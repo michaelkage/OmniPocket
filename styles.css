@@ -21,3 +21,5 @@ textarea{width:100%;resize:vertical;border:1px solid #4a4650;background:#151419;
 .metric-track{height:8px;border-radius:99px;background:rgba(255,255,255,.07);overflow:hidden}
 .metric-fill{height:100%;border-radius:inherit;background:var(--primary);min-width:3px;transition:width .35s ease}
 
+
+.context-bar{display:flex;align-items:center;gap:10px;margin-top:10px;padding:8px 10px;width:max-content;max-width:100%;border:1px solid rgba(208,188,255,.14);border-radius:999px;background:rgba(208,188,255,.06)}.context-bar .text-button{font-size:11px}.context-value-label{margin-top:8px}
