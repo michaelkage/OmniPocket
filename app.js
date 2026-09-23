@@ -596,7 +596,9 @@ function openAccountDetail(id) {
     const incoming = t.destinationAccountId === id && t.sourceAccountId !== id;
     const sign = incoming ? "+" : transactionDirection(t) === "out" ? "−" : "";
     const other = t.sourceAccountId === id ? account(t.destinationAccountId) : account(t.sourceAccountId);
-    return '<div class="activity-row"><div><strong>' + escapeHtml(transactionLabel(t)) + "</strong><div class=\"muted\">" + escapeHtml(t.date) + " · " + escapeHtml(other?.name || "") + "</div></div><span class=\"amount\">" + sign + escapeHtml(money(t.amount, t.currency)) + "</span></div>";
+    const displayAmount = incoming && t.receivedAmount != null ? t.receivedAmount : t.amount;
+    const displayCurrency = incoming && t.receivedCurrency ? t.receivedCurrency : t.currency;
+    return '<div class="activity-row"><div><strong>' + escapeHtml(transactionLabel(t)) + "</strong><div class=\"muted\">" + escapeHtml(t.date) + " · " + escapeHtml(other?.name || "") + "</div></div><span class=\"amount\">" + sign + escapeHtml(money(displayAmount, displayCurrency)) + "</span></div>";
   }).join("") || '<div class="empty-state">No activity yet.</div>';
   $("accountDetailDialog").dataset.accountId = id;
   $("accountDetailDialog").showModal();
@@ -757,6 +759,15 @@ document.querySelectorAll(".nav-item[data-page]").forEach(button => {
   button.addEventListener("click", () => navigate(button.dataset.page));
 });
 $("activitySearch")?.addEventListener("input", renderFullViews);
+$("clearReviewButton")?.addEventListener("click", () => {
+  navigate("Activity");
+  const review = state.transactions.filter(t => t.status === "needs_review");
+  $("activitySearch").value = "";
+  renderFullViews();
+  if (!review.length) return alert("No transactions need review.");
+  $("activitySearch").value = "review";
+  renderFullViews();
+});
 window.addEventListener("load", async () => {
   if ("serviceWorker" in navigator && location.protocol !== "file:") navigator.serviceWorker.register("sw.js");
   await bootstrapStorage();
