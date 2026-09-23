@@ -234,7 +234,7 @@ function openTransactionDetail(id) {
   const displayAmount = t.receivedAmount != null && t.type !== "expense" && dest ? t.receivedAmount : t.amount;
   const displayCurrency = t.receivedAmount != null && t.type !== "expense" && dest ? (t.receivedCurrency || t.currency) : t.currency;
   $("transactionDetailTitle").textContent = transactionLabel(t);
-  $("transactionDetailMeta").textContent = t.date + " · " + t.type;
+  $("transactionDetailMeta").textContent = t.date + " · " + t.type + (t.external?.provider ? " · Imported from " + t.external.provider : "");
   $("transactionDetailAmount").textContent = state.settings.privacyHidden ? "••••••" : money(displayAmount, displayCurrency);
   $("transactionDetailContext").textContent = t.type === "transfer" || t.type === "withdrawal"
     ? (source?.name || "Unknown") + " → " + (dest?.name || "Unknown")
@@ -923,6 +923,33 @@ function syncTransferFields() {
   if ($("quickReceivedLabel")) $("quickReceivedLabel").textContent = destination ? `Received (${destination.currency})` : "Received";
 }
 
+function transactionExternalKey(external) {
+  if (!external?.provider || !external?.providerTransactionId) return null;
+  return String(external.provider) + ':' + String(external.providerTransactionId);
+}
+
+function findImportedTransaction(external) {
+  const key = transactionExternalKey(external);
+  if (!key) return null;
+  return state.transactions.find(t => transactionExternalKey(t.external) === key) || null;
+}
+
+function importTransaction(input, options = {}) {
+  const external = input.external && typeof input.external === 'object' ? {
+    provider: input.external.provider || null,
+    providerTransactionId: input.external.providerTransactionId || null,
+    importedAt: input.external.importedAt || new Date().toISOString(),
+    lastSeenAt: new Date().toISOString()
+  } : null;
+  const existing = findImportedTransaction(external);
+  if (existing) {
+    existing.external = { ...(existing.external || {}), ...external, lastSeenAt: new Date().toISOString() };
+    if (options.updateExisting && input.note) existing.note = input.note;
+    return { transaction: existing, duplicate: true };
+  }
+  const transaction = addTransaction({ ...input, status: input.status || 'needs_review', external });
+  return { transaction, duplicate: false };
+}
 function addTransaction(input) {
   const tx = {
     id: uid(),
@@ -940,7 +967,13 @@ function addTransaction(input) {
     fxSource: input.fxSource || null,
     category: input.category || "",
     note: input.note || "",
-    linkedGoalIds: Array.isArray(input.linkedGoalIds) ? [...new Set(input.linkedGoalIds)] : []
+    linkedGoalIds: Array.isArray(input.linkedGoalIds) ? [...new Set(input.linkedGoalIds)] : [],
+    external: input.external && typeof input.external === 'object' ? {
+      provider: input.external.provider || null,
+      providerTransactionId: input.external.providerTransactionId || null,
+      importedAt: input.external.importedAt || new Date().toISOString(),
+      lastSeenAt: input.external.lastSeenAt || new Date().toISOString()
+    } : null
   };
   state.transactions.push(tx);
   emitStateEvent("transaction:updated", { action: "created", transaction: tx });
@@ -1105,7 +1138,7 @@ function renderFullViews() {
     const direction = transactionDirection(t);
     const sign = direction === "out" ? "−" : direction === "in" ? "+" : "";
     const detail = t.type === "transfer" ? `${source?.name || "Unknown"} → ${dest?.name || "Unknown"}` : source?.name || "Unknown";
-    return `<div class="activity-row interactive-row" data-transaction-id="${escapeHtml(t.id)}" tabindex="0" role="button"><div><strong>${escapeHtml(transactionLabel(t))}</strong><div class="muted">${escapeHtml(t.date)} · ${escapeHtml(detail)}${t.note ? " · "+escapeHtml(t.note) : ""}</div></div><div class="activity-value"><strong>${sign}${escapeHtml(money(t.amount,t.currency))}</strong><span class="muted">${escapeHtml(t.status)}</span></div></div>`;
+    return `<div class="activity-row interactive-row" data-transaction-id="${escapeHtml(t.id)}" tabindex="0" role="button"><div><strong>${escapeHtml(transactionLabel(t))}</strong><div class="muted">${escapeHtml(t.date)} · ${escapeHtml(detail)}${t.note ? " · "+escapeHtml(t.note) : ""}</div></div><div class="activity-value"><strong>${sign}${escapeHtml(money(t.amount,t.currency))}</strong><span class="muted">${escapeHtml(t.status === "needs_review" ? "Handle later" : "Recorded")}${t.external?.provider ? " · " + escapeHtml(t.external.provider) : ""}</span></div></div>`;
   }).join("") || '<div class="empty-state">No matching activity.</div>';
 
   document.querySelectorAll("[data-reconcile]").forEach(button => {
