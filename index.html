@@ -47,4 +47,11 @@
   <div class="detail-section"><div class="eyebrow">PACE</div><div id="goalDetailPace" class="detail-callout"></div></div>
   <div class="detail-section"><div class="eyebrow">CONTRIBUTING ACCOUNTS</div><div id="goalDetailAccounts" class="stack"></div></div>
   <div class="dialog-actions"><button id="goalDetailEdit">Edit goal</button><button class="primary" onclick="this.closest('dialog').close()">Done</button></div>
+</dialog><dialog id="reconcileDialog" class="app-dialog">
+<div class="dialog-head"><div><span class="eyebrow">RECONCILIATION</span><h2>Match actual balance</h2><div id="reconcileMeta" class="muted"></div></div><button class="icon-button" onclick="this.closest('dialog').close()">✕</button></div>
+<form id="reconcileForm" class="form-grid"><label>Actual balance<input id="reconcileAmount" type="number" step="0.01" required></label><label>Note <span class="muted">(optional)</span><input id="reconcileNote" placeholder="Why did it differ?"></label><div class="dialog-actions"><button type="button" onclick="this.closest('dialog').close()">Cancel</button><button class="primary">Reconcile</button></div></form>
+</dialog>
+<dialog id="currencyDialog" class="app-dialog">
+<div class="dialog-head"><div><span class="eyebrow">DISPLAY</span><h2>Base currency</h2><div class="muted">Net worth will be converted into this currency.</div></div><button class="icon-button" onclick="this.closest('dialog').close()">✕</button></div>
+<form id="currencyForm" class="form-grid"><label>Currency<select id="baseCurrencySelect"><option>NGN</option><option>USD</option><option>GBP</option><option>EUR</option></select></label><div class="dialog-actions"><button type="button" onclick="this.closest('dialog').close()">Cancel</button><button class="primary">Use currency</button></div></form>
 </dialog><script src="storage.js"></script><script src="app.js"></script></body></html>
