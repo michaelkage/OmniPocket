@@ -109,6 +109,7 @@ function migrateState(raw) {
     id: t.id || uid(),
     type: TX_TYPES.includes(t.type) ? t.type : "adjustment",
     status: t.status === "needs_review" ? "needs_review" : "recorded",
+    adjustmentSign: t.adjustmentSign === -1 ? -1 : (t.adjustmentSign === 1 ? 1 : (String(t.category || "").toLowerCase().includes("decrease") ? -1 : 1)),
     date: t.date || today(),
     createdAt: Number(t.createdAt) || Date.now(),
     sourceAccountId: t.sourceAccountId || t.accountId || null,
@@ -296,6 +297,106 @@ function deleteTransaction(id) {
   emitStateEvent("transaction:updated", { action: "deleted", transactionId: id });
   saveState();
   $("transactionDialog")?.close();
+}
+
+function parseStatementCsv(text) {
+  const input = String(text || "").replace(/^\uFEFF/, "");
+  const rows = [];
+  let row = [], cell = "", quoted = false;
+  for (let i = 0; i < input.length; i++) {
+    const ch = input[i], next = input[i + 1];
+    if (ch === '"') {
+      if (quoted && next === '"') { cell += '"'; i++; }
+      else quoted = !quoted;
+    } else if (ch === "," && !quoted) {
+      row.push(cell.trim()); cell = "";
+    } else if ((ch === "\n" || ch === "\r") && !quoted) {
+      if (ch === "\r" && next === "\n") i++;
+      row.push(cell.trim()); cell = "";
+      if (row.some(value => value !== "")) rows.push(row);
+      row = [];
+    } else cell += ch;
+  }
+  if (cell !== "" || row.length) {
+    row.push(cell.trim());
+    if (row.some(value => value !== "")) rows.push(row);
+  }
+  if (rows.length < 2) return { headers: [], rows: [] };
+  const headers = rows[0].map((h, i) => String(h || "Column " + (i + 1)).trim());
+  return { headers, rows: rows.slice(1).map(values => Object.fromEntries(headers.map((h, i) => [h, values[i] ?? ""]))) };
+}
+
+function statementColumn(headers, patterns) {
+  return headers.find(h => patterns.some(pattern => pattern.test(String(h)))) || null;
+}
+
+function parseStatementAmount(value) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return null;
+  const negative = /^-/.test(raw) || /^\(.*\)$/.test(raw);
+  const number = Number(raw.replace(/[(),₦$£€\s]/g, "").replace(/,/g, ""));
+  return Number.isFinite(number) && number !== 0 ? Math.abs(number) * (negative ? -1 : 1) : null;
+}
+
+function previewStatementImport(text, accountId) {
+  const parsed = parseStatementCsv(text);
+  if (!parsed.rows.length) throw new Error("The CSV needs a header row and at least one transaction.");
+  const headers = parsed.headers;
+  const dateCol = statementColumn(headers, [/^date$/i, /transaction.*date/i, /posting.*date/i, /value.*date/i]);
+  const descCol = statementColumn(headers, [/description/i, /narration/i, /details/i, /memo/i, /particular/i, /reference/i]);
+  const amountCol = statementColumn(headers, [/^amount$/i, /transaction.*amount/i]);
+  const debitCol = statementColumn(headers, [/debit/i, /withdrawal/i, /paid.*out/i]);
+  const creditCol = statementColumn(headers, [/credit/i, /deposit/i, /paid.*in/i]);
+  if (!dateCol || (!amountCol && !debitCol && !creditCol)) throw new Error("I need a Date column and an Amount, Debit, or Credit column.");
+  const accountTarget = account(accountId);
+  if (!accountTarget) throw new Error("Choose an account for this statement first.");
+  const rows = parsed.rows.map((row, index) => {
+    const rawAmount = amountCol ? parseStatementAmount(row[amountCol]) : null;
+    const debit = debitCol ? parseStatementAmount(row[debitCol]) : null;
+    const credit = creditCol ? parseStatementAmount(row[creditCol]) : null;
+    let signed = rawAmount;
+    if (signed == null) signed = (credit || 0) - Math.abs(debit || 0);
+    if (!signed) return null;
+    const rawDate = String(row[dateCol] || "").trim();
+    const normalizedDate = /^\d{4}[-/]\d{1,2}[-/]\d{1,2}$/.test(rawDate) ? rawDate.replace(/\//g, "-") : rawDate;
+    return {
+      rowNumber: index + 2,
+      date: normalizedDate || today(),
+      description: descCol ? String(row[descCol] || "").trim() : "",
+      signedAmount: signed,
+      type: signed > 0 ? "income" : "expense",
+      currency: accountTarget.currency,
+      accountId: accountTarget.id
+    };
+  }).filter(Boolean);
+  return { headers, rows, account: accountTarget };
+}
+
+function importStatementRows(rows) {
+  let imported = 0, duplicates = 0;
+  for (const row of rows) {
+    const fingerprint = [row.accountId, row.date, row.signedAmount.toFixed(2), row.description.toLowerCase()].join("|");
+    const existing = state.transactions.find(t => t.external?.provider === "statement_csv" && t.external?.providerTransactionId === fingerprint);
+    if (existing) {
+      existing.external.lastSeenAt = new Date().toISOString();
+      duplicates++;
+      continue;
+    }
+    importTransaction({
+      type: row.type,
+      sourceAccountId: row.accountId,
+      amount: Math.abs(row.signedAmount),
+      currency: row.currency,
+      category: row.type === "income" ? "Imported income" : "Other",
+      note: row.description || "Imported from CSV statement",
+      date: row.date,
+      external: { provider: "statement_csv", providerTransactionId: fingerprint }
+    });
+    imported++;
+  }
+  rebuildBalances();
+  saveState();
+  return { imported, duplicates };
 }
 
 function parseMoneyText(text) {
@@ -967,6 +1068,7 @@ function addTransaction(input) {
     fxSource: input.fxSource || null,
     category: input.category || "",
     note: input.note || "",
+    adjustmentSign: input.adjustmentSign === -1 ? -1 : 1,
     linkedGoalIds: Array.isArray(input.linkedGoalIds) ? [...new Set(input.linkedGoalIds)] : [],
     external: input.external && typeof input.external === 'object' ? {
       provider: input.external.provider || null,
@@ -1523,6 +1625,51 @@ $("exportButton")?.addEventListener("click", () => {
   URL.revokeObjectURL(url);
 });
 
+let pendingStatementImport = null;
+$("statementImportButton")?.addEventListener("click", () => {
+  const active = state.accounts.filter(a => !a.archived);
+  if (!active.length) return alert("Add an account before importing a statement.");
+  $("statementImportAccount").innerHTML = active.map(a => '<option value="' + escapeHtml(a.id) + '">' + escapeHtml(a.name) + ' · ' + escapeHtml(a.currency) + '</option>').join("");
+  pendingStatementImport = null;
+  $("statementImportSummary").textContent = "Choose the account and CSV file to preview.";
+  $("statementImportPreview").innerHTML = "";
+  $("statementImportConfirm").disabled = true;
+  $("statementImportDialog").showModal();
+});
+$("statementImportAccount")?.addEventListener("change", () => {
+  if (!pendingStatementImport?.text) return;
+  try { pendingStatementImport.preview = previewStatementImport(pendingStatementImport.text, $("statementImportAccount").value); renderStatementPreview(); } catch (error) { pendingStatementImport = null; $("statementImportSummary").textContent = error.message; $("statementImportPreview").innerHTML = ""; $("statementImportConfirm").disabled = true; }
+});
+$("statementImportFile")?.addEventListener("change", async event => {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  try {
+    const text = await file.text();
+    pendingStatementImport = { text, preview: previewStatementImport(text, $("statementImportAccount").value) };
+    renderStatementPreview();
+  } catch (error) {
+    pendingStatementImport = null;
+    $("statementImportSummary").textContent = error.message || "Could not read that CSV.";
+    $("statementImportPreview").innerHTML = "";
+    $("statementImportConfirm").disabled = true;
+  } finally { event.target.value = ""; }
+});
+function renderStatementPreview() {
+  const preview = pendingStatementImport?.preview;
+  if (!preview) return;
+  const rows = preview.rows;
+  $("statementImportSummary").textContent = rows.length + " transaction" + (rows.length === 1 ? "" : "s") + " found for " + preview.account.name + ". First 8 rows shown below.";
+  $("statementImportPreview").innerHTML = '<div class="statement-import-preview">' + rows.slice(0,8).map(row => '<div class="statement-import-row"><span><strong>' + escapeHtml(row.date) + '</strong><small>' + escapeHtml(row.description || "No description") + '</small></span><strong>' + escapeHtml(money(Math.abs(row.signedAmount), row.currency)) + '</strong></div>').join("") + '</div>';
+  $("statementImportConfirm").disabled = !rows.length;
+}
+$("statementImportConfirm")?.addEventListener("click", () => {
+  const preview = pendingStatementImport?.preview;
+  if (!preview?.rows?.length) return;
+  const result = importStatementRows(preview.rows);
+  $("statementImportDialog").close();
+  pendingStatementImport = null;
+  alert(result.imported + " imported to the review queue." + (result.duplicates ? " " + result.duplicates + " duplicate" + (result.duplicates === 1 ? "" : "s") + " skipped." : ""));
+});
 $("importButton")?.addEventListener("click", () => $("importFile")?.click());
 $("importFile")?.addEventListener("change", async event => {
   const file = event.target.files?.[0];
@@ -1598,6 +1745,7 @@ $("reconcileForm")?.addEventListener("submit", event => {
     amount:Math.abs(delta),
     currency:a.currency,
     category:delta > 0 ? "Reconciliation increase" : "Reconciliation decrease",
+    adjustmentSign: delta > 0 ? 1 : -1,
     note,
     date:today()
   });
