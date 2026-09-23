@@ -25,6 +25,8 @@
   }
 
   function adjustmentDelta(tx) {
+    if (tx.adjustmentSign === -1) return -Math.abs(Number(tx.amount) || 0);
+    if (tx.adjustmentSign === 1) return Math.abs(Number(tx.amount) || 0);
     return String(tx.category || "").toLowerCase().includes("decrease")
       ? -Math.abs(Number(tx.amount) || 0)
       : Math.abs(Number(tx.amount) || 0);
@@ -45,6 +47,7 @@
     }));
     const map = accountMap({ accounts });
     for (const tx of sortedTransactions(state, until)) {
+      if (tx.status === "needs_review") continue;
       const source = map.get(tx.sourceAccountId);
       const destination = map.get(tx.destinationAccountId);
       if (tx.type === "income" && source) source.balance += Math.abs(Number(tx.amount) || 0);
@@ -87,7 +90,7 @@
     let total = 0;
     let income = 0;
     for (const tx of state.transactions || []) {
-      if (String(tx.date) < cutoffDate) continue;
+      if (String(tx.date) < cutoffDate || tx.status === "needs_review") continue;
       if (tx.type === "expense") {
         const value = convert(state, tx.amount, tx.currency, state.settings.baseCurrency, tx.fxRate);
         const key = tx.category || "Other";
