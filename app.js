@@ -629,7 +629,11 @@ async function refreshFxRates() {
   if (state.settings.mode === "offline") return alert("Offline mode keeps the last cached FX matrix.");
   const base=state.settings.baseCurrency;
   try {
-    const response=await fetch("https://open.er-api.com/v6/latest/"+encodeURIComponent(base), {cache:"no-store"});
+    const integration = integrationSettings();
+    const fxUrl = integration.supabaseUrl
+      ? integration.supabaseUrl + "/functions/v1/fx-rates?base=" + encodeURIComponent(base)
+      : "https://open.er-api.com/v6/latest/" + encodeURIComponent(base);
+    const response=await fetch(fxUrl, {cache:"no-store"});
     if(!response.ok) throw new Error("FX service unavailable");
     const data=await response.json();
     if(!data.rates) throw new Error("No FX matrix returned");
