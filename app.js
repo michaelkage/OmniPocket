@@ -310,6 +310,7 @@ function deleteTransaction(id) {
   if (!confirm("Delete this transaction? The account balance will be recalculated.")) return;
   state.transactions.splice(index, 1);
   rebuildBalances();
+  emitStateEvent("transaction:updated", { action: "deleted", transactionId: id });
   saveState();
   $("transactionDialog")?.close();
 }
@@ -653,6 +654,7 @@ function addTransaction(input) {
     linkedGoalIds: Array.isArray(input.linkedGoalIds) ? input.linkedGoalIds : []
   };
   state.transactions.push(tx);
+  emitStateEvent("transaction:updated", { action: "created", transaction: tx });
   return tx;
 }
 
