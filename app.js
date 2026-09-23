@@ -1,4 +1,4 @@
-/* OmniPocket — V1 financial domain + UI engine */
+/\n\nfunction emitUiContext(event, detail = {}) {\n  emitStateEvent(event, detail);\n}* OmniPocket — V1 financial domain + UI engine */
 const STORAGE_KEY = "omnipocket.v1";
 const storage = new OmniPocketStorage({ dbName: "omnipocket", storeName: "state", legacyKey: STORAGE_KEY });
 const SCHEMA_VERSION = 3;
