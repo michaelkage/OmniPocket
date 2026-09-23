@@ -23,9 +23,10 @@
   <div class="dialog-head"><div><span class="eyebrow">ACCOUNT</span><h2 id="accountDetailTitle">Account</h2><div id="accountDetailMeta" class="muted"></div></div><button class="icon-button" onclick="this.closest('dialog').close()">✕</button></div>
   <div class="detail-balance"><strong id="accountDetailBalance">₦0</strong><span id="accountDetailConverted" class="muted">≈ ₦0</span></div>
   <div id="accountDetailStats" class="detail-stats"></div>
+  <div class="account-sync-status"><span class="eyebrow">CONNECTION</span><strong id="accountDetailSyncMeta">Managed locally on this device.</strong></div>
   <div class="detail-section"><div class="eyebrow">GOALS</div><div id="accountDetailGoals" class="stack"></div></div>
   <div class="detail-section"><div class="eyebrow">RECENT ACTIVITY</div><div id="accountDetailActivity" class="stack"></div></div>
-  <div class="dialog-actions"><button id="accountDetailEdit">Edit</button><button id="accountDetailArchive">Archive</button><button class="primary" onclick="this.closest('dialog').close()">Done</button></div>
+  <div class="dialog-actions"><button id="accountDetailRefresh">Refresh local balance</button><button id="accountDetailSync">Sync bank</button><button id="accountDetailEdit">Edit</button><button id="accountDetailArchive">Archive</button><button class="primary" onclick="this.closest('dialog').close()">Done</button></div>
 </dialog>
 <dialog id="editAccountDialog" class="app-dialog">
   <div class="dialog-head"><div><span class="eyebrow">ACCOUNT</span><h2>Edit account</h2></div><button class="icon-button" onclick="this.closest('dialog').close()">✕</button></div>
