@@ -481,15 +481,15 @@ function renderFullViews() {
   }).join("") || '<div class="empty-state">No matching activity.</div>';
 
   document.querySelectorAll("[data-reconcile]").forEach(button => {
-    button.onclick = () => {
+    button.onclick = event => {
+      event.stopPropagation();
       const a = account(button.dataset.reconcile);
       if (!a) return;
-      const target = Number(prompt(`Actual balance for ${a.name} (${a.currency}):`, String(a.balance)));
-      if (!Number.isFinite(target) || target < 0 || target === a.balance) return;
-      const delta = target - a.balance;
-      addTransaction({type:"adjustment",sourceAccountId:a.id,amount:Math.abs(delta),currency:a.currency,category:delta > 0 ? "Reconciliation increase" : "Reconciliation decrease",note:"Balance reconciliation",date:today()});
-      a.balance = target;
-      saveState();
+      $("reconcileMeta").textContent = a.name + " · " + a.currency + " · Current " + money(a.balance, a.currency);
+      $("reconcileAmount").value = a.balance;
+      $("reconcileNote").value = "";
+      $("reconcileDialog").dataset.accountId = a.id;
+      $("reconcileDialog").showModal();
     };
   });
 }
@@ -745,12 +745,38 @@ $("privacyButton").onclick = () => {
 };
 
 $("baseCurrencyButton").onclick = () => {
-  const next = (prompt("Base currency (NGN, USD, GBP, EUR):", state.settings.baseCurrency) || "").toUpperCase();
-  if (CURRENCIES.includes(next)) {
-    state.settings.baseCurrency = next;
-    saveState();
-  }
+  $("baseCurrencySelect").value = state.settings.baseCurrency;
+  $("currencyDialog").showModal();
 };
+
+$("currencyForm")?.addEventListener("submit", event => {
+  event.preventDefault();
+  state.settings.baseCurrency = $("baseCurrencySelect").value;
+  saveState();
+  $("currencyDialog").close();
+});
+
+$("reconcileForm")?.addEventListener("submit", event => {
+  event.preventDefault();
+  const a = account($("reconcileDialog").dataset.accountId);
+  if (!a) return;
+  const target = Number($("reconcileAmount").value);
+  if (!Number.isFinite(target) || target < 0) return alert("Enter a valid balance.");
+  if (target === a.balance) return $("reconcileDialog").close();
+  const delta = target - a.balance;
+  addTransaction({
+    type:"adjustment",
+    sourceAccountId:a.id,
+    amount:Math.abs(delta),
+    currency:a.currency,
+    category:delta > 0 ? "Reconciliation increase" : "Reconciliation decrease",
+    note:$("reconcileNote").value.trim() || "Balance reconciliation",
+    date:today()
+  });
+  a.balance = target;
+  saveState();
+  $("reconcileDialog").close();
+});
 
 $("addGoalButton").onclick = () => createGoal();
 
