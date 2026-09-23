@@ -1,4 +1,4 @@
-/\n\nfunction emitUiContext(event, detail = {}) {\n  emitStateEvent(event, detail);\n}* OmniPocket — V1 financial domain + UI engine */
+/* OmniPocket — V1 financial domain + UI engine */
 const STORAGE_KEY = "omnipocket.v1";
 const storage = new OmniPocketStorage({ dbName: "omnipocket", storeName: "state", legacyKey: STORAGE_KEY });
 const SCHEMA_VERSION = 3;
@@ -38,57 +38,8 @@ let persistTimer = null;
 let persistenceReady = false;
 let quickType = "expense";
 
-function emitStateEvent(event, detail = {}) {
-  if (window.OmniPocketBus) OmniPocketBus.emit(event, { state, ...detail });
-}
-
-function bindOmniPocketBus() {
-  if (!window.OmniPocketBus || window.__omnipocketBusBound) return;
-  window.__omnipocketBusBound = true;
-
-  OmniPocketBus.on("account:updated", () => {
-    renderAccounts();
-    renderFullViews();
-    renderGoal();
-    renderDashboard();
-  });
-  OmniPocketBus.on("transaction:updated", () => {
-    rebuildBalances();
-    renderActivity();
-    renderGoal();
-    renderDashboard();
-    renderFullViews();
-  });
-  OmniPocketBus.on("goal:updated", () => {
-    renderGoal();
-    renderFullViews();
-    renderDashboard();
-  });
-  OmniPocketBus.on("fx:updated", () => {
-    render();
-  });
-  OmniPocketBus.on("privacy:updated", () => {
-    render();
-  });
-  OmniPocketBus.on("dashboard:updated", () => {
-    renderDashboard();
-  });
-  OmniPocketBus.on("context:changed", payload => {
-    renderContextBar(payload.context);
-    renderAccounts();
-    renderGoal();
-    renderActivity();
-    renderDashboardContextWidgets(payload.context);
-  });
-  OmniPocketBus.on("context:cleared", payload => {
-    renderContextBar(payload.context);
-    renderAccounts();
-    renderGoal();
-    renderActivity();
-    renderDashboardContextWidgets(payload.context);
-  });
-}
-
+function emitStateEvent(event, detail = {}) { if (window.OmniPocketBus) OmniPocketBus.emit(event, { state, ...detail }); }
+function bindOmniPocketBus() { if (!window.OmniPocketBus || window.__omnipocketBusBound) return; window.__omnipocketBusBound = true; OmniPocketBus.on("account:updated", () => { renderAccounts(); renderFullViews(); renderGoal(); renderDashboard(); }); OmniPocketBus.on("transaction:updated", () => { rebuildBalances(); renderActivity(); renderGoal(); renderDashboard(); renderFullViews(); }); OmniPocketBus.on("goal:updated", () => { renderGoal(); renderFullViews(); renderDashboard(); }); OmniPocketBus.on("fx:updated", () => render()); OmniPocketBus.on("privacy:updated", () => render()); OmniPocketBus.on("dashboard:updated", () => renderDashboard()); OmniPocketBus.on("context:changed", payload => { renderContextBar(payload.context); renderAccounts(); renderGoal(); renderActivity(); renderDashboardContextWidgets(payload.context); }); OmniPocketBus.on("context:cleared", payload => { renderContextBar(payload.context); renderAccounts(); renderGoal(); renderActivity(); renderDashboardContextWidgets(payload.context); }); }
 
 function loadState() {
   try {
@@ -172,15 +123,8 @@ function migrateState(raw) {
     createdAt: Number(g.createdAt) || Date.now()
   })) : [];
 
-  next.snapshots = Array.isArray(raw.snapshots) ? raw.snapshots.filter(s => s && s.date).map(s => ({
-    id: String(s.id || `${s.date}:${s.baseCurrency || next.settings.baseCurrency}`),
-    date: String(s.date),
-    capturedAt: Number(s.capturedAt) || Date.now(),
-    baseCurrency: CURRENCIES.includes(s.baseCurrency) ? s.baseCurrency : next.settings.baseCurrency,
-    value: Number(s.value) || 0,
-    balances: Array.isArray(s.balances) ? s.balances.map(b => ({ accountId: b.accountId, balance: Number(b.balance) || 0, currency: CURRENCIES.includes(b.currency) ? b.currency : "NGN" })) : [],
-    rates: s.rates && typeof s.rates === "object" ? s.rates : clone(DEFAULT_RATES)
-  })).slice(-730) : [];
+  next.snapshots = Array.isArray(raw.snapshots) ? raw.snapshots.filter(s => s && s.date).map(s => ({ id: String(s.id || `${s.date}:${s.baseCurrency || next.settings.baseCurrency}`), date: String(s.date), capturedAt: Number(s.capturedAt) || Date.now(), baseCurrency: CURRENCIES.includes(s.baseCurrency) ? s.baseCurrency : next.settings.baseCurrency, value: Number(s.value) || 0, balances: Array.isArray(s.balances) ? s.balances.map(b => ({ accountId: b.accountId, balance: Number(b.balance) || 0, currency: CURRENCIES.includes(b.currency) ? b.currency : "NGN" })) : [], rates: s.rates && typeof s.rates === "object" ? s.rates : clone(DEFAULT_RATES) })).slice(-730) : [];
+
   next.schemaVersion = SCHEMA_VERSION;
   return next;
 }
@@ -203,13 +147,9 @@ function account(id) {
   return state.accounts.find(a => a.id === id) || null;
 }
 
-function rate(from, to) {
-  return OmniPocketEngine.rate(state, from, to);
-}
+function rate(from, to) { return OmniPocketEngine.rate(state, from, to); }
 
-function convert(value, from, to, overrideRate = null) {
-  return OmniPocketEngine.convert(state, value, from, to, overrideRate);
-}
+function convert(value, from, to, overrideRate = null) { return OmniPocketEngine.convert(state, value, from, to, overrideRate); }
 
 function money(value, currency = state.settings.baseCurrency) {
   try {
@@ -223,9 +163,7 @@ function money(value, currency = state.settings.baseCurrency) {
   }
 }
 
-function netWorth() {
-  return OmniPocketEngine.netWorth(state);
-}
+function netWorth() { return OmniPocketEngine.netWorth(state); }
 
 function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, char => ({
@@ -253,11 +191,7 @@ function adjustmentDelta(t) {
   return label.includes("decrease") ? -Math.abs(t.amount) : Math.abs(t.amount);
 }
 
-function rebuildBalances() {
-  const balances = OmniPocketEngine.balancesAt(state);
-  const byId = new Map(balances.map(a => [a.id, a.balance]));
-  state.accounts.forEach(a => { a.balance = byId.has(a.id) ? byId.get(a.id) : (Number(a.openingBalance) || 0); });
-}
+function rebuildBalances() { const balances = OmniPocketEngine.balancesAt(state); const byId = new Map(balances.map(a => [a.id, a.balance])); state.accounts.forEach(a => { a.balance = byId.has(a.id) ? byId.get(a.id) : (Number(a.openingBalance) || 0); }); }
 
 function openTransactionDetail(id) {
   const t = state.transactions.find(x => x.id === id);
@@ -372,37 +306,9 @@ function parseClipboardText() {
   $("smartApprove").dataset.date = parsed.date;
 }
 
-function renderNetWorthTrend() {
-  const el = $("netWorthTrend");
-  if (!el) return;
-  const rows = OmniPocketEngine.historicalNetWorth(state, 90);
-  if (rows.length < 2) {
-    el.innerHTML = '<div class="empty-state">Log transactions across different days to build your wealth trend.</div>';
-    return;
-  }
-  const unique = rows.reduce((acc, p) => {
-    const last = acc[acc.length - 1];
-    if (last && last.date === p.date) last.value = p.value;
-    else acc.push({ date: p.date, value: p.value });
-    return acc;
-  }, []).slice(-30);
-  const width = 720, height = 240, pad = 28;
-  const values = unique.map(p => p.value);
-  const min = Math.min(...values, 0), max = Math.max(...values, 1), range = max - min || 1;
-  const coords = unique.map((p, i) => [
-    unique.length === 1 ? width / 2 : pad + i * (width - pad * 2) / (unique.length - 1),
-    height - pad - (p.value - min) / range * (height - pad * 2)
-  ]);
-  const path = coords.map((p, i) => (i ? "L" : "M") + p[0].toFixed(1) + " " + p[1].toFixed(1)).join(" ");
-  el.innerHTML = '<svg viewBox="0 0 ' + width + ' ' + height + '" role="img" aria-label="Net worth trend"><path class="trend-line" d="' + path + '"></path>' +
-    coords.map(p => '<circle class="trend-dot" cx="' + p[0] + '" cy="' + p[1] + '" r="3"></circle>').join("") +
-    '</svg><div class="trend-meta"><span>' + escapeHtml(unique[0].date) + '</span><strong>' + money(unique[unique.length - 1].value) +
-    '</strong><span>' + escapeHtml(unique[unique.length - 1].date) + '</span></div>';
-}
+function renderNetWorthTrend() { const el = $("netWorthTrend"); if (!el) return; const rows = OmniPocketEngine.historicalNetWorth(state, 90); if (rows.length < 2) { el.innerHTML = '<div class="empty-state">Log transactions across different days to build your wealth trend.</div>'; return; } const unique = rows.reduce((acc,p) => { const last=acc[acc.length-1]; if(last&&last.date===p.date) last.value=p.value; else acc.push({date:p.date,value:p.value}); return acc; },[]).slice(-30); const width=720,height=240,pad=28; const values=unique.map(p=>p.value),min=Math.min(...values,0),max=Math.max(...values,1),range=max-min||1; const coords=unique.map((p,i)=>[unique.length===1?width/2:pad+i*(width-pad*2)/(unique.length-1),height-pad-(p.value-min)/range*(height-pad*2)]); const path=coords.map((p,i)=>(i?"L":"M")+p[0].toFixed(1)+" "+p[1].toFixed(1)).join(" "); el.innerHTML='<svg viewBox="0 0 '+width+" "+height+'" role="img" aria-label="Net worth trend"><path class="trend-line" d="'+path+'"></path>'+coords.map(p=>'<circle class="trend-dot" cx="'+p[0]+'" cy="'+p[1]+'" r="3"></circle>').join("")+'</svg><div class="trend-meta"><span>'+escapeHtml(unique[0].date)+'</span><strong>'+money(unique[unique.length-1].value)+'</strong><span>'+escapeHtml(unique[unique.length-1].date)+'</span></div>'; }
 
-function spendingSummary(days = 30) {
-  return OmniPocketEngine.spendingSummary(state, days);
-}
+function spendingSummary(days = 30) { return OmniPocketEngine.spendingSummary(state, days); }
 
 function financialInsights() {
   const summary = spendingSummary(30);
@@ -440,24 +346,6 @@ function renderIntelligence() {
   }
 }
 
-function renderDashboardContextWidgets(context = getAppContext()) {
-  const netEl = $("galaxyNetWorth");
-  if (netEl) {
-    let value = netWorth();
-    let label = "Your global wealth";
-    if (context.scope === "account" && context.accountId) {
-      const acc = account(context.accountId); value = acc ? convert(acc.balance, acc.currency, state.settings.baseCurrency) : 0;
-      label = (acc?.name || "Account") + " balance";
-    } else if (context.scope === "goal" && context.goalId) {
-      const g = state.goals.find(x => x.id === context.goalId); const p = g ? goalProgress(g) : { current: 0 };
-      value = g ? convert(p.current, g.currency, state.settings.baseCurrency) : 0; label = (g?.name || "Goal") + " progress";
-    } else if (context.scope === "transaction" && context.transactionId) {
-      const t = state.transactions.find(x => x.id === context.transactionId); value = t ? convert(t.amount, t.currency, state.settings.baseCurrency) : 0; label = t ? transactionLabel(t) : "Activity";
-    }
-    netEl.innerHTML = (state.settings.privacyHidden ? "•••••••" : escapeHtml(money(value))) + '<div class="muted context-value-label">' + escapeHtml(label) + '</div>';
-  }
-}
-
 function renderDashboard() {
   const root=$("dashboardGalaxy");
   if(!root) return;
@@ -473,6 +361,8 @@ function renderDashboard() {
   const galaxyNetWorth=$("galaxyNetWorth"); if(galaxyNetWorth) galaxyNetWorth.textContent=state.settings.privacyHidden ? "•••••••" : money(netWorth());
   renderNetWorthTrend();
   renderIntelligence();
+  renderContextBar();
+  renderDashboardContextWidgets();
   const count=$("reviewCount"); if(count) count.textContent=state.transactions.filter(t=>t.status==="needs_review").length+" review";
   const fxStatus=$("fxCacheStatus"); if(fxStatus) fxStatus.textContent=state.settings.fx.updatedAt ? "Cached "+new Date(state.settings.fx.updatedAt).toLocaleString() : "Bundled rates";
 }
@@ -540,6 +430,14 @@ function approveSmartParse() {
   $("smartParserDialog").close();
 }
 
+function getAppContext() { return window.OmniPocketBus?.getContext?.() || { scope: "global", accountId: null, goalId: null, transactionId: null }; }
+function selectAccountContext(id) { if (window.OmniPocketBus) OmniPocketBus.selectAccount(id); }
+function selectGoalContext(id) { if (window.OmniPocketBus) OmniPocketBus.selectGoal(id); }
+function selectTransactionContext(id) { const t=state.transactions.find(x=>x.id===id); if(window.OmniPocketBus) OmniPocketBus.selectTransaction(id,t?.sourceAccountId||null); }
+function renderContextBar(context=getAppContext()) { const bar=$("dashboardContext"),label=$("dashboardContextLabel"); if(!bar||!label)return; let text="Viewing · Global"; if(context.scope==="account"&&context.accountId)text="Viewing · Account: "+(account(context.accountId)?.name||"Unknown"); if(context.scope==="goal"&&context.goalId)text="Viewing · Goal: "+(state.goals.find(g=>g.id===context.goalId)?.name||"Unknown"); if(context.scope==="transaction"&&context.transactionId)text="Viewing · Activity: "+transactionLabel(state.transactions.find(t=>t.id===context.transactionId)||{type:"activity"}); label.textContent=text; bar.hidden=context.scope==="global"; }
+function contextAccountIds(context=getAppContext()) { if(context.scope==="account"&&context.accountId)return [context.accountId]; if(context.scope==="goal"&&context.goalId)return state.goals.find(g=>g.id===context.goalId)?.accountIds||[]; if(context.scope==="transaction"&&context.transactionId){const t=state.transactions.find(x=>x.id===context.transactionId);return [t?.sourceAccountId,t?.destinationAccountId].filter(Boolean);} return state.accounts.filter(a=>!a.archived).map(a=>a.id); }
+function renderDashboardContextWidgets(context=getAppContext()) { const el=$("galaxyNetWorth"); if(!el)return; let value=netWorth(),label="Your global wealth"; if(context.scope==="account"&&context.accountId){const acc=account(context.accountId);value=acc?convert(acc.balance,acc.currency,state.settings.baseCurrency):0;label=(acc?.name||"Account")+" balance";} else if(context.scope==="goal"&&context.goalId){const g=state.goals.find(x=>x.id===context.goalId);const p=g?goalProgress(g):{current:0};value=g?convert(p.current,g.currency,state.settings.baseCurrency):0;label=(g?.name||"Goal")+" progress";} else if(context.scope==="transaction"&&context.transactionId){const t=state.transactions.find(x=>x.id===context.transactionId);value=t?convert(t.amount,t.currency,state.settings.baseCurrency):0;label=t?transactionLabel(t):"Activity";} el.innerHTML=(state.settings.privacyHidden?"•••••••":escapeHtml(money(value)))+'<div class="muted context-value-label">'+escapeHtml(label)+'</div>'; }
+
 function render() {
   if (!$("netWorth")) return;
   $("netWorth").textContent = state.settings.privacyHidden ? "•••••••" : money(netWorth());
@@ -553,43 +451,9 @@ function render() {
   renderDashboard();
 }
 
-function getAppContext() {
-  return window.OmniPocketBus?.getContext?.() || { scope: "global", accountId: null, goalId: null, transactionId: null };
-}
-
-function selectAccountContext(id) { if (window.OmniPocketBus) OmniPocketBus.selectAccount(id); }
-function selectGoalContext(id) { if (window.OmniPocketBus) OmniPocketBus.selectGoal(id); }
-function selectTransactionContext(id) {
-  const t = state.transactions.find(x => x.id === id);
-  if (window.OmniPocketBus) OmniPocketBus.selectTransaction(id, t?.sourceAccountId || null);
-}
-
-function renderContextBar(context = getAppContext()) {
-  const bar = $("dashboardContext");
-  const label = $("dashboardContextLabel");
-  if (!bar || !label) return;
-  let text = "Viewing · Global";
-  if (context.scope === "account" && context.accountId) text = "Viewing · Account: " + (account(context.accountId)?.name || "Unknown");
-  if (context.scope === "goal" && context.goalId) text = "Viewing · Goal: " + (state.goals.find(g => g.id === context.goalId)?.name || "Unknown");
-  if (context.scope === "transaction" && context.transactionId) text = "Viewing · Activity: " + transactionLabel(state.transactions.find(t => t.id === context.transactionId) || { type: "activity" });
-  label.textContent = text;
-  bar.hidden = context.scope === "global";
-}
-
-function contextAccountIds(context = getAppContext()) {
-  if (context.scope === "account" && context.accountId) return [context.accountId];
-  if (context.scope === "goal" && context.goalId) return state.goals.find(g => g.id === context.goalId)?.accountIds || [];
-  if (context.scope === "transaction" && context.transactionId) {
-    const t = state.transactions.find(x => x.id === context.transactionId);
-    return [t?.sourceAccountId, t?.destinationAccountId].filter(Boolean);
-  }
-  return state.accounts.filter(a => !a.archived).map(a => a.id);
-}
-
 function renderAccounts() {
   const el = $("accountList");
-  const context = getAppContext();
-  const allowed = new Set(contextAccountIds(context));
+  const allowed = new Set(contextAccountIds());
   const accounts = state.accounts.filter(a => !a.archived && allowed.has(a.id)).slice(0, 5);
   if (!accounts.length) {
     el.innerHTML = '<div class="empty-state">No money nodes yet. Add your first account.</div>';
@@ -611,12 +475,8 @@ function renderAccounts() {
 
 function renderActivity() {
   const el = $("activityList");
-  const context = getAppContext();
-  const allowed = new Set(contextAccountIds(context));
-  const rows = state.transactions.filter(t => {
-    if (context.scope === "transaction") return t.id === context.transactionId;
-    return !allowed.size || allowed.has(t.sourceAccountId) || allowed.has(t.destinationAccountId);
-  }).slice().sort((a, b) => b.createdAt - a.createdAt).slice(0, 5);
+  const context = getAppContext(); const allowed = new Set(contextAccountIds(context));
+  const rows = state.transactions.filter(t => context.scope === "transaction" ? t.id === context.transactionId : (!allowed.size || allowed.has(t.sourceAccountId) || allowed.has(t.destinationAccountId))).slice().sort((a,b)=>b.createdAt-a.createdAt).slice(0,5);
   if (!rows.length) {
     el.innerHTML = '<div class="empty-state">Transactions will appear here.</div>';
     return;
@@ -641,19 +501,12 @@ function renderActivity() {
   }).join("");
 }
 
-function goalProgress(goal) {
-  return OmniPocketEngine.goalProgress(state, goal);
-}
+function goalProgress(goal) { return OmniPocketEngine.goalProgress(state, goal); }
 
 function renderGoal() {
-  const el = $("goalContent");
-  const context = getAppContext();
-  const visibleGoals = context.scope === "goal" && context.goalId
-    ? state.goals.filter(g => g.id === context.goalId)
-    : context.scope === "account" && context.accountId
-      ? state.goals.filter(g => g.accountIds.includes(context.accountId))
-      : state.goals;
-  const goal = visibleGoals.find(g => g.status !== "completed") || visibleGoals[0];
+  const el = $("goalContent"); const context=getAppContext();
+  const visibleGoals = context.scope==="goal"&&context.goalId ? state.goals.filter(g=>g.id===context.goalId) : context.scope==="account"&&context.accountId ? state.goals.filter(g=>g.accountIds.includes(context.accountId)) : state.goals;
+  const goal = visibleGoals.find(g=>g.status!=="completed") || visibleGoals[0];
   if (!goal) {
     el.innerHTML = state.goals.length
       ? '<div class="empty-state">All goals completed. Create another target.</div>'
@@ -910,7 +763,6 @@ document.addEventListener("click", event => {
 $("transactionEditButton")?.addEventListener("click", () => editTransaction($("transactionDialog").dataset.transactionId));
 $("transactionDeleteButton")?.addEventListener("click", () => deleteTransaction($("transactionDialog").dataset.transactionId));
 document.addEventListener("click", event => { const goalLink = event.target.closest("[data-goal-from-transaction]"); if (goalLink) { $("transactionDialog")?.close(); selectGoalContext(goalLink.dataset.goalFromTransaction); openGoalDetail(goalLink.dataset.goalFromTransaction); } });
-
 $("clearDashboardContext")?.addEventListener("click", () => window.OmniPocketBus?.clearContext?.());
 
 $("transactionReviewButton")?.addEventListener("click", () => {
@@ -1083,3 +935,161 @@ $("menuButton")?.addEventListener("click", () => navigate("More"));
 $("modeButton")?.addEventListener("click", () => {
   state.settings.mode = state.settings.mode === "offline" ? "hybrid" : "offline";
   $("modeButton").textContent = `Mode · ${state.settings.mode === "offline" ? "Offline" : "Hybrid"}`;
+  saveState();
+});
+
+$("privacySettingsButton")?.addEventListener("click", () => {
+  state.settings.privacyHidden = !state.settings.privacyHidden;
+  $("privacySettingsButton").textContent = `Privacy · ${state.settings.privacyHidden ? "Hidden" : "Visible"}`;
+  saveState();
+});
+
+$("exportButton")?.addEventListener("click", () => {
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `omnipocket-backup-${today()}.json`;
+  link.click();
+  URL.revokeObjectURL(url);
+});
+
+$("importButton")?.addEventListener("click", () => $("importFile")?.click());
+$("importFile")?.addEventListener("change", async event => {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  try {
+    const imported = migrateState(JSON.parse(await file.text()));
+    if (!confirm("Replace current OmniPocket data with this backup?")) return;
+    state = imported;
+    saveState();
+    alert("Backup imported.");
+  } catch {
+    alert("That file is not a valid OmniPocket backup.");
+  } finally {
+    event.target.value = "";
+  }
+});
+
+$("accountForm").addEventListener("submit", event => {
+  event.preventDefault();
+  const accountData = {
+    id: uid(),
+    name: $("accountName").value.trim(),
+    institution: $("accountInstitution").value.trim(),
+    type: $("accountType").value,
+    currency: $("accountCurrency").value,
+    openingBalance: Number($("accountBalance").value) || 0,
+    balance: Number($("accountBalance").value) || 0,
+    archived: false,
+    createdAt: Date.now()
+  };
+  if (!accountData.name) return;
+  state.accounts.push(accountData);
+  saveState();
+  $("accountDialog").close();
+  event.target.reset();
+});
+
+$("quickForm").addEventListener("submit", handleQuickSubmit);
+
+$("privacyButton").onclick = () => {
+  state.settings.privacyHidden = !state.settings.privacyHidden;
+  saveState();
+};
+
+$("baseCurrencyButton").onclick = () => {
+  $("baseCurrencySelect").value = state.settings.baseCurrency;
+  $("currencyDialog").showModal();
+};
+
+$("currencyForm")?.addEventListener("submit", event => {
+  event.preventDefault();
+  state.settings.baseCurrency = $("baseCurrencySelect").value;
+  saveState();
+  $("currencyDialog").close();
+});
+
+$("reconcileForm")?.addEventListener("submit", event => {
+  event.preventDefault();
+  const a = account($("reconcileDialog").dataset.accountId);
+  if (!a) return;
+  const target = Number($("reconcileAmount").value);
+  if (!Number.isFinite(target) || target < 0) return alert("Enter a valid balance.");
+  if (target === a.balance) return $("reconcileDialog").close();
+  const delta = target - a.balance;
+  addTransaction({
+    type:"adjustment",
+    sourceAccountId:a.id,
+    amount:Math.abs(delta),
+    currency:a.currency,
+    category:delta > 0 ? "Reconciliation increase" : "Reconciliation decrease",
+    note:$("reconcileNote").value.trim() || "Balance reconciliation",
+    date:today()
+  });
+  a.balance = target;
+  saveState();
+  $("reconcileDialog").close();
+});
+
+$("addGoalButton").onclick = () => createGoal();
+
+$("smartParseButton")?.addEventListener("click", parseClipboardText);
+$("smartPasteButton")?.addEventListener("click", async () => {
+  try { $("smartTextInput").value = await navigator.clipboard.readText(); parseClipboardText(); }
+  catch { alert("Clipboard access was blocked. Paste the alert into the box instead."); }
+});
+$("smartApprove")?.addEventListener("click", approveSmartParse);
+$("smartReceiptInput")?.addEventListener("change", event => {
+  const file=event.target.files?.[0];
+  if(file) { $("receiptStatus").textContent="Receipt selected. Local OCR adapter is ready for a bundled OCR engine; no image is uploaded by OmniPocket."; }
+});
+$("refreshFxButton")?.addEventListener("click", refreshFxRates);
+let draggedWidgetId=null;
+document.addEventListener("dragstart", event => { const widget=event.target.closest("[data-widget-id]"); if(!widget) return; draggedWidgetId=widget.dataset.widgetId; widget.classList.add("dragging"); });
+document.addEventListener("dragend", event => { const widget=event.target.closest("[data-widget-id]"); widget?.classList.remove("dragging"); draggedWidgetId=null; });
+document.addEventListener("dragover", event => { const target=event.target.closest("[data-widget-id]"); if(!target || !draggedWidgetId || target.dataset.widgetId===draggedWidgetId) return; event.preventDefault(); const root=$("dashboardGalaxy"); const dragged=root.querySelector("[data-widget-id='"+draggedWidgetId+"']"); if(!dragged) return; const rect=target.getBoundingClientRect(); root.insertBefore(dragged,event.clientY < rect.top+rect.height/2 ? target : target.nextSibling); });
+document.addEventListener("drop", event => { if(!draggedWidgetId) return; const order=[...document.querySelectorAll("#dashboardGalaxy [data-widget-id]")].map(el=>el.dataset.widgetId); state.settings.dashboard.order=order; saveState(); });
+$("dashboardCustomizeButton")?.addEventListener("click", () => {
+  const hidden=state.settings.dashboard.hidden||[];
+  document.querySelectorAll("[data-widget-hidden]").forEach(el=>el.checked=!hidden.includes(el.dataset.widgetHidden));
+  const current=(state.settings.dashboard.order||["networth","trend","goals","accounts","activity","quick","fx","insights","spending"]).slice();
+  const select=$("widgetOrderSelect");
+  if(select){
+    const value=current.join(",");
+    let option=[...select.options].find(o=>o.value===value);
+    if(!option){ option=document.createElement("option"); option.value=value; option.textContent="Current workspace order"; select.appendChild(option); }
+    select.value=value;
+  }
+  $("dashboardSettingsDialog").showModal();
+});
+$("dashboardSettingsForm")?.addEventListener("submit", event => {
+  event.preventDefault();
+  const order=($("widgetOrderSelect")?.value || "networth,trend,goals,accounts,activity,quick,fx,insights,spending").split(",");
+  const hidden=[...document.querySelectorAll("[data-widget-hidden]:not(:checked)")].map(el=>el.dataset.widgetHidden);
+  state.settings.dashboard={...state.settings.dashboard,order,hidden};
+  saveState();
+  $("dashboardSettingsDialog").close();
+});
+document.addEventListener("click", event => {
+  const widgetQuick=event.target.closest("[data-dashboard-quick]");
+  if(widgetQuick) openQuick(widgetQuick.dataset.dashboardQuick);
+});
+setupDynamicFields();
+document.querySelectorAll(".nav-item[data-page]").forEach(button => {
+  button.addEventListener("click", () => navigate(button.dataset.page));
+});
+$("activitySearch")?.addEventListener("input", renderFullViews);
+$("clearReviewButton")?.addEventListener("click", () => {
+  navigate("Activity");
+  const review = state.transactions.filter(t => t.status === "needs_review");
+  $("activitySearch").value = "";
+  renderFullViews();
+  if (!review.length) return alert("No transactions need review.");
+  $("activitySearch").value = "review";
+  renderFullViews();
+});
+window.addEventListener("load", async () => {
+  if ("serviceWorker" in navigator && location.protocol !== "file:") navigator.serviceWorker.register("sw.js");
+  await bootstrapStorage();
+});
