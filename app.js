@@ -299,6 +299,7 @@ function parseMoneyText(text) {
   if (/USD|US\\$|\\$/.test(upper)) currency = "USD";
   else if (/GBP|£/.test(upper)) currency = "GBP";
   else if (/EUR|€/.test(upper)) currency = "EUR";
+  let type = /SALARY|PAYROLL|WAGE|CREDITED|CR\b/i.test(raw) ? "income" : "expense";
   let category = "Other";
   const categories = [
     ["TRANSFER", "Transfer"], ["AIRTIME|DATA|MTN|GLO|AIRTEL|9MOBILE", "Bills & telecom"],
@@ -307,8 +308,10 @@ function parseMoneyText(text) {
     ["SALARY|PAYROLL|WAGE", "Income"], ["ATM|CASH WITHDRAWAL", "Cash withdrawal"]
   ];
   for (const [pattern, label] of categories) if (new RegExp(pattern, "i").test(raw)) { category = label; break; }
+  if (category === "Transfer") type = "transfer";
+  if (category === "Income") type = "income";
   const dateMatch = raw.match(/\\b(20\\d{2}[-/]\\d{1,2}[-/]\\d{1,2})\\b/);
-  return { amount, currency, category, date: dateMatch ? dateMatch[1].replace(/\\//g, "-") : today(), raw };
+  return { amount, currency, category, type, date: dateMatch ? dateMatch[1].replace(/\\//g, "-") : today(), raw };
 }
 
 function parseClipboardText() {
@@ -318,10 +321,12 @@ function parseClipboardText() {
   $("smartAmount").textContent = money(parsed.amount, parsed.currency);
   $("smartCategory").textContent = parsed.category;
   $("smartDate").textContent = parsed.date;
+  $("smartApprove").textContent = parsed.type === "income" ? "Approve & add" : "Approve & log expense";
   $("smartResult").hidden = false;
   $("smartApprove").dataset.amount = parsed.amount;
   $("smartApprove").dataset.currency = parsed.currency;
   $("smartApprove").dataset.category = parsed.category;
+  $("smartApprove").dataset.type = parsed.type;
   $("smartApprove").dataset.date = parsed.date;
 }
 
@@ -404,8 +409,9 @@ function approveSmartParse() {
   if(!(amount>0)) return;
   const source=state.accounts.find(a=>!a.archived && a.currency===currency) || state.accounts.find(a=>!a.archived);
   if(!source) return alert("Add an account first.");
-  addTransaction({type:"expense",sourceAccountId:source.id,amount,currency:source.currency,category:button.dataset.category||"Other",date:button.dataset.date||today(),note:"Imported from pasted alert",status:"recorded"});
-  source.balance-=amount;
+  const type = button.dataset.type || "expense";
+  addTransaction({type:type==="income"?"income":"expense",sourceAccountId:source.id,amount,currency:source.currency,category:button.dataset.category||"Other",date:button.dataset.date||today(),note:"Imported from pasted alert",status:"recorded"});
+  if(type==="income") source.balance+=amount; else source.balance-=amount;
   saveState();
   $("smartParserDialog").close();
 }
@@ -1029,7 +1035,7 @@ document.addEventListener("dragstart", event => { const widget=event.target.clos
 document.addEventListener("dragend", event => { const widget=event.target.closest("[data-widget-id]"); widget?.classList.remove("dragging"); draggedWidgetId=null; });
 document.addEventListener("dragover", event => { const target=event.target.closest("[data-widget-id]"); if(!target || !draggedWidgetId || target.dataset.widgetId===draggedWidgetId) return; event.preventDefault(); const root=$("dashboardGalaxy"); const dragged=root.querySelector("[data-widget-id='"+draggedWidgetId+"']"); if(!dragged) return; const rect=target.getBoundingClientRect(); root.insertBefore(dragged,event.clientY < rect.top+rect.height/2 ? target : target.nextSibling); });
 document.addEventListener("drop", event => { if(!draggedWidgetId) return; const order=[...document.querySelectorAll("#dashboardGalaxy [data-widget-id]")].map(el=>el.dataset.widgetId); state.settings.dashboard.order=order; saveState(); });
-$("dashboardCustomizeButton")?.addEventListener("click", () => $("dashboardSettingsDialog").showModal());
+$("dashboardCustomizeButton")?.addEventListener("click", () => { const hidden=state.settings.dashboard.hidden||[]; document.querySelectorAll("[data-widget-hidden]").forEach(el=>el.checked=!hidden.includes(el.dataset.widgetHidden)); $("widgetOrderSelect").value=(state.settings.dashboard.order||[]).join(",") || "networth,trend,goals,accounts,activity,quick,fx"; $("dashboardSettingsDialog").showModal(); });
 $("dashboardSettingsForm")?.addEventListener("submit", event => {
   event.preventDefault();
   const order=($("widgetOrderSelect")?.value || "networth,trend,goals,accounts,activity,quick,fx").split(",");
