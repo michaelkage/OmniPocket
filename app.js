@@ -491,7 +491,7 @@ function renderDashboardContextWidgets(context=getAppContext()) {
   const exposure=context.scope==="account"&&context.accountId?engine.accountExposure(state,context.accountId):engine.accountExposure(state);
   const exposureChips=exposure.currencies.slice(0,4).map(row=>{
     const pct=exposure.totalBase?Math.round(row.baseValue/exposure.totalBase*100):0;
-    return '<span class="relationship-chip">'+escapeHtml(row.currency)+" · "+pct+"%"+'</span>';
+    return '<span class="relationship-chip">'+escapeHtml(row.currency)+(state.settings.privacyHidden?"":" · "+pct+"%")+'</span>';
   }).join("");
 
   const groups=[];
@@ -1136,7 +1136,7 @@ document.addEventListener("drop", event => { if(!draggedWidgetId) return; const 
 $("dashboardCustomizeButton")?.addEventListener("click", () => {
   const hidden=state.settings.dashboard.hidden||[];
   document.querySelectorAll("[data-widget-hidden]").forEach(el=>el.checked=!hidden.includes(el.dataset.widgetHidden));
-  const current=(state.settings.dashboard.order||["networth","trend","goals","accounts","activity","quick","fx","insights","spending"]).slice();
+  const current=(state.settings.dashboard.order||["networth","trend","goals","accounts","activity","quick","fx","relations","insights","spending"]).slice();
   const select=$("widgetOrderSelect");
   if(select){
     const value=current.join(",");
@@ -1148,7 +1148,7 @@ $("dashboardCustomizeButton")?.addEventListener("click", () => {
 });
 $("dashboardSettingsForm")?.addEventListener("submit", event => {
   event.preventDefault();
-  const order=($("widgetOrderSelect")?.value || "networth,trend,goals,accounts,activity,quick,fx,insights,spending").split(",");
+  const order=($("widgetOrderSelect")?.value || "networth,trend,goals,accounts,activity,quick,fx,relations,insights,spending").split(",");
   const hidden=[...document.querySelectorAll("[data-widget-hidden]:not(:checked)")].map(el=>el.dataset.widgetHidden);
   state.settings.dashboard={...state.settings.dashboard,order,hidden};
   saveState();
