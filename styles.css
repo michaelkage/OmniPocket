@@ -25,3 +25,27 @@ textarea{width:100%;resize:vertical;border:1px solid #4a4650;background:#151419;
 .context-bar{display:flex;align-items:center;gap:10px;margin-top:10px;padding:8px 10px;width:max-content;max-width:100%;border:1px solid rgba(208,188,255,.14);border-radius:999px;background:rgba(208,188,255,.06)}.context-bar .text-button{font-size:11px}.context-value-label{margin-top:8px}
 
 .context-trail{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:8px;font-size:12px}.context-crumb,.context-back{border:0;background:none;color:var(--primary);padding:2px 0;cursor:pointer}.context-current{max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.context-separator{opacity:.45}.context-back{margin-left:8px;padding-left:10px;border-left:1px solid rgba(208,188,255,.16)}
+
+.widget-relations{grid-column:span 12}
+.relationship-content{display:grid;gap:14px}
+.relationship-summary{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:14px 16px;border-radius:20px;background:rgba(208,188,255,.07);border:1px solid rgba(208,188,255,.08)}
+.relationship-summary strong{font-size:18px}
+.relationship-summary span{color:var(--muted);font-size:12px}
+.relationship-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.relationship-group{display:grid;gap:8px;padding:12px;border-radius:20px;background:rgba(255,255,255,.025);border:1px solid rgba(255,255,255,.06);min-width:0}
+.relationship-group h3{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:0}
+.relationship-node{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;padding:10px 11px;border:1px solid rgba(208,188,255,.08);background:rgba(255,255,255,.035);color:inherit;border-radius:15px;text-align:left}
+.relationship-node:hover{background:rgba(208,188,255,.09);border-color:rgba(208,188,255,.2)}
+.relationship-node-main{display:flex;align-items:center;gap:9px;min-width:0}
+.relationship-node-main>div{min-width:0}
+.relationship-node .node{width:30px;height:30px;flex:0 0 30px;border-radius:11px}
+.relationship-node strong,.relationship-node small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.relationship-node small{color:var(--muted);font-size:10px;margin-top:2px}
+.relationship-value{font-size:11px;font-weight:750;white-space:nowrap}
+.relationship-chips{display:flex;flex-wrap:wrap;gap:7px}
+.relationship-chip{display:inline-flex;align-items:center;gap:5px;padding:7px 9px;border-radius:999px;background:rgba(208,188,255,.08);color:var(--primary);font-size:11px}
+.relationship-mini{margin-top:12px;display:flex;flex-wrap:wrap;gap:7px}
+.relationship-mini:empty{display:none}
+.relationship-empty{padding:12px;border-radius:16px;background:rgba(255,255,255,.025);color:var(--muted);font-size:12px}
+.relationship-foot{color:var(--muted);font-size:11px;line-height:1.45}
+@media(max-width:800px){.widget-relations{grid-column:span 12}.relationship-grid{grid-template-columns:1fr}}
