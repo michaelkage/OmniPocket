@@ -169,6 +169,7 @@ function render() {
   renderAccounts();
   renderActivity();
   renderGoal();
+  renderFullViews();
 }
 
 function renderAccounts() {
@@ -404,6 +405,71 @@ function handleQuickSubmit(event) {
   } catch (error) {
     alert(error.message || "Could not record transaction.");
   }
+}
+
+function renderFullViews() {
+  const accountsEl = $("accountsFullList");
+  if (accountsEl) accountsEl.innerHTML = state.accounts.filter(a => !a.archived).map(a => `
+    <div class="account-row account-full">
+      <div class="account-main"><span class="node">◉</span><div><strong>${escapeHtml(a.name)}</strong><div class="muted">${escapeHtml(a.institution || "Personal")} · ${escapeHtml(a.type)} · ${escapeHtml(a.currency)}</div></div></div>
+      <div class="account-tools"><strong>${state.settings.privacyHidden ? "••••" : escapeHtml(money(a.balance,a.currency))}</strong><button data-reconcile="${escapeHtml(a.id)">Reconcile</button></div>
+    </div>`).join("") || '<div class="empty-state">No accounts yet.</div>';
+
+  const goalsEl = $("goalsFullList");
+  if (goalsEl) goalsEl.innerHTML = state.goals.map(g => {
+    const p = goalProgress(g);
+    return `<div class="goal-row"><div><strong>${escapeHtml(g.name)}</strong><div class="muted">${escapeHtml(money(p.current,g.currency))} of ${escapeHtml(money(g.target,g.currency))} · ${p.pct.toFixed(0)}%${g.deadline ? " · "+escapeHtml(g.deadline) : ""}</div></div><span class="status-chip">${escapeHtml(g.status)}</span></div>`;
+  }).join("") || '<div class="empty-state">No goals yet.</div>';
+
+  const search = ($("activitySearch")?.value || "").toLowerCase();
+  const activityEl = $("activityFullList");
+  if (activityEl) activityEl.innerHTML = state.transactions.slice().sort((a,b)=>b.createdAt-a.createdAt).filter(t => {
+    const s = `${transactionLabel(t)} ${t.note} ${t.date} ${account(t.sourceAccountId)?.name || ""}`.toLowerCase();
+    return s.includes(search);
+  }).map(t => {
+    const source = account(t.sourceAccountId), dest = account(t.destinationAccountId);
+    const direction = transactionDirection(t);
+    const sign = direction === "out" ? "−" : direction === "in" ? "+" : "";
+    const detail = t.type === "transfer" ? `${source?.name || "Unknown"} → ${dest?.name || "Unknown"}` : source?.name || "Unknown";
+    return `<div class="activity-row"><div><strong>${escapeHtml(transactionLabel(t))}</strong><div class="muted">${escapeHtml(t.date)} · ${escapeHtml(detail)}${t.note ? " · "+escapeHtml(t.note) : ""}</div></div><div class="activity-value"><strong>${sign}${escapeHtml(money(t.amount,t.currency))}</strong><span class="muted">${escapeHtml(t.status)}</span></div></div>`;
+  }).join("") || '<div class="empty-state">No matching activity.</div>';
+
+  document.querySelectorAll("[data-reconcile]").forEach(button => {
+    button.onclick = () => {
+      const a = account(button.dataset.reconcile);
+      if (!a) return;
+      const target = Number(prompt(`Actual balance for ${a.name} (${a.currency}):`, String(a.balance)));
+      if (!Number.isFinite(target) || target < 0 || target === a.balance) return;
+      const delta = target - a.balance;
+      addTransaction({type:"adjustment",sourceAccountId:a.id,amount:Math.abs(delta),currency:a.currency,category:delta > 0 ? "Reconciliation increase" : "Reconciliation decrease",note:"Balance reconciliation",date:today()});
+      a.balance = target;
+      saveState();
+    };
+  });
+}
+
+function navigate(page) {
+  const names = ["Home","Accounts","Goals","Activity","More"];
+  names.forEach(name => {
+    const view = $("page"+name);
+    if (view) view.hidden = name !== page;
+  });
+  document.querySelectorAll(".nav-item[data-page]").forEach(button => button.classList.toggle("active", button.dataset.page === page));
+  document.querySelector(".main-content")?.scrollTo({top:0,behavior:"smooth"});
+}
+
+function createGoal() {
+  if (!state.accounts.some(a => !a.archived)) return alert("Add an account first.");
+  const name = prompt("Goal name:");
+  if (!name?.trim()) return;
+  const target = Number(prompt("Target amount:", "100000"));
+  if (!(target > 0)) return;
+  const currency = (prompt("Goal currency (NGN, USD, GBP, EUR):", state.settings.baseCurrency) || state.settings.baseCurrency).toUpperCase();
+  if (!CURRENCIES.includes(currency)) return alert("Unsupported currency.");
+  const selected = state.accounts.filter(a => !a.archived).filter(a => confirm(`Include ${a.name} (${a.currency}) in this goal?`));
+  const deadline = prompt("Deadline (YYYY-MM-DD, optional):", "");
+  state.goals.push({id:uid(),name:name.trim(),target,currency,accountIds:selected.map(a=>a.id),deadline:deadline || "",status:"active",createdAt:Date.now()});
+  saveState();
 }
 
 function setupDynamicFields() {
