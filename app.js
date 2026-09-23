@@ -1072,6 +1072,7 @@ function archiveAccount(id) {
 function openGoalDetail(id) {
   const g = state.goals.find(x => x.id === id);
   if (!g) return;
+  const health = window.OmniPocketEngine?.goalHealth ? window.OmniPocketEngine.goalHealth(state, g) : { label: "Active", tone: "neutral", reason: "" };
   const intelligence = window.OmniPocketEngine?.goalIntelligence
     ? OmniPocketEngine.goalIntelligence(state, g)
     : { progress: goalProgress(g), projection: null, accounts: g.accountIds.map(account).filter(Boolean), linkedTransactions: [], inferredTransactions: [], transactions: [] };
@@ -1082,6 +1083,9 @@ function openGoalDetail(id) {
   const dateLabel = value => value ? new Date(value + "T00:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "—";
   const accountIds = new Set(g.accountIds || []);
 
+  $("goalDetailHealth").textContent = health.label;
+  $("goalDetailHealth").dataset.tone = health.tone;
+  $("goalDetailHealthNote").textContent = health.reason;
   $("goalDetailTitle").textContent = g.name;
   $("goalDetailProgress").textContent = privacy ? "••••••" : money(p.current, g.currency) + " of " + money(p.target, g.currency);
   $("goalDetailBar").style.width = p.pct + "%";
