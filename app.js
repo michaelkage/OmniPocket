@@ -1071,17 +1071,54 @@ function archiveAccount(id) {
 function openGoalDetail(id) {
   const g = state.goals.find(x => x.id === id);
   if (!g) return;
-  const p = goalProgress(g);
-  const days = g.deadline ? Math.max(0, Math.ceil((new Date(g.deadline) - new Date(today())) / 86400000)) : null;
+  const intelligence = window.OmniPocketEngine?.goalIntelligence
+    ? OmniPocketEngine.goalIntelligence(state, g)
+    : { progress: goalProgress(g), projection: null, accounts: g.accountIds.map(account).filter(Boolean), linkedTransactions: [], inferredTransactions: [], transactions: [] };
+  const p = intelligence.progress;
+  const projection = intelligence.projection || {};
+  const privacy = state.settings.privacyHidden;
+  const fmt = value => privacy ? "••••••" : money(value, g.currency);
+  const dateLabel = value => value ? new Date(value + "T00:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "—";
+  const accountIds = new Set(g.accountIds || []);
+
   $("goalDetailTitle").textContent = g.name;
-  $("goalDetailProgress").textContent = state.settings.privacyHidden ? "••••••" : money(p.current, g.currency) + " of " + money(g.target, g.currency);
+  $("goalDetailProgress").textContent = privacy ? "••••••" : money(p.current, g.currency) + " of " + money(p.target, g.currency);
   $("goalDetailBar").style.width = p.pct + "%";
-  $("goalDetailMeta").textContent = p.pct.toFixed(0) + "% complete" + (days !== null ? " · " + days + " day" + (days === 1 ? "" : "s") + " remaining" : "");
-  $("goalDetailAccounts").innerHTML = g.accountIds.map(id => account(id)).filter(Boolean).map(a => '<button class="link-row" data-account-from-goal="' + escapeHtml(a.id) + '"><strong>' + escapeHtml(a.name) + "</strong><span>" + escapeHtml(money(a.balance, a.currency)) + "</span></button>").join("") || '<div class="empty-state">No contributing accounts selected.</div>';
-  const pace = days && p.current < g.target ? (g.target - p.current) / days : 0;
-  $("goalDetailPace").textContent = pace > 0 ? "Needed pace: " + money(pace, g.currency) + " / day" : p.current >= g.target ? "Target reached." : "No deadline set.";
+  $("goalDetailMeta").textContent = p.pct.toFixed(0) + "% complete" + (projection.daysRemaining != null ? " · " + projection.daysRemaining + " day" + (projection.daysRemaining === 1 ? "" : "s") + " remaining" : "");
+
+  $("goalDetailRemaining").textContent = p.remaining > 0 ? fmt(p.remaining) : "Target reached";
+  $("goalDetailRequired").textContent = projection.dailyRequired != null ? fmt(projection.dailyRequired) + " / day" : "No deadline";
+  $("goalDetailProjected").textContent = projection.projectedDate ? dateLabel(projection.projectedDate) : "Not enough pace data";
+  $("goalDetailProjectionNote").textContent = projection.pace > 0
+    ? "Based on the net contribution pace from the last 30 days."
+    : p.current >= p.target
+      ? "This goal has reached its target."
+      : "Add recorded account activity to build a completion projection.";
+
+  $("goalDetailPace").textContent = projection.dailyRequired > 0
+    ? "Required: " + fmt(projection.dailyRequired) + " per day" + (projection.pace > 0 ? " · Recent pace: " + fmt(projection.pace) + " per day" : "")
+    : p.current >= p.target ? "Target reached." : "No deadline set.";
+
+  $("goalDetailAccounts").innerHTML = intelligence.accounts.map(a =>
+    '<button class="link-row" data-account-from-goal="' + escapeHtml(a.id) + '"><span><strong>' + escapeHtml(a.name) + '</strong><small class="muted">' + escapeHtml(a.currency) + ' · Included in goal progress</small></span><span>' + escapeHtml(fmt(a.balance)) + '</span></button>'
+  ).join("") || '<div class="empty-state">No contributing accounts selected.</div>';
+
+  $("goalDetailLinkedActivity").innerHTML = activityRowsForGoal(intelligence.linkedTransactions, g, true) || '<div class="empty-state">No transactions are explicitly linked to this goal.</div>';
+  $("goalDetailConnectedActivity").innerHTML = activityRowsForGoal(intelligence.inferredTransactions, g, false) || '<div class="empty-state">No inferred account activity yet.</div>';
+  $("goalDetailActivitySummary").textContent = intelligence.transactions.length + " related transaction" + (intelligence.transactions.length === 1 ? "" : "s") + " · " + intelligence.linkedTransactions.length + " explicitly linked";
+
   $("goalDetailDialog").dataset.goalId = id;
   $("goalDetailDialog").showModal();
+}
+
+function activityRowsForGoal(list, goal, linked) {
+  const accountIds = new Set(goal.accountIds || []);
+  return list.slice(0, 6).map(t => {
+    const incoming = accountIds.has(t.destinationAccountId) && !accountIds.has(t.sourceAccountId);
+    const displayAmount = incoming && t.receivedAmount != null ? t.receivedAmount : t.amount;
+    const displayCurrency = incoming && t.receivedCurrency ? t.receivedCurrency : t.currency;
+    return '<button class="link-row goal-activity-row" data-transaction-from-goal="' + escapeHtml(t.id) + '"><span><strong>' + escapeHtml(transactionLabel(t)) + '</strong><small class="muted">' + escapeHtml(t.date) + ' · ' + (linked ? 'Explicitly linked to this goal' : 'Connected through an included account') + '</small></span><span class="goal-activity-right"><span class="' + (linked ? 'context-link-badge' : 'relationship-inferred-badge') + '">' + (linked ? 'Linked' : 'Connected') + '</span><span>' + escapeHtml((incoming ? "+" : transactionDirection(t) === "out" ? "−" : "") + money(displayAmount, displayCurrency)) + '</span></span></button>';
+  }).join("");
 }
 
 function setupDynamicFields() {
