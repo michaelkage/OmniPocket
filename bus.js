@@ -89,16 +89,24 @@
     return getContext();
   }
 
-  function goBack() {
-    if (history.length > 1) {
-      history.pop();
-      const previous = history[history.length - 1];
-      context = { ...previous, reason: "context-back" };
-      emit("context:changed", { context: getContext(), previous: null, history: getHistory() });
-      return getContext();
+  function restoreHistory(index = 0) {
+    const targetIndex = Math.max(0, Math.min(Number(index) || 0, history.length));
+    if (targetIndex === 0) {
+      history.length = 0;
+      return clearContext("context-history");
     }
-    history.length = 0;
-    return clearContext("context-back");
+    const target = history[targetIndex - 1];
+    if (!target) return getContext();
+    history.splice(targetIndex);
+    const previous = { ...context };
+    context = { ...target, reason: "context-history" };
+    emit("context:changed", { context: getContext(), previous, history: getHistory() });
+    return getContext();
+  }
+
+  function goBack() {
+    if (history.length > 1) return restoreHistory(history.length - 1);
+    return restoreHistory(0);
   }
 
   function clear(event = null) {
@@ -106,5 +114,5 @@
     else listeners.clear();
   }
 
-  window.OmniPocketBus = Object.freeze({ on, once, emit, clear, getContext, getHistory, setContext, selectAccount, selectGoal, selectTransaction, clearContext, goBack });
+  window.OmniPocketBus = Object.freeze({ on, once, emit, clear, getContext, getHistory, setContext, selectAccount, selectGoal, selectTransaction, clearContext, restoreHistory, goBack });
 })();
