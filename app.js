@@ -360,7 +360,7 @@ function renderDashboard() {
   };
   const order=state.settings.dashboard.order || Object.keys(widgets);
   root.innerHTML="";
-  order.filter(id=>widgets[id] && !(state.settings.dashboard.hidden||[]).includes(id)).forEach(id=>root.appendChild(widgets[id]));
+  order.filter(id=>widgets[id] && !(state.settings.dashboard.hidden||[]).includes(id)).forEach(id=>{ const widget=widgets[id]; widget.draggable=true; widget.dataset.widgetId=id; root.appendChild(widget); });
   const galaxyNetWorth=$("galaxyNetWorth"); if(galaxyNetWorth) galaxyNetWorth.textContent=state.settings.privacyHidden ? "•••••••" : money(netWorth());
   renderNetWorthTrend();
   const count=$("reviewCount"); if(count) count.textContent=state.transactions.filter(t=>t.status==="needs_review").length+" review";
@@ -1024,11 +1024,16 @@ $("smartReceiptInput")?.addEventListener("change", event => {
   if(file) { $("receiptStatus").textContent="Receipt selected. Local OCR adapter is ready for a bundled OCR engine; no image is uploaded by OmniPocket."; }
 });
 $("refreshFxButton")?.addEventListener("click", refreshFxRates);
+let draggedWidgetId=null;
+document.addEventListener("dragstart", event => { const widget=event.target.closest("[data-widget-id]"); if(!widget) return; draggedWidgetId=widget.dataset.widgetId; widget.classList.add("dragging"); });
+document.addEventListener("dragend", event => { const widget=event.target.closest("[data-widget-id]"); widget?.classList.remove("dragging"); draggedWidgetId=null; });
+document.addEventListener("dragover", event => { const target=event.target.closest("[data-widget-id]"); if(!target || !draggedWidgetId || target.dataset.widgetId===draggedWidgetId) return; event.preventDefault(); const root=$("dashboardGalaxy"); const dragged=root.querySelector("[data-widget-id='"+draggedWidgetId+"']"); if(!dragged) return; const rect=target.getBoundingClientRect(); root.insertBefore(dragged,event.clientY < rect.top+rect.height/2 ? target : target.nextSibling); });
+document.addEventListener("drop", event => { if(!draggedWidgetId) return; const order=[...document.querySelectorAll("#dashboardGalaxy [data-widget-id]")].map(el=>el.dataset.widgetId); state.settings.dashboard.order=order; saveState(); });
 $("dashboardCustomizeButton")?.addEventListener("click", () => $("dashboardSettingsDialog").showModal());
 $("dashboardSettingsForm")?.addEventListener("submit", event => {
   event.preventDefault();
   const order=($("widgetOrderSelect")?.value || "networth,trend,goals,accounts,activity,quick,fx").split(",");
-  const hidden=[...document.querySelectorAll("[data-widget-hidden]:checked")].map(el=>el.dataset.widgetHidden);
+  const hidden=[...document.querySelectorAll("[data-widget-hidden]:not(:checked)")].map(el=>el.dataset.widgetHidden);
   state.settings.dashboard={...state.settings.dashboard,order,hidden};
   saveState();
   $("dashboardSettingsDialog").close();
