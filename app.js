@@ -184,6 +184,83 @@ function transactionDirection(t) {
   return "neutral";
 }
 
+function adjustmentDelta(t) {
+  const label = (t.category || "").toLowerCase();
+  return label.includes("decrease") ? -Math.abs(t.amount) : Math.abs(t.amount);
+}
+
+function rebuildBalances() {
+  state.accounts.forEach(a => { a.balance = Number(a.openingBalance) || 0; });
+  const txs = state.transactions.slice().sort((a,b) => {
+    const dateCompare = String(a.date).localeCompare(String(b.date));
+    return dateCompare || a.createdAt - b.createdAt;
+  });
+  for (const tx of txs) {
+    const source = account(tx.sourceAccountId);
+    const destination = account(tx.destinationAccountId);
+    if (tx.type === "income" && source) source.balance += tx.amount;
+    if (tx.type === "expense" && source) source.balance -= tx.amount;
+    if (tx.type === "withdrawal") {
+      if (source) source.balance -= tx.amount;
+      if (destination) destination.balance += tx.receivedAmount ?? convert(tx.amount, tx.currency, destination.currency, tx.fxRate);
+    }
+    if (tx.type === "transfer") {
+      if (source) source.balance -= tx.amount;
+      if (destination) destination.balance += tx.receivedAmount ?? convert(tx.amount, tx.currency, destination.currency, tx.fxRate);
+    }
+    if (tx.type === "adjustment" && source) source.balance += adjustmentDelta(tx);
+  }
+}
+
+function openTransactionDetail(id) {
+  const t = state.transactions.find(x => x.id === id);
+  if (!t) return;
+  const source = account(t.sourceAccountId);
+  const dest = account(t.destinationAccountId);
+  const incoming = t.type !== "income" && dest && !source ? dest : null;
+  const displayAmount = t.receivedAmount != null && t.type !== "expense" && dest ? t.receivedAmount : t.amount;
+  const displayCurrency = t.receivedAmount != null && t.type !== "expense" && dest ? (t.receivedCurrency || t.currency) : t.currency;
+  $("transactionDetailTitle").textContent = transactionLabel(t);
+  $("transactionDetailMeta").textContent = t.date + " · " + t.type;
+  $("transactionDetailAmount").textContent = state.settings.privacyHidden ? "••••••" : money(displayAmount, displayCurrency);
+  $("transactionDetailContext").textContent = t.type === "transfer" || t.type === "withdrawal"
+    ? (source?.name || "Unknown") + " → " + (dest?.name || "Unknown")
+    : source?.name || incoming?.name || "Unknown account";
+  $("transactionDetailStatus").textContent = t.status === "needs_review" ? "Needs review — handle later" : "Recorded";
+  $("transactionDetailNote").textContent = t.note || "No note.";
+  $("transactionReviewButton").textContent = t.status === "needs_review" ? "Mark recorded" : "Mark for review";
+  $("transactionDialog").dataset.transactionId = id;
+  $("transactionDialog").showModal();
+}
+
+function editTransaction(id) {
+  const t = state.transactions.find(x => x.id === id);
+  if (!t) return;
+  if (t.type === "transfer" || t.type === "withdrawal") {
+    alert("For transfers and cash-outs, edit details from the original entry instead of changing the movement amount here.");
+    return;
+  }
+  $("editTxAmount").value = t.amount;
+  $("editTxDate").value = t.date;
+  $("editTxCategory").value = t.category;
+  $("editTxNote").value = t.note;
+  $("editTxStatus").value = t.status;
+  $("editTransactionDialog").dataset.transactionId = id;
+  $("transactionDialog").close();
+  $("editTransactionDialog").showModal();
+}
+
+function deleteTransaction(id) {
+  const index = state.transactions.findIndex(x => x.id === id);
+  if (index < 0) return;
+  const t = state.transactions[index];
+  if (!confirm("Delete this transaction? The account balance will be recalculated.")) return;
+  state.transactions.splice(index, 1);
+  rebuildBalances();
+  saveState();
+  $("transactionDialog")?.close();
+}
+
 function render() {
   if (!$("netWorth")) return;
   $("netWorth").textContent = state.settings.privacyHidden ? "•••••••" : money(netWorth());
@@ -470,7 +547,7 @@ function renderFullViews() {
     const direction = transactionDirection(t);
     const sign = direction === "out" ? "−" : direction === "in" ? "+" : "";
     const detail = t.type === "transfer" ? `${source?.name || "Unknown"} → ${dest?.name || "Unknown"}` : source?.name || "Unknown";
-    return `<div class="activity-row"><div><strong>${escapeHtml(transactionLabel(t))}</strong><div class="muted">${escapeHtml(t.date)} · ${escapeHtml(detail)}${t.note ? " · "+escapeHtml(t.note) : ""}</div></div><div class="activity-value"><strong>${sign}${escapeHtml(money(t.amount,t.currency))}</strong><span class="muted">${escapeHtml(t.status)}</span></div></div>`;
+    return `<div class="activity-row interactive-row" data-transaction-id="${escapeHtml(t.id)}" tabindex="0" role="button"><div><strong>${escapeHtml(transactionLabel(t))}</strong><div class="muted">${escapeHtml(t.date)} · ${escapeHtml(detail)}${t.note ? " · "+escapeHtml(t.note) : ""}</div></div><div class="activity-value"><strong>${sign}${escapeHtml(money(t.amount,t.currency))}</strong><span class="muted">${escapeHtml(t.status)}</span></div></div>`;
   }).join("") || '<div class="empty-state">No matching activity.</div>';
 
   document.querySelectorAll("[data-reconcile]").forEach(button => {
@@ -506,6 +583,38 @@ document.addEventListener("click", event => {
   if (goalLink) { $("accountDetailDialog")?.close(); openGoalDetail(goalLink.dataset.goalFromAccount); }
   const accountLink = event.target.closest("[data-account-from-goal]");
   if (accountLink) { $("goalDetailDialog")?.close(); openAccountDetail(accountLink.dataset.accountFromGoal); }
+});
+
+document.addEventListener("click", event => {
+  const txRow = event.target.closest("[data-transaction-id]");
+  if (txRow && !event.target.closest("button")) openTransactionDetail(txRow.dataset.transactionId);
+});
+
+$("transactionEditButton")?.addEventListener("click", () => editTransaction($("transactionDialog").dataset.transactionId));
+$("transactionDeleteButton")?.addEventListener("click", () => deleteTransaction($("transactionDialog").dataset.transactionId));
+$("transactionReviewButton")?.addEventListener("click", () => {
+  const t = state.transactions.find(x => x.id === $("transactionDialog").dataset.transactionId);
+  if (!t) return;
+  t.status = t.status === "needs_review" ? "recorded" : "needs_review";
+  saveState();
+  openTransactionDetail(t.id);
+});
+
+$("editTransactionForm")?.addEventListener("submit", event => {
+  event.preventDefault();
+  const t = state.transactions.find(x => x.id === $("editTransactionDialog").dataset.transactionId);
+  if (!t) return;
+  const amount = Number($("editTxAmount").value);
+  if (!(amount > 0)) return alert("Enter an amount greater than zero.");
+  t.amount = amount;
+  t.date = $("editTxDate").value || t.date;
+  t.category = $("editTxCategory").value.trim();
+  t.note = $("editTxNote").value.trim();
+  t.status = $("editTxStatus").value;
+  t.createdAt = Date.now();
+  rebuildBalances();
+  saveState();
+  $("editTransactionDialog").close();
 });
 
 $("accountDetailEdit")?.addEventListener("click", () => editAccount($("accountDetailDialog").dataset.accountId));
