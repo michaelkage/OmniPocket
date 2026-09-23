@@ -49,3 +49,8 @@ textarea{width:100%;resize:vertical;border:1px solid #4a4650;background:#151419;
 .relationship-empty{padding:12px;border-radius:16px;background:rgba(255,255,255,.025);color:var(--muted);font-size:12px}
 .relationship-foot{color:var(--muted);font-size:11px;line-height:1.45}
 @media(max-width:800px){.widget-relations{grid-column:span 12}.relationship-grid{grid-template-columns:1fr}}
+
+/* Context relationship cues */
+.row-title-with-context{display:flex;align-items:center;gap:7px;min-width:0;flex-wrap:wrap}
+.context-link-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 7px;border-radius:999px;border:1px solid rgba(208,188,255,.14);background:rgba(208,188,255,.07);color:var(--primary);font-size:9px;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+.context-link-badge::before{content:"";width:5px;height:5px;border-radius:50%;background:currentColor;opacity:.8}
