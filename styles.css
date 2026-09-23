@@ -93,3 +93,9 @@ textarea{width:100%;resize:vertical;border:1px solid #4a4650;background:#151419;
 @media(max-width:520px){.review-queue-head{align-items:flex-start;flex-direction:column}.review-queue-head button{width:100%}}
 
 .imported-transaction-badge{font-size:10px}
+
+.statement-import-preview{max-height:280px;overflow:auto;border:1px solid rgba(255,255,255,.06);border-radius:14px}
+.statement-import-row{display:flex;justify-content:space-between;gap:12px;padding:9px 11px;border-bottom:1px solid rgba(255,255,255,.05);font-size:11px}
+.statement-import-row:last-child{border-bottom:0}
+.statement-import-row>span{min-width:0}
+.statement-import-row small{display:block;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
