@@ -371,20 +371,13 @@ function handleQuickSubmit(event) {
 
   try {
     if (quickType === "adjustment") {
-      const target = Number(prompt(`Actual balance for ${source.name} (${source.currency}):`, String(source.balance)));
-      if (!Number.isFinite(target) || target < 0) return;
-      const delta = target - source.balance;
-      const tx = addTransaction({
-        type: "adjustment",
-        sourceAccountId: source.id,
-        amount: Math.abs(delta),
-        currency: source.currency,
-        category: delta >= 0 ? "Reconciliation increase" : "Reconciliation decrease",
-        note: note || "Balance reconciliation",
-        date
-      });
-      if (delta < 0) tx.amount = Math.abs(delta);
-      source.balance = target;
+      $("quickDialog").close();
+      $("reconcileMeta").textContent = source.name + " · " + source.currency + " · Current " + money(source.balance, source.currency);
+      $("reconcileAmount").value = source.balance;
+      $("reconcileNote").value = note;
+      $("reconcileDialog").dataset.accountId = source.id;
+      $("reconcileDialog").showModal();
+      return;
     } else if (quickType === "transfer") {
       const destination = account($("quickDestination").value);
       if (!destination || destination.id === source.id) return alert("Choose a different destination account.");
