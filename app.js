@@ -233,22 +233,40 @@ function openTransactionDetail(id) {
   $("transactionDialog").showModal();
 }
 
+function populateEditTransactionAccounts(t) {
+  const active = state.accounts.filter(a => !a.archived);
+  $("editTxSource").innerHTML = active.map(a => '<option value="' + escapeHtml(a.id) + '">' + escapeHtml(a.name) + " · " + escapeHtml(a.currency) + "</option>").join("");
+  $("editTxDestination").innerHTML = active.map(a => '<option value="' + escapeHtml(a.id) + '">' + escapeHtml(a.name) + " · " + escapeHtml(a.currency) + "</option>").join("");
+  $("editTxSource").value = t.sourceAccountId || "";
+  $("editTxDestination").value = t.destinationAccountId || "";
+}
+
+function syncEditTransactionFields() {
+  const type = $("editTxType").value;
+  const movement = type === "transfer" || type === "withdrawal";
+  $("editTxDestinationWrap").style.display = movement ? "grid" : "none";
+  $("editTxReceivedWrap").style.display = movement ? "grid" : "none";
+  $("editTxFxWrap").style.display = movement ? "grid" : "none";
+}
+
 function editTransaction(id) {
   const t = state.transactions.find(x => x.id === id);
   if (!t) return;
-  if (t.type === "transfer" || t.type === "withdrawal") {
-    alert("For transfers and cash-outs, edit details from the original entry instead of changing the movement amount here.");
-    return;
-  }
+  $("editTxType").value = t.type;
+  populateEditTransactionAccounts(t);
   $("editTxAmount").value = t.amount;
+  $("editTxReceived").value = t.receivedAmount ?? "";
+  $("editTxFxRate").value = t.fxRate ?? "";
   $("editTxDate").value = t.date;
   $("editTxCategory").value = t.category;
   $("editTxNote").value = t.note;
   $("editTxStatus").value = t.status;
   $("editTransactionDialog").dataset.transactionId = id;
+  syncEditTransactionFields();
   $("transactionDialog").close();
   $("editTransactionDialog").showModal();
 }
+
 
 function deleteTransaction(id) {
   const index = state.transactions.findIndex(x => x.id === id);
@@ -600,13 +618,25 @@ $("transactionReviewButton")?.addEventListener("click", () => {
   openTransactionDetail(t.id);
 });
 
-$("editTransactionForm")?.addEventListener("submit", event => {
+$("editTxType")?.addEventListener("change", syncEditTransactionFields);\n\n$("editTransactionForm")?.addEventListener("submit", event => {
   event.preventDefault();
   const t = state.transactions.find(x => x.id === $("editTransactionDialog").dataset.transactionId);
   if (!t) return;
   const amount = Number($("editTxAmount").value);
-  if (!(amount > 0)) return alert("Enter an amount greater than zero.");
+  const type = $("editTxType").value;
+  const source = account($("editTxSource").value);
+  const destination = account($("editTxDestination").value);
+  if (!(amount > 0) || !source) return alert("Enter a valid amount and account.");
+  if ((type === "transfer" || type === "withdrawal") && (!destination || destination.id === source.id)) return alert("Choose a different destination.");
+  if (type === "withdrawal" && destination.type !== "cash") return alert("Cash out must land in a Cash account.");
+  t.type = type;
+  t.sourceAccountId = source.id;
+  t.destinationAccountId = type === "transfer" || type === "withdrawal" ? destination.id : null;
   t.amount = amount;
+  t.receivedAmount = type === "transfer" || type === "withdrawal" ? (Number($("editTxReceived").value) || convert(amount, source.currency, destination.currency, Number($("editTxFxRate").value) || null)) : null;
+  t.receivedCurrency = type === "transfer" || type === "withdrawal" ? destination.currency : null;
+  t.fxRate = type === "transfer" || type === "withdrawal" ? (Number($("editTxFxRate").value) || null) : null;
+  t.fxSource = t.fxRate ? "manual" : (type === "transfer" || type === "withdrawal" ? "snapshot" : null);
   t.date = $("editTxDate").value || t.date;
   t.category = $("editTxCategory").value.trim();
   t.note = $("editTxNote").value.trim();
@@ -615,43 +645,6 @@ $("editTransactionForm")?.addEventListener("submit", event => {
   rebuildBalances();
   saveState();
   $("editTransactionDialog").close();
-});
-
-$("accountDetailEdit")?.addEventListener("click", () => editAccount($("accountDetailDialog").dataset.accountId));
-$("accountDetailArchive")?.addEventListener("click", () => archiveAccount($("accountDetailDialog").dataset.accountId));
-
-$("editAccountForm")?.addEventListener("submit", event => {
-  event.preventDefault();
-  const a = account($("editAccountDialog").dataset.accountId);
-  if (!a) return;
-  a.name = $("editAccountName").value.trim() || a.name;
-  a.institution = $("editAccountInstitution").value.trim();
-  a.type = $("editAccountType").value;
-  a.currency = $("editAccountCurrency").value;
-  saveState();
-  $("editAccountDialog").close();
-  $("accountDetailDialog")?.close();
-  openAccountDetail(a.id);
-});
-
-$("goalForm")?.addEventListener("submit", event => {
-  event.preventDefault();
-  const name = $("goalName").value.trim();
-  const target = Number($("goalTarget").value);
-  const currency = $("goalCurrency").value;
-  if (!name || !(target > 0)) return alert("Enter a goal name and target.");
-  const accountIds = [...document.querySelectorAll('input[name="goalAccount"]:checked')].map(input => input.value);
-  const editingId = $("goalDialog").dataset.editingId;
-  if (editingId) {
-    const g = state.goals.find(x => x.id === editingId);
-    if (g) Object.assign(g, {name,target,currency,accountIds,deadline:$("goalDeadline").value||""});
-  } else {
-    state.goals.push({id:uid(),name,target,currency,accountIds,deadline:$("goalDeadline").value||"",status:"active",createdAt:Date.now()});
-  }
-  delete $("goalDialog").dataset.editingId;
-  saveState();
-  $("goalDialog").close();
-  event.target.reset();
 });
 
 $("goalDetailEdit")?.addEventListener("click", () => {
