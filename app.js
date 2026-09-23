@@ -327,27 +327,54 @@ function parseStatementCsv(text) {
 }
 
 function statementColumn(headers, patterns) {
-  return headers.find(h => patterns.some(pattern => pattern.test(String(h)))) || null;
+  return headers.find(h => patterns.some(pattern => pattern.test(String(h)))) || "";
+}
+
+function normalizeStatementDate(value) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return "";
+  if (/^\d{4}[-/]\d{1,2}[-/]\d{1,2}$/.test(raw)) {
+    const parts = raw.split(/[-/]/).map(Number);
+    return parts[0] + "-" + String(parts[1]).padStart(2,"0") + "-" + String(parts[2]).padStart(2,"0");
+  }
+  const dmy = raw.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/);
+  if (dmy) {
+    let year = Number(dmy[3]); if (year < 100) year += 2000;
+    const d = new Date(year, Number(dmy[2]) - 1, Number(dmy[1]));
+    if (d.getFullYear() === year && d.getMonth() === Number(dmy[2]) - 1 && d.getDate() === Number(dmy[1])) return d.toISOString().slice(0,10);
+  }
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? "" : parsed.toISOString().slice(0,10);
 }
 
 function parseStatementAmount(value) {
   const raw = String(value ?? "").trim();
   if (!raw) return null;
   const negative = /^-/.test(raw) || /^\(.*\)$/.test(raw);
-  const number = Number(raw.replace(/[(),₦$£€\s]/g, "").replace(/,/g, ""));
+  const cleaned = raw.replace(/[₦$£€NGNUSDGBP,\s]/gi, "").replace(/[()]/g, "");
+  const number = Number(cleaned);
   return Number.isFinite(number) && number !== 0 ? Math.abs(number) * (negative ? -1 : 1) : null;
 }
 
-function previewStatementImport(text, accountId) {
+function statementHeaderOptions(headers, selected, emptyLabel) {
+  return '<option value="">' + escapeHtml(emptyLabel) + '</option>' +
+    headers.map(h => '<option value="' + escapeHtml(h) + '" ' + (h === selected ? "selected" : "") + '>' + escapeHtml(h) + '</option>').join("");
+}
+
+function previewStatementImport(text, accountId, mapping = {}) {
   const parsed = parseStatementCsv(text);
   if (!parsed.rows.length) throw new Error("The CSV needs a header row and at least one transaction.");
   const headers = parsed.headers;
-  const dateCol = statementColumn(headers, [/^date$/i, /transaction.*date/i, /posting.*date/i, /value.*date/i]);
-  const descCol = statementColumn(headers, [/description/i, /narration/i, /details/i, /memo/i, /particular/i, /reference/i]);
-  const amountCol = statementColumn(headers, [/^amount$/i, /transaction.*amount/i]);
-  const debitCol = statementColumn(headers, [/debit/i, /withdrawal/i, /paid.*out/i]);
-  const creditCol = statementColumn(headers, [/credit/i, /deposit/i, /paid.*in/i]);
-  if (!dateCol || (!amountCol && !debitCol && !creditCol)) throw new Error("I need a Date column and an Amount, Debit, or Credit column.");
+  const dateCol = mapping.date || statementColumn(headers, [/^date$/i, /transaction.*date/i, /posting.*date/i, /value.*date/i]);
+  const descCol = mapping.description || statementColumn(headers, [/description/i, /narration/i, /details/i, /memo/i, /particular/i]);
+  const refCol = mapping.reference || statementColumn(headers, [/reference/i, /ref\.?\s*(no|number)?$/i, /transaction.*id/i]);
+  const amountCol = mapping.amount || statementColumn(headers, [/^amount$/i, /transaction.*amount/i, /value/i]);
+  const debitCol = mapping.debit || statementColumn(headers, [/debit/i, /withdrawal/i, /paid.*out/i]);
+  const creditCol = mapping.credit || statementColumn(headers, [/credit/i, /deposit/i, /paid.*in/i]);
+  if (!dateCol || (!amountCol && !debitCol && !creditCol)) throw new Error("Map a Date and either Amount or Debit/Credit before previewing.");
+  if (amountCol && (debitCol || creditCol)) {
+    // A signed Amount column takes precedence; Debit/Credit are ignored.
+  }
   const accountTarget = account(accountId);
   if (!accountTarget) throw new Error("Choose an account for this statement first.");
   const rows = parsed.rows.map((row, index) => {
@@ -355,28 +382,37 @@ function previewStatementImport(text, accountId) {
     const debit = debitCol ? parseStatementAmount(row[debitCol]) : null;
     const credit = creditCol ? parseStatementAmount(row[creditCol]) : null;
     let signed = rawAmount;
-    if (signed == null) signed = (credit || 0) - Math.abs(debit || 0);
-    if (!signed) return null;
-    const rawDate = String(row[dateCol] || "").trim();
-    const normalizedDate = /^\d{4}[-/]\d{1,2}[-/]\d{1,2}$/.test(rawDate) ? rawDate.replace(/\//g, "-") : rawDate;
+    if (signed == null) {
+      const out = debit == null ? 0 : Math.abs(debit);
+      const incoming = credit == null ? 0 : Math.abs(credit);
+      signed = incoming - out;
+    }
+    const date = normalizeStatementDate(row[dateCol]);
+    const description = descCol ? String(row[descCol] || "").trim() : "";
+    const reference = refCol ? String(row[refCol] || "").trim() : "";
+    if (!date && !signed) return { rowNumber:index+2, invalid:true, reason:"Missing date and amount", description };
+    if (!date) return { rowNumber:index+2, invalid:true, reason:"Invalid date", description };
+    if (!signed) return { rowNumber:index+2, invalid:true, reason:"Missing or zero amount", description };
     return {
       rowNumber: index + 2,
-      date: normalizedDate || today(),
-      description: descCol ? String(row[descCol] || "").trim() : "",
+      date,
+      description,
+      reference,
       signedAmount: signed,
       type: signed > 0 ? "income" : "expense",
       currency: accountTarget.currency,
       accountId: accountTarget.id
     };
-  }).filter(Boolean);
-  return { headers, rows, account: accountTarget };
+  });
+  return { headers, rows, account: accountTarget, mapping: { date:dateCol, description:descCol, reference:refCol, amount:amountCol, debit:debitCol, credit:creditCol } };
 }
 
 function importStatementRows(rows) {
-  let imported = 0, duplicates = 0;
+  let imported = 0, duplicates = 0, invalid = 0;
   for (const row of rows) {
-    const fingerprint = [row.accountId, row.date, row.signedAmount.toFixed(2), row.description.toLowerCase()].join("|");
-    const existing = state.transactions.find(t => t.external?.provider === "statement_csv" && t.external?.providerTransactionId === fingerprint);
+    if (row.invalid) { invalid++; continue; }
+    const fingerprint = [row.accountId, row.date, row.signedAmount.toFixed(2), row.description.toLowerCase().replace(/\\s+/g," ").trim(), row.reference.toLowerCase().trim()].join("|");
+    const existing = state.transactions.find(t => t.external?.provider === "statement_csv" && t.external.providerTransactionId === fingerprint);
     if (existing) {
       existing.external.lastSeenAt = new Date().toISOString();
       duplicates++;
@@ -396,7 +432,7 @@ function importStatementRows(rows) {
   }
   rebuildBalances();
   saveState();
-  return { imported, duplicates };
+  return { imported, duplicates, invalid };
 }
 
 function parseMoneyText(text) {
@@ -1627,51 +1663,112 @@ $("exportButton")?.addEventListener("click", () => {
 });
 
 let pendingStatementImport = null;
+
+function statementMapping() {
+  return {
+    date: $("statementMapDate")?.value || "",
+    description: $("statementMapDescription")?.value || "",
+    reference: $("statementMapReference")?.value || "",
+    amount: $("statementMapAmount")?.value || "",
+    debit: $("statementMapDebit")?.value || "",
+    credit: $("statementMapCredit")?.value || ""
+  };
+}
+
+function renderStatementMapping(headers) {
+  const p = $("statementMappingPanel");
+  if (!p) return;
+  const preview = pendingStatementImport?.preview;
+  const map = preview?.mapping || {};
+  $("statementMapDate").innerHTML = statementHeaderOptions(headers, map.date, "Select date column");
+  $("statementMapDescription").innerHTML = statementHeaderOptions(headers, map.description, "No description");
+  $("statementMapReference").innerHTML = statementHeaderOptions(headers, map.reference, "No reference");
+  $("statementMapAmount").innerHTML = statementHeaderOptions(headers, map.amount, "No signed amount");
+  $("statementMapDebit").innerHTML = statementHeaderOptions(headers, map.debit, "No debit");
+  $("statementMapCredit").innerHTML = statementHeaderOptions(headers, map.credit, "No credit");
+  p.hidden = false;
+}
+
+function renderStatementPreview() {
+  const preview = pendingStatementImport?.preview;
+  if (!preview) return;
+  const rows = preview.rows;
+  const valid = rows.filter(row => !row.invalid);
+  const invalid = rows.filter(row => row.invalid);
+  const duplicateCount = valid.filter(row => {
+    const fingerprint = [row.accountId,row.date,row.signedAmount.toFixed(2),row.description.toLowerCase().replace(/\\s+/g," ").trim(),row.reference.toLowerCase().trim()].join("|");
+    return state.transactions.some(t => t.external?.provider === "statement_csv" && t.external.providerTransactionId === fingerprint);
+  }).length;
+  $("statementImportSummary").innerHTML = '<strong>' + valid.length + ' valid</strong> · ' + duplicateCount + ' duplicate' + (duplicateCount === 1 ? "" : "s") + ' · ' + invalid.length + ' invalid';
+  $("statementImportPreview").innerHTML = '<div class="statement-import-preview">' +
+    rows.slice(0,12).map(row => '<div class="statement-import-row ' + (row.invalid ? 'statement-import-invalid' : '') + '"><span><strong>' + escapeHtml(row.date || ("Row " + row.rowNumber)) + '</strong><small>' + escapeHtml(row.description || row.reason || "No description") + '</small></span><strong>' + (row.invalid ? escapeHtml(row.reason) : escapeHtml((row.signedAmount > 0 ? "+" : "−") + money(Math.abs(row.signedAmount), row.currency))) + '</strong></div>').join("") +
+    '</div>' + (rows.length > 12 ? '<div class="muted">Showing first 12 of ' + rows.length + ' rows.</div>' : "");
+  $("statementImportConfirm").disabled = !valid.length;
+}
+
 $("statementImportButton")?.addEventListener("click", () => {
   const active = state.accounts.filter(a => !a.archived);
   if (!active.length) return alert("Add an account before importing a statement.");
   $("statementImportAccount").innerHTML = active.map(a => '<option value="' + escapeHtml(a.id) + '">' + escapeHtml(a.name) + ' · ' + escapeHtml(a.currency) + '</option>').join("");
   pendingStatementImport = null;
-  $("statementImportSummary").textContent = "Choose the account and CSV file to preview.";
+  $("statementMappingPanel").hidden = true;
+  $("statementImportSummary").textContent = "Choose an account and CSV file.";
   $("statementImportPreview").innerHTML = "";
   $("statementImportConfirm").disabled = true;
   $("statementImportDialog").showModal();
-  setTimeout(() => $("statementImportFile")?.click(), 0);
 });
-$("statementImportAccount")?.addEventListener("change", () => {
-  if (!pendingStatementImport?.text) return;
-  try { pendingStatementImport.preview = previewStatementImport(pendingStatementImport.text, $("statementImportAccount").value); renderStatementPreview(); } catch (error) { pendingStatementImport = null; $("statementImportSummary").textContent = error.message; $("statementImportPreview").innerHTML = ""; $("statementImportConfirm").disabled = true; }
-});
-$("statementImportFile")?.addEventListener("change", async event => {
+
+$("statementImportFilePicker")?.addEventListener("change", async event => {
   const file = event.target.files?.[0];
   if (!file) return;
   try {
     const text = await file.text();
-    pendingStatementImport = { text, preview: previewStatementImport(text, $("statementImportAccount").value) };
-    renderStatementPreview();
+    const parsed = parseStatementCsv(text);
+    if (!parsed.headers.length) throw new Error("That CSV does not contain a usable header row.");
+    pendingStatementImport = { text, fileName:file.name, preview:null };
+    renderStatementMapping(parsed.headers);
+    $("statementImportSummary").textContent = parsed.rows.length + " data row" + (parsed.rows.length === 1 ? "" : "s") + " loaded. Check the mapping, then preview.";
   } catch (error) {
     pendingStatementImport = null;
+    $("statementMappingPanel").hidden = true;
     $("statementImportSummary").textContent = error.message || "Could not read that CSV.";
     $("statementImportPreview").innerHTML = "";
     $("statementImportConfirm").disabled = true;
   } finally { event.target.value = ""; }
 });
-function renderStatementPreview() {
-  const preview = pendingStatementImport?.preview;
-  if (!preview) return;
-  const rows = preview.rows;
-  $("statementImportSummary").textContent = rows.length + " transaction" + (rows.length === 1 ? "" : "s") + " found for " + preview.account.name + ". First 8 rows shown below.";
-  $("statementImportPreview").innerHTML = '<div class="statement-import-preview">' + rows.slice(0,8).map(row => '<div class="statement-import-row"><span><strong>' + escapeHtml(row.date) + '</strong><small>' + escapeHtml(row.description || "No description") + '</small></span><strong>' + escapeHtml(money(Math.abs(row.signedAmount), row.currency)) + '</strong></div>').join("") + '</div>';
-  $("statementImportConfirm").disabled = !rows.length;
-}
+
+$("statementPreviewButton")?.addEventListener("click", () => {
+  if (!pendingStatementImport?.text) return;
+  try {
+    pendingStatementImport.preview = previewStatementImport(pendingStatementImport.text, $("statementImportAccount").value, statementMapping());
+    renderStatementPreview();
+  } catch (error) {
+    $("statementImportSummary").textContent = error.message || "Could not preview the statement.";
+    $("statementImportPreview").innerHTML = "";
+    $("statementImportConfirm").disabled = true;
+  }
+});
+
+$("statementImportAccount")?.addEventListener("change", () => {
+  if (!pendingStatementImport?.text) return;
+  try {
+    pendingStatementImport.preview = previewStatementImport(pendingStatementImport.text, $("statementImportAccount").value, statementMapping());
+    renderStatementMapping(pendingStatementImport.preview.headers);
+    renderStatementPreview();
+  } catch (error) {
+    $("statementImportSummary").textContent = error.message || "Choose a valid account.";
+  }
+});
+
 $("statementImportConfirm")?.addEventListener("click", () => {
-  const preview = pendingStatementImport?.preview;
-  if (!preview?.rows?.length) return;
-  const result = importStatementRows(preview.rows);
+  const rows = pendingStatementImport?.preview?.rows;
+  if (!rows?.length) return;
+  const result = importStatementRows(rows);
   $("statementImportDialog").close();
   pendingStatementImport = null;
-  alert(result.imported + " imported to the review queue." + (result.duplicates ? " " + result.duplicates + " duplicate" + (result.duplicates === 1 ? "" : "s") + " skipped." : ""));
+  alert(result.imported + " imported to the review queue." + (result.duplicates ? " " + result.duplicates + " duplicate" + (result.duplicates === 1 ? "" : "s") + " skipped." : "") + (result.invalid ? " " + result.invalid + " invalid row" + (result.invalid === 1 ? "" : "s") + " skipped." : ""));
 });
+
 $("importButton")?.addEventListener("click", () => $("importFile")?.click());
 $("importFile")?.addEventListener("change", async event => {
   const file = event.target.files?.[0];
