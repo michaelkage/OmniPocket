@@ -323,6 +323,21 @@
     };
   }
 
+  function goalHealth(state, goal, asOf = new Date()) {
+    if (!goal) return { key: "unknown", label: "Unknown", tone: "neutral", reason: "Goal not found." };
+    const projection = goalProjection(state, goal, asOf);
+    if (goal.status === "completed" || projection.remaining <= 0) return { key: "complete", label: "Complete", tone: "positive", reason: "Target reached." };
+    const history = goalContributionHistory(state, goal);
+    const today = new Date(asOf); today.setHours(0,0,0,0);
+    const since = new Date(today); since.setDate(since.getDate() - 14);
+    const recent = history.filter(item => new Date(item.date + "T00:00:00") >= since);
+    const recentNet = recent.reduce((sum,item) => sum + item.value, 0);
+    if (!history.length || recentNet <= 0) return { key: "inactive", label: "No recent progress", tone: "warning", reason: "No positive net contribution has been recorded recently." };
+    if (projection.dailyRequired != null && projection.pace >= projection.dailyRequired) return { key: "ahead", label: "On track", tone: "positive", reason: "Recent contribution pace meets the pace required for the deadline." };
+    if (projection.dailyRequired != null && projection.pace > 0) return { key: "attention", label: "Needs attention", tone: "warning", reason: "Recent contribution pace is below the pace required for the deadline." };
+    return { key: "active", label: "Active", tone: "neutral", reason: "The goal has recent contribution activity." };
+  }
+
   function goalTrajectory(state, goal, asOf = new Date(), days = 30) {
     if (!goal) return { points: [], actualNet: 0, requiredNet: 0 };
     const today = new Date(asOf);
@@ -384,6 +399,6 @@
     spendingSummary, flowSummary, goalProjection, snapshot,
     recordDailySnapshot, historicalNetWorth,
     relatedAccounts, relatedGoals, relatedTransactions, accountExposure,
-    goalNetwork, transactionNetwork, goalIntelligence, goalTrajectory
+    goalNetwork, transactionNetwork, goalIntelligence, goalTrajectory, goalHealth
   };
 })();
