@@ -133,16 +133,30 @@ function saveState() {
   if (window.OmniPocketEngine) OmniPocketEngine.recordDailySnapshot(state);
   render();
   clearTimeout(persistTimer);
-  persistTimer = setTimeout(async () => {
-    try {
-      if (persistenceReady) await storage.save(state);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    } catch (error) {
-      console.warn("Could not persist OmniPocket state.", error);
-    }
-  }, 0);
+  persistTimer = setTimeout(flushPersistence, 50);
 }
 
+let persistenceRevision = 0;
+let persistenceInFlight = false;
+
+async function flushPersistence() {
+  persistTimer = null;
+  const revision = ++persistenceRevision;
+  const snapshot = structuredClone(state);
+  persistenceInFlight = true;
+  try {
+    if (persistenceReady) await storage.save(snapshot);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
+  } catch (error) {
+    console.warn("Could not persist OmniPocket state.", error);
+  } finally {
+    persistenceInFlight = false;
+    if (revision !== persistenceRevision) {
+      clearTimeout(persistTimer);
+      persistTimer = setTimeout(flushPersistence, 0);
+    }
+  }
+}
 function account(id) {
   return state.accounts.find(a => a.id === id) || null;
 }
@@ -1267,7 +1281,7 @@ $("privacyButton")?.addEventListener("click", () => {
   saveState();
 });
 
-$("baseCurrencyButton")?.addEventListener("click", () => { = () => {
+$("baseCurrencyButton")?.addEventListener("click", () => {
   $("baseCurrencySelect").value = state.settings.baseCurrency;
   $("currencyDialog").showModal();
 });
