@@ -323,11 +323,38 @@
     };
   }
 
+  function goalIntelligence(state, goal, asOf = new Date()) {
+    if (!goal) return {
+      goal: null,
+      progress: { current: 0, target: 0, remaining: 0, pct: 0 },
+      projection: null,
+      accounts: [],
+      transactions: [],
+      linkedTransactions: [],
+      inferredTransactions: [],
+      history: []
+    };
+    const context = { scope: "goal", goalId: goal.id };
+    const transactions = relatedTransactions(state, context).filter(tx => tx.status !== "needs_review");
+    const linkedTransactions = transactions.filter(tx => (tx.linkedGoalIds || []).includes(goal.id));
+    const linkedIds = new Set(linkedTransactions.map(tx => tx.id));
+    return {
+      goal,
+      progress: goalProgress(state, goal),
+      projection: goalProjection(state, goal, asOf),
+      accounts: relatedAccounts(state, context),
+      transactions,
+      linkedTransactions,
+      inferredTransactions: transactions.filter(tx => !linkedIds.has(tx.id)),
+      history: goalContributionHistory(state, goal)
+    };
+  }
+
   window.OmniPocketEngine = {
     DAY, rate, convert, balancesAt, netWorth, goalProgress,
     spendingSummary, flowSummary, goalProjection, snapshot,
     recordDailySnapshot, historicalNetWorth,
     relatedAccounts, relatedGoals, relatedTransactions, accountExposure,
-    goalNetwork, transactionNetwork
+    goalNetwork, transactionNetwork, goalIntelligence
   };
 })();
