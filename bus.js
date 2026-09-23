@@ -6,6 +6,23 @@
   const listeners = new Map();
   let sequence = 0;
   let context = { scope: "global", accountId: null, goalId: null, transactionId: null, reason: "init" };
+  const history = [];
+  const MAX_HISTORY = 12;
+
+  function contextKey(value) {
+    return [value.scope || "global", value.accountId || "", value.goalId || "", value.transactionId || ""].join(":");
+  }
+
+  function pushHistory(value) {
+    if (!value || value.scope === "global") return;
+    const key = contextKey(value);
+    const last = history[history.length - 1];
+    if (last && contextKey(last) === key) return;
+    history.push({ ...value });
+    if (history.length > MAX_HISTORY) history.shift();
+  }
+
+  function getHistory() { return history.map(item => ({ ...item })); }
 
   function on(event, handler) {
     if (typeof handler !== "function") return () => {};
@@ -51,6 +68,7 @@
     else next.scope = "global";
     const changed = Object.keys(next).some(key => next[key] !== context[key]);
     context = next;
+    if (changed && next.scope !== "global") pushHistory(next);
     if (changed) {
       emit("context:changed", { context: getContext(), previous, history: getHistory() });
       if (next.accountId && next.accountId !== previous.accountId) emit("account:selected", { context: getContext(), accountId: next.accountId });
@@ -71,10 +89,22 @@
     return getContext();
   }
 
+  function goBack() {
+    if (history.length > 1) {
+      history.pop();
+      const previous = history[history.length - 1];
+      context = { ...previous, reason: "context-back" };
+      emit("context:changed", { context: getContext(), previous: null, history: getHistory() });
+      return getContext();
+    }
+    history.length = 0;
+    return clearContext("context-back");
+  }
+
   function clear(event = null) {
     if (event) listeners.delete(event);
     else listeners.clear();
   }
 
-  window.OmniPocketBus = Object.freeze({ on, once, emit, clear, getContext, setContext, selectAccount, selectGoal, selectTransaction, clearContext });
+  window.OmniPocketBus = Object.freeze({ on, once, emit, clear, getContext, getHistory, setContext, selectAccount, selectGoal, selectTransaction, clearContext, goBack });
 })();
