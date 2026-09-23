@@ -38,6 +38,44 @@ let persistTimer = null;
 let persistenceReady = false;
 let quickType = "expense";
 
+function emitStateEvent(event, detail = {}) {
+  if (window.OmniPocketBus) OmniPocketBus.emit(event, { state, ...detail });
+}
+
+function bindOmniPocketBus() {
+  if (!window.OmniPocketBus || window.__omnipocketBusBound) return;
+  window.__omnipocketBusBound = true;
+
+  OmniPocketBus.on("account:updated", () => {
+    renderAccounts();
+    renderFullViews();
+    renderGoal();
+    renderDashboard();
+  });
+  OmniPocketBus.on("transaction:updated", () => {
+    rebuildBalances();
+    renderActivity();
+    renderGoal();
+    renderDashboard();
+    renderFullViews();
+  });
+  OmniPocketBus.on("goal:updated", () => {
+    renderGoal();
+    renderFullViews();
+    renderDashboard();
+  });
+  OmniPocketBus.on("fx:updated", () => {
+    render();
+  });
+  OmniPocketBus.on("privacy:updated", () => {
+    render();
+  });
+  OmniPocketBus.on("dashboard:updated", () => {
+    renderDashboard();
+  });
+}
+
+
 function loadState() {
   try {
     const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
@@ -53,6 +91,7 @@ async function bootstrapStorage() {
     state = migrateState(loaded || loadState());
     persistenceReady = true;
     rebuildBalances();
+    bindOmniPocketBus();
     OmniPocketEngine.recordDailySnapshot(state);
     if (!loaded) await storage.save(state);
   } catch (error) {
@@ -425,6 +464,7 @@ async function refreshFxRates() {
       }
     }
     state.settings.fx={provider:"live",updatedAt:Date.now(),rates,source:"open.er-api.com",base};
+    emitStateEvent("fx:updated", { baseCurrency: base });
     saveState();
   } catch(error) {
     alert("Live FX refresh failed. OmniPocket will keep using its cached rates.");
