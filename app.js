@@ -531,7 +531,7 @@ function renderDashboardContextWidgets(context=getAppContext()) {
 
   const accountButtons=accounts.slice(0,6).map(a=>{
     const valueText=state.settings.privacyHidden?"••••":money(a.balance,a.currency);
-    const exposure=context.scope==="account"&&context.accountId===a.id?engine.accountExposure(state,a.id).selectedShare.toFixed(1)+"% of wealth":"";
+    const exposure=context.scope==="account"&&context.accountId===a.id&&!state.settings.privacyHidden?engine.accountExposure(state,a.id).selectedShare.toFixed(1)+"% of wealth":"";
     return '<button class="relationship-node" data-related-account="'+escapeHtml(a.id)+'"><span class="relationship-node-main"><span class="node">◉</span><div><strong>'+escapeHtml(a.name)+'</strong><small>'+escapeHtml(a.currency)+" · "+escapeHtml(a.type)+'</small></div></span><span class="relationship-value">'+escapeHtml(valueText)+(exposure?" · "+escapeHtml(exposure):"")+'</span></button>';
   }).join("");
   const goalButtons=goals.slice(0,6).map(g=>{
@@ -556,6 +556,12 @@ function renderDashboardContextWidgets(context=getAppContext()) {
   groups.push('<div class="relationship-group"><h3>Activity</h3>'+(txButtons||'<div class="relationship-empty">No connected activity.</div>')+'</div>');
   relationEl.innerHTML='<div class="relationship-summary"><div><strong>'+escapeHtml(scopeLabel==="GLOBAL"?"Your financial network":"Connected financial nodes")+'</strong><span>'+escapeHtml(accounts.length+" account"+(accounts.length===1?"":"s")+" · "+goals.length+" goal"+(goals.length===1?"":"s")+" · "+transactions.length+" transaction"+(transactions.length===1?"":"s"))+'</span></div><div class="relationship-chips">'+exposureChips+'</div></div><div class="relationship-grid">'+groups.join("")+'</div><div class="relationship-foot">Connections are derived from account ownership, goal account selections, transaction source/destination links, and explicit transaction-goal links. Shared accounts can appear in multiple goals and are not double-counted in net worth.</div>';
 
+  const contextTitle=context.scope==="global"?"Net worth trend":context.scope==="account"?(account(context.accountId)?.name||"Account")+" trend":context.scope==="goal"?(state.goals.find(g=>g.id===context.goalId)?.name||"Goal")+" progress":transactionLabel(state.transactions.find(t=>t.id===context.transactionId)||{type:"activity"});
+  const trendWidget=$("widgetTrend")?.querySelector("h2"); if(trendWidget) trendWidget.textContent=contextTitle;
+  const spendingWidget=$("widgetSpending")?.querySelector("h2"); if(spendingWidget) spendingWidget.textContent=context.scope==="global"?"Last 30 days":context.scope==="account"?(account(context.accountId)?.name||"Account")+" · 30 days":context.scope==="goal"?(state.goals.find(g=>g.id===context.goalId)?.name||"Goal")+" · 30 days":"Related spending";
+  const accountsWidget=$("widgetAccounts")?.querySelector("h2"); if(accountsWidget) accountsWidget.textContent=context.scope==="global"?"Accounts":"Connected accounts";
+  const goalsWidget=$("widgetGoals")?.querySelector("h2"); if(goalsWidget) goalsWidget.textContent=context.scope==="global"?"Goals":context.scope==="goal"?(state.goals.find(g=>g.id===context.goalId)?.name||"Goal"):context.scope==="account"?"Connected goals":"Related goals";
+  const fxWidget=$("widgetFx")?.querySelector("h2"); if(fxWidget) fxWidget.textContent=context.scope==="global"?"FX cache":context.scope==="account"?"Account currency":context.scope==="goal"?"Goal currency":"Transaction FX";
   if(fxContext){
     if(context.scope==="account"&&context.accountId){
       const a=account(context.accountId);
