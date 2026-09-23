@@ -121,15 +121,33 @@
 
   function goalContributionHistory(state, goal) {
     const accountIds = new Set(goal.accountIds || []);
-    return (state.transactions || [])
-      .filter(tx => tx.status !== "needs_review" && accountIds.has(tx.sourceAccountId))
-      .filter(tx => tx.type === "income" || tx.type === "adjustment" || tx.type === "transfer" || tx.type === "withdrawal")
-      .map(tx => ({
-        date: tx.date,
-        value: tx.type === "withdrawal"
-          ? -convert(state, tx.receivedAmount ?? tx.amount, tx.receivedCurrency || tx.currency, goal.currency, tx.fxRate)
-          : convert(state, tx.amount, tx.currency, goal.currency, tx.fxRate)
-      }));
+    const rows = [];
+    for (const tx of state.transactions || []) {
+      if (tx.status === "needs_review") continue;
+      const sourceIncluded = accountIds.has(tx.sourceAccountId);
+      const destinationIncluded = accountIds.has(tx.destinationAccountId);
+      if (!sourceIncluded && !destinationIncluded) continue;
+
+      let value = 0;
+      if (tx.type === "income" && sourceIncluded) {
+        value += convert(state, tx.amount, tx.currency, goal.currency, tx.fxRate);
+      } else if (tx.type === "expense" && sourceIncluded) {
+        value -= convert(state, tx.amount, tx.currency, goal.currency, tx.fxRate);
+      } else if (tx.type === "withdrawal" && sourceIncluded) {
+        value -= convert(state, tx.amount, tx.currency, goal.currency, tx.fxRate);
+      } else if (tx.type === "adjustment" && sourceIncluded) {
+        value += adjustmentDelta(tx);
+        value = convert(state, value, tx.currency, goal.currency, tx.fxRate);
+      } else if (tx.type === "transfer") {
+        if (sourceIncluded) value -= convert(state, tx.amount, tx.currency, goal.currency, tx.fxRate);
+        if (destinationIncluded) {
+          const received = tx.receivedAmount != null ? tx.receivedAmount : convert(state, tx.amount, tx.currency, tx.receivedCurrency || tx.currency, tx.fxRate);
+          value += convert(state, received, tx.receivedCurrency || tx.currency, goal.currency);
+        }
+      }
+      if (value) rows.push({ date: tx.date, value });
+    }
+    return rows.sort((a, b) => String(a.date).localeCompare(String(b.date)));
   }
 
   function goalProjection(state, goal, asOf = new Date()) {
