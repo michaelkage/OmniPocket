@@ -356,18 +356,78 @@ function renderNetWorthTrend() {
   el.innerHTML=unique.length>1 ? '<svg viewBox="0 0 '+width+' '+height+'" role="img" aria-label="Net worth trend"><path class="trend-line" d="'+path+'"></path>'+coords.map(p=>'<circle class="trend-dot" cx="'+p[0]+'" cy="'+p[1]+'" r="3"></circle>').join("")+'</svg><div class="trend-meta"><span>'+escapeHtml(unique[0].date)+'</span><strong>'+money(unique[unique.length-1].value)+'</strong><span>'+escapeHtml(unique[unique.length-1].date)+'</span></div>' : '<div class="empty-state">Log transactions to build your wealth trend.</div>';
 }
 
+function spendingSummary(days = 30) {
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - days + 1);
+  const cutoffDate = cutoff.toISOString().slice(0, 10);
+  const totals = {};
+  let total = 0;
+  let income = 0;
+  for (const t of state.transactions) {
+    if (String(t.date) < cutoffDate) continue;
+    if (t.type === "expense") {
+      const value = convert(t.amount, t.currency, state.settings.baseCurrency);
+      const key = t.category || "Other";
+      totals[key] = (totals[key] || 0) + value;
+      total += value;
+    } else if (t.type === "income") {
+      income += convert(t.amount, t.currency, state.settings.baseCurrency);
+    }
+  }
+  return { totals, total, income, days };
+}
+
+function financialInsights() {
+  const summary = spendingSummary(30);
+  const insights = [];
+  const reviewCount = state.transactions.filter(t => t.status === "needs_review").length;
+  if (!state.accounts.some(a => !a.archived)) insights.push("Add your first account to start building your wealth graph.");
+  if (reviewCount) insights.push(reviewCount + " item" + (reviewCount === 1 ? "" : "s") + " still need review.");
+  if (summary.total > 0) insights.push(money(summary.total) + " spent across recorded expenses in the last 30 days.");
+  if (summary.income > 0 && summary.total > summary.income) insights.push("Recorded spending is above recorded income for the last 30 days.");
+  else if (summary.income > 0) insights.push("Recorded income is above recorded spending for the last 30 days.");
+  for (const g of state.goals.filter(g => g.status === "active")) {
+    const p = goalProgress(g);
+    if (g.deadline && p.current < g.target) {
+      const days = Math.max(0, Math.ceil((new Date(g.deadline) - new Date(today())) / 86400000));
+      if (days > 0) insights.push(g.name + " needs about " + money((g.target - p.current) / days, g.currency) + " per day to reach its target.");
+    }
+  }
+  if (!insights.length) insights.push("Your financial graph is ready. Add activity to unlock more local insights.");
+  return insights.slice(0, 4);
+}
+
+function renderIntelligence() {
+  const insightsEl = $("insightContent");
+  if (insightsEl) {
+    insightsEl.innerHTML = financialInsights().map(value => '<div class="insight-row"><span class="node">✦</span><div>' + escapeHtml(value) + '</div></div>').join("");
+  }
+  const spendingEl = $("spendingContent");
+  if (spendingEl) {
+    const summary = spendingSummary(30);
+    const rows = Object.entries(summary.totals).sort((a, b) => b[1] - a[1]).slice(0, 5);
+    spendingEl.innerHTML = rows.length ? rows.map(([label, value]) => {
+      const pct = summary.total ? Math.round(value / summary.total * 100) : 0;
+      return '<div class="metric-row"><div class="metric-row-head"><strong>' + escapeHtml(label) + '</strong><span>' + escapeHtml(money(value)) + '</span></div><div class="metric-track"><div class="metric-fill" style="width:' + pct + '%"></div></div></div>';
+    }).join("") : '<div class="empty-state">Record expenses to see your spending mix.</div>';
+  }
+}
+
 function renderDashboard() {
   const root=$("dashboardGalaxy");
   if(!root) return;
   const widgets={
     networth:$("widgetNetWorth"), trend:$("widgetTrend"), goals:$("widgetGoals"), accounts:$("widgetAccounts"),
-    activity:$("widgetActivity"), quick:$("widgetQuick"), fx:$("widgetFx")
+    activity:$("widgetActivity"), quick:$("widgetQuick"), fx:$("widgetFx"), insights:$("widgetInsights"), spending:$("widgetSpending")
   };
-  const defaultOrder=["networth","trend","goals","accounts","activity","quick","fx","insights","spending"];\n  const order=[...(state.settings.dashboard.order || [])];\n  defaultOrder.forEach(id=>{ if(!order.includes(id)) order.push(id); });
+  const defaultOrder=["networth","trend","goals","accounts","activity","quick","fx","insights","spending"];
+  const order=[...(state.settings.dashboard.order || [])];
+  defaultOrder.forEach(id=>{ if(!order.includes(id)) order.push(id); });
   root.innerHTML="";
   order.filter(id=>widgets[id] && !(state.settings.dashboard.hidden||[]).includes(id)).forEach(id=>{ const widget=widgets[id]; widget.draggable=true; widget.dataset.widgetId=id; root.appendChild(widget); });
   const galaxyNetWorth=$("galaxyNetWorth"); if(galaxyNetWorth) galaxyNetWorth.textContent=state.settings.privacyHidden ? "•••••••" : money(netWorth());
   renderNetWorthTrend();
+  renderIntelligence();
   const count=$("reviewCount"); if(count) count.textContent=state.transactions.filter(t=>t.status==="needs_review").length+" review";
   const fxStatus=$("fxCacheStatus"); if(fxStatus) fxStatus.textContent=state.settings.fx.updatedAt ? "Cached "+new Date(state.settings.fx.updatedAt).toLocaleString() : "Bundled rates";
 }
