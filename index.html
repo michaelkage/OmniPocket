@@ -11,4 +11,40 @@
 <div id="pageGoals" class="page-view" hidden><section class="surface page-card"><div class="widget-head"><div><span class="eyebrow">TARGETS</span><h1>Goals</h1><div class="muted">Choose which accounts contribute to each target.</div></div><button class="primary" id="addGoalPageButton">＋ Add</button></div><div id="goalsFullList" class="stack"></div></section></div>
 <div id="pageActivity" class="page-view" hidden><section class="surface page-card"><div class="widget-head"><div><span class="eyebrow">MONEY FLOW</span><h1>Activity</h1><div class="muted">A ledger of recorded movements.</div></div></div><div class="activity-filter"><input id="activitySearch" placeholder="Search activity…" autocomplete="off"></div><div id="activityFullList" class="stack"></div></section></div>
 <div id="pageMore" class="page-view" hidden><section class="surface page-card"><div><span class="eyebrow">SYSTEM</span><h1>More</h1><div class="muted">OmniPocket preferences and data tools.</div></div><div class="settings-list" style="margin-top:18px"><button id="modeButton">Mode · Hybrid</button><button id="privacySettingsButton">Privacy · Visible</button><button id="exportButton">Export data</button><button id="importButton">Import data</button><input id="importFile" type="file" accept="application/json" hidden><button id="clearReviewButton">Review queue</button></div></section></div>
-</main><button class="fab" id="fab" aria-label="Quick money action">＋</button><nav class="bottom-nav"><button class="nav-item active" data-page="Home">⌂<span>Home</span></button><button class="nav-item" data-page="Accounts">◫<span>Accounts</span></button><button class="nav-item" data-page="Goals">◎<span>Goals</span></button><button class="nav-item" data-page="Activity">≋<span>Activity</span></button><button class="nav-item" data-page="More">•••<span>More</span></button></nav></div><script src="storage.js"></script><script src="app.js"></script></body></html>
+</main><button class="fab" id="fab" aria-label="Quick money action">＋</button><nav class="bottom-nav"><button class="nav-item active" data-page="Home">⌂<span>Home</span></button><button class="nav-item" data-page="Accounts">◫<span>Accounts</span></button><button class="nav-item" data-page="Goals">◎<span>Goals</span></button><button class="nav-item" data-page="Activity">≋<span>Activity</span></button><button class="nav-item" data-page="More">•••<span>More</span></button></nav></div><dialog id="accountDetailDialog" class="app-dialog">
+  <div class="dialog-head"><div><span class="eyebrow">ACCOUNT</span><h2 id="accountDetailTitle">Account</h2><div id="accountDetailMeta" class="muted"></div></div><button class="icon-button" onclick="this.closest('dialog').close()">✕</button></div>
+  <div class="detail-balance"><strong id="accountDetailBalance">₦0</strong><span id="accountDetailConverted" class="muted">≈ ₦0</span></div>
+  <div id="accountDetailStats" class="detail-stats"></div>
+  <div class="detail-section"><div class="eyebrow">GOALS</div><div id="accountDetailGoals" class="stack"></div></div>
+  <div class="detail-section"><div class="eyebrow">RECENT ACTIVITY</div><div id="accountDetailActivity" class="stack"></div></div>
+  <div class="dialog-actions"><button id="accountDetailEdit">Edit</button><button id="accountDetailArchive">Archive</button><button class="primary" onclick="this.closest('dialog').close()">Done</button></div>
+</dialog>
+<dialog id="editAccountDialog" class="app-dialog">
+  <div class="dialog-head"><div><span class="eyebrow">ACCOUNT</span><h2>Edit account</h2></div><button class="icon-button" onclick="this.closest('dialog').close()">✕</button></div>
+  <form id="editAccountForm" class="form-grid">
+    <label>Name<input id="editAccountName" required></label>
+    <label>Institution<input id="editAccountInstitution"></label>
+    <label>Type<select id="editAccountType"><option value="bank">Bank</option><option value="cash">Cash</option><option value="wallet">Digital wallet</option><option value="locked">Fixed / locked savings</option></select></label>
+    <label>Currency<select id="editAccountCurrency"><option>NGN</option><option>USD</option><option>GBP</option><option>EUR</option></select></label>
+    <div class="dialog-actions"><button type="button" onclick="this.closest('dialog').close()">Cancel</button><button class="primary">Save changes</button></div>
+  </form>
+</dialog>
+<dialog id="goalDialog" class="app-dialog">
+  <div class="dialog-head"><div><span class="eyebrow">TARGET</span><h2>Goal</h2><div class="muted">Choose the accounts that contribute to this target.</div></div><button class="icon-button" onclick="this.closest('dialog').close()">✕</button></div>
+  <form id="goalForm" class="form-grid">
+    <label>Name<input id="goalName" required placeholder="Emergency fund"></label>
+    <label>Target<input id="goalTarget" type="number" min="0.01" step="0.01" required placeholder="100000"></label>
+    <label>Currency<select id="goalCurrency"><option>NGN</option><option>USD</option><option>GBP</option><option>EUR</option></select></label>
+    <label>Deadline<input id="goalDeadline" type="date"></label>
+    <div><div class="field-label">Contributing accounts</div><div id="goalAccounts" class="check-list"></div></div>
+    <div class="dialog-actions"><button type="button" onclick="this.closest('dialog').close()">Cancel</button><button class="primary">Save goal</button></div>
+  </form>
+</dialog>
+<dialog id="goalDetailDialog" class="app-dialog">
+  <div class="dialog-head"><div><span class="eyebrow">TARGET</span><h2 id="goalDetailTitle">Goal</h2></div><button class="icon-button" onclick="this.closest('dialog').close()">✕</button></div>
+  <div class="detail-balance"><strong id="goalDetailProgress">₦0 of ₦0</strong><span id="goalDetailMeta" class="muted"></span></div>
+  <div class="progress-track"><div id="goalDetailBar" class="progress-fill"></div></div>
+  <div class="detail-section"><div class="eyebrow">PACE</div><div id="goalDetailPace" class="detail-callout"></div></div>
+  <div class="detail-section"><div class="eyebrow">CONTRIBUTING ACCOUNTS</div><div id="goalDetailAccounts" class="stack"></div></div>
+  <div class="dialog-actions"><button id="goalDetailEdit">Edit goal</button><button class="primary" onclick="this.closest('dialog').close()">Done</button></div>
+</dialog><script src="storage.js"></script><script src="app.js"></script></body></html>
