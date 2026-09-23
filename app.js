@@ -227,6 +227,8 @@ function openTransactionDetail(id) {
     ? (source?.name || "Unknown") + " → " + (dest?.name || "Unknown")
     : source?.name || incoming?.name || "Unknown account";
   $("transactionDetailStatus").textContent = t.status === "needs_review" ? "Needs review — handle later" : "Recorded";
+  const linkedGoals = state.goals.filter(g => (t.linkedGoalIds || []).includes(g.id));
+  $("transactionDetailGoals").innerHTML = linkedGoals.length ? linkedGoals.map(g => '<button class="link-row" data-goal-from-transaction="' + escapeHtml(g.id) + '"><strong>' + escapeHtml(g.name) + "</strong><span>" + escapeHtml(money(goalProgress(g).current, g.currency)) + "</span></button>").join("") : '<div class="empty-state">No goals linked.</div>';
   $("transactionDetailNote").textContent = t.note || "No note.";
   $("transactionReviewButton").textContent = t.status === "needs_review" ? "Mark recorded" : "Mark for review";
   $("transactionDialog").dataset.transactionId = id;
@@ -610,6 +612,8 @@ document.addEventListener("click", event => {
 
 $("transactionEditButton")?.addEventListener("click", () => editTransaction($("transactionDialog").dataset.transactionId));
 $("transactionDeleteButton")?.addEventListener("click", () => deleteTransaction($("transactionDialog").dataset.transactionId));
+document.addEventListener("click", event => { const goalLink = event.target.closest("[data-goal-from-transaction]"); if (goalLink) { $("transactionDialog")?.close(); openGoalDetail(goalLink.dataset.goalFromTransaction); } });
+
 $("transactionReviewButton")?.addEventListener("click", () => {
   const t = state.transactions.find(x => x.id === $("transactionDialog").dataset.transactionId);
   if (!t) return;
