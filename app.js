@@ -209,7 +209,9 @@ function openTransactionDetail(id) {
     : source?.name || incoming?.name || "Unknown account";
   $("transactionDetailStatus").textContent = t.status === "needs_review" ? "Needs review — handle later" : "Recorded";
   const linkedGoals = state.goals.filter(g => (t.linkedGoalIds || []).includes(g.id));
-  $("transactionDetailGoals").innerHTML = linkedGoals.length ? linkedGoals.map(g => '<button class="link-row" data-goal-from-transaction="' + escapeHtml(g.id) + '"><strong>' + escapeHtml(g.name) + "</strong><span>" + escapeHtml(money(goalProgress(g).current, g.currency)) + "</span></button>").join("") : '<div class="empty-state">No goals linked.</div>';
+  $("transactionDetailGoals").innerHTML = linkedGoals.length
+    ? linkedGoals.map(g => '<button class="link-row" data-goal-from-transaction="' + escapeHtml(g.id) + '"><strong>' + escapeHtml(g.name) + '</strong><span><span class="context-link-badge">Linked</span> ' + escapeHtml(money(goalProgress(g).current, g.currency)) + '</span></button>').join("")
+    : '<div class="empty-state">No goals explicitly linked to this transaction.</div>';
   $("transactionDetailNote").textContent = t.note || "No note.";
   $("transactionReviewButton").textContent = t.status === "needs_review" ? "Mark recorded" : "Mark for review";
   $("transactionDialog").dataset.transactionId = id;
@@ -244,6 +246,7 @@ function editTransaction(id) {
   $("editTxCategory").value = t.category;
   $("editTxNote").value = t.note;
   $("editTxStatus").value = t.status;
+  populateTransactionGoals("editTxGoals", t.linkedGoalIds || []);
   $("editTransactionDialog").dataset.transactionId = id;
   syncEditTransactionFields();
   $("transactionDialog").close();
@@ -702,6 +705,7 @@ function openQuick(type) {
   $("quickReceivedWrap").style.display = type === "transfer" ? "grid" : "none";
   $("quickFxWrap").style.display = type === "transfer" ? "grid" : "none";
   $("quickStatusWrap").style.display = type === "expense" || type === "income" ? "grid" : "none";
+  populateTransactionGoals("quickTxGoals");
   populateAccounts();
   $("quickDate").value = today();
   $("quickDialog").showModal();
@@ -732,7 +736,7 @@ function addTransaction(input) {
     fxSource: input.fxSource || null,
     category: input.category || "",
     note: input.note || "",
-    linkedGoalIds: Array.isArray(input.linkedGoalIds) ? input.linkedGoalIds : []
+    linkedGoalIds: Array.isArray(input.linkedGoalIds) ? [...new Set(input.linkedGoalIds)] : []
   };
   state.transactions.push(tx);
   emitStateEvent("transaction:updated", { action: "created", transaction: tx });
@@ -800,7 +804,8 @@ function handleQuickSubmit(event) {
         fxRate: fx,
         fxSource: fx ? "manual" : "snapshot",
         note,
-        date
+        date,
+        linkedGoalIds: readTransactionGoals("quickTxGoals")
       });
     } else if (quickType === "withdrawal") {
       const destination = account($("quickDestination").value);
@@ -820,7 +825,8 @@ function handleQuickSubmit(event) {
         fxRate: source.currency === destination.currency ? 1 : null,
         fxSource: "snapshot",
         note,
-        date
+        date,
+        linkedGoalIds: readTransactionGoals("quickTxGoals")
       });
     } else {
       const type = quickType;
@@ -832,7 +838,8 @@ function handleQuickSubmit(event) {
         category: type === "expense" ? $("quickCategory").value : "Money added",
         note,
         date,
-        status
+        status,
+        linkedGoalIds: readTransactionGoals("quickTxGoals")
       });
     }
     saveState();
@@ -965,6 +972,7 @@ $("editTransactionForm")?.addEventListener("submit", event => {
   t.category = $("editTxCategory").value.trim();
   t.note = $("editTxNote").value.trim();
   t.status = $("editTxStatus").value;
+  t.linkedGoalIds = readTransactionGoals("editTxGoals");
   t.createdAt = Date.now();
   rebuildBalances();
   saveState();
@@ -999,6 +1007,22 @@ function populateGoalAccounts(selectedIds = []) {
     '<label class="check-row"><input type="checkbox" name="goalAccount" value="' + escapeHtml(a.id) + '" ' + (selectedIds.includes(a.id) ? "checked" : "") + '><span>' + escapeHtml(a.name) + " · " + escapeHtml(a.currency) + "</span></label>"
   ).join("");
 }
+
+function populateTransactionGoals(containerId, selectedIds = []) {
+  const el = $(containerId);
+  if (!el) return;
+  const selected = new Set(selectedIds || []);
+  const goals = state.goals.filter(g => g.status !== "completed");
+  const header = '<div class="field-label">Linked goals <span class="muted">(optional)</span></div><div class="muted" style="margin-bottom:8px">Relationships only — linking a transaction does not allocate or double-count money.</div>';
+  el.innerHTML = header + (goals.length
+    ? goals.map(g => '<label class="check-row"><input type="checkbox" data-transaction-goal="' + escapeHtml(g.id) + '" ' + (selected.has(g.id) ? "checked" : "") + '><span>' + escapeHtml(g.name) + ' · ' + escapeHtml(g.currency) + '</span></label>').join("")
+    : '<div class="empty-state">Create a goal first to link activity to it.</div>');
+}
+
+function readTransactionGoals(containerId) {
+  return [...document.querySelectorAll('#' + containerId + ' [data-transaction-goal]:checked')].map(input => input.dataset.transactionGoal);
+}
+
 
 function openAccountDetail(id) {
   const a = account(id);
@@ -1083,6 +1107,18 @@ function setupDynamicFields() {
   status.style.display = "none";
   status.innerHTML = 'Status<select id="quickStatus"><option value="recorded">Record now</option><option value="needs_review">Handle later</option></select>';
   $("quickNote").closest("label").after(status);
+
+  const quickGoals = document.createElement("div");
+  quickGoals.id = "quickTxGoals";
+  quickGoals.className = "check-list";
+  quickGoals.innerHTML = '<div class="field-label">Linked goals <span class="muted">(optional)</span></div><div class="muted">Link this movement to one or more goals. This is a relationship, not a separate allocation.</div>';
+  $("quickNote").closest("label").after(quickGoals);
+
+  const editGoals = document.createElement("div");
+  editGoals.id = "editTxGoals";
+  editGoals.className = "check-list";
+  editGoals.innerHTML = '<div class="field-label">Linked goals <span class="muted">(optional)</span></div><div class="muted">Links explain which goals this activity relates to; they do not double-count money.</div>';
+  $("editTxNote").closest("label").after(editGoals);
 
   $("quickAccount").addEventListener("change", syncTransferFields);
   $("quickDestination").addEventListener("change", syncTransferFields);
