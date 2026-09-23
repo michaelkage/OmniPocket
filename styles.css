@@ -91,3 +91,5 @@ textarea{width:100%;resize:vertical;border:1px solid #4a4650;background:#151419;
 .review-queue-item small{font-size:10px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .review-queue-more{font-size:10px;text-align:center}
 @media(max-width:520px){.review-queue-head{align-items:flex-start;flex-direction:column}.review-queue-head button{width:100%}}
+
+.imported-transaction-badge{font-size:10px}
