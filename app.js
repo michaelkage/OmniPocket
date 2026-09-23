@@ -1089,6 +1089,12 @@ function openGoalDetail(id) {
   $("goalDetailRemaining").textContent = p.remaining > 0 ? fmt(p.remaining) : "Target reached";
   $("goalDetailRequired").textContent = projection.dailyRequired != null ? fmt(projection.dailyRequired) + " / day" : "No deadline";
   $("goalDetailProjected").textContent = projection.projectedDate ? dateLabel(projection.projectedDate) : "Not enough pace data";
+  const trajectory = window.OmniPocketEngine?.goalTrajectory ? OmniPocketEngine.goalTrajectory(state, g) : { points: [] };
+  $("goalDetailTrajectory").innerHTML = renderGoalTrajectory(trajectory.points, projection, g.currency, privacy);
+  $("goalDetailTrajectoryMeta").textContent = trajectory.actualNet > 0
+    ? "Net contribution over the last 30 days: " + fmt(trajectory.actualNet)
+    : "No positive net contribution recorded in the last 30 days.";
+
   $("goalDetailProjectionNote").textContent = projection.pace > 0
     ? "Based on the net contribution pace from the last 30 days."
     : p.current >= p.target
@@ -1119,6 +1125,23 @@ function activityRowsForGoal(list, goal, linked) {
     const displayCurrency = incoming && t.receivedCurrency ? t.receivedCurrency : t.currency;
     return '<button class="link-row goal-activity-row" data-transaction-from-goal="' + escapeHtml(t.id) + '"><span><strong>' + escapeHtml(transactionLabel(t)) + '</strong><small class="muted">' + escapeHtml(t.date) + ' · ' + (linked ? 'Explicitly linked to this goal' : 'Connected through an included account') + '</small></span><span class="goal-activity-right"><span class="' + (linked ? 'context-link-badge' : 'relationship-inferred-badge') + '">' + (linked ? 'Linked' : 'Connected') + '</span><span>' + escapeHtml((incoming ? "+" : transactionDirection(t) === "out" ? "−" : "") + money(displayAmount, displayCurrency)) + '</span></span></button>';
   }).join("");
+}
+
+function renderGoalTrajectory(points, projection, currency, privacy) {
+  if (!points.length) return '<div class="empty-state">No contribution history yet.</div>';
+  const width = 520, height = 150, pad = 16;
+  const values = points.map(p => Number(p.value) || 0);
+  const target = projection.dailyRequired != null ? projection.dailyRequired * Math.max(0, points.length - 1) : 0;
+  const maxAbs = Math.max(1, ...values.map(Math.abs), Math.abs(target));
+  const min = Math.min(0, ...values, target);
+  const max = Math.max(0, ...values, target);
+  const span = Math.max(1, max - min);
+  const x = i => pad + (i / Math.max(1, points.length - 1)) * (width - pad * 2);
+  const y = value => height - pad - ((value - min) / span) * (height - pad * 2);
+  const path = points.map((p,i) => (i ? "L" : "M") + x(i).toFixed(1) + " " + y(p.value).toFixed(1)).join(" ");
+  const requiredPath = target ? "M " + x(0).toFixed(1) + " " + y(0).toFixed(1) + " L " + x(points.length - 1).toFixed(1) + " " + y(target).toFixed(1) : "";
+  const latest = values[values.length - 1];
+  return '<div class="goal-trajectory-chart"><svg viewBox="0 0 '+width+' '+height+'" role="img" aria-label="Goal contribution trajectory"><path class="goal-trajectory-required" d="'+requiredPath+'"></path><path class="goal-trajectory-line" d="'+path+'"></path><circle class="goal-trajectory-dot" cx="'+x(values.length-1).toFixed(1)+'" cy="'+y(latest).toFixed(1)+'" r="5"></circle></svg><div class="goal-trajectory-legend"><span><i class="trajectory-key actual"></i>Actual net contribution</span><span><i class="trajectory-key required"></i>Required pace</span></div><div class="goal-trajectory-values"><span>Start · '+(privacy ? "••••••" : money(0,currency))+'</span><strong>'+ (privacy ? "••••••" : money(latest,currency)) +'</strong></div></div>';
 }
 
 function setupDynamicFields() {
