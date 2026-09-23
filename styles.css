@@ -54,3 +54,6 @@ textarea{width:100%;resize:vertical;border:1px solid #4a4650;background:#151419;
 .row-title-with-context{display:flex;align-items:center;gap:7px;min-width:0;flex-wrap:wrap}
 .context-link-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 7px;border-radius:999px;border:1px solid rgba(208,188,255,.14);background:rgba(208,188,255,.07);color:var(--primary);font-size:9px;font-weight:700;letter-spacing:.03em;white-space:nowrap}
 .context-link-badge::before{content:"";width:5px;height:5px;border-radius:50%;background:currentColor;opacity:.8}
+
+.relationship-inferred-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 7px;border-radius:999px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.035);color:var(--muted);font-size:9px;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+.relationship-inferred-badge::before{content:"·";font-size:13px;line-height:0;opacity:.8}
