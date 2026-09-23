@@ -555,9 +555,10 @@ function renderDashboardContextWidgets(context=getAppContext()) {
   const txButtons=transactions.slice(0,6).map(t=>{
     const source=account(t.sourceAccountId), dest=account(t.destinationAccountId);
     const detail=t.type==="transfer"?((source?.name||"Unknown")+" → "+(dest?.name||"Unknown")):(source?.name||"Unknown account");
-    return '<button class="relationship-node" data-related-transaction="'+escapeHtml(t.id)+'"><span class="relationship-node-main"><span class="node">≋</span><div><strong>'+escapeHtml(transactionLabel(t))+'</strong><small>'+escapeHtml(t.date+" · "+detail)+'</small></div></span><span class="relationship-value">'+escapeHtml(state.settings.privacyHidden?"••••":money(t.amount,t.currency))+'</span></button>';
+    const linked=context.scope==="goal"&&context.goalId&&(t.linkedGoalIds||[]).includes(context.goalId);
+    const relationshipBadge=linked?'<span class="context-link-badge">Linked</span>':'<span class="relationship-inferred-badge">Connected</span>';
+    return '<button class="relationship-node" data-related-transaction="'+escapeHtml(t.id)+'"><span class="relationship-node-main"><span class="node">≋</span><div><strong>'+escapeHtml(transactionLabel(t))+'</strong><small>'+escapeHtml(t.date+" · "+detail)+'</small><div class="relationship-mini">'+relationshipBadge+'</div></div></span><span class="relationship-value">'+escapeHtml(state.settings.privacyHidden?"••••":money(t.amount,t.currency))+'</span></button>';
   }).join("");
-
   const exposure=context.scope==="account"&&context.accountId?engine.accountExposure(state,context.accountId):engine.accountExposure(state);
   const exposureChips=exposure.currencies.slice(0,4).map(row=>{
     const pct=exposure.totalBase?Math.round(row.baseValue/exposure.totalBase*100):0;
