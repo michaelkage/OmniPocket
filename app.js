@@ -321,7 +321,7 @@ function parseClipboardText() {
   $("smartAmount").textContent = money(parsed.amount, parsed.currency);
   $("smartCategory").textContent = parsed.category;
   $("smartDate").textContent = parsed.date;
-  $("smartApprove").textContent = parsed.type === "income" ? "Approve & add" : "Approve & log expense";
+  $("smartApprove").textContent = parsed.type === "income" ? "Approve & add" : parsed.type === "transfer" ? "Review transfer" : "Approve & log expense";
   $("smartResult").hidden = false;
   $("smartApprove").dataset.amount = parsed.amount;
   $("smartApprove").dataset.currency = parsed.currency;
@@ -363,7 +363,7 @@ function renderDashboard() {
     networth:$("widgetNetWorth"), trend:$("widgetTrend"), goals:$("widgetGoals"), accounts:$("widgetAccounts"),
     activity:$("widgetActivity"), quick:$("widgetQuick"), fx:$("widgetFx")
   };
-  const order=state.settings.dashboard.order || Object.keys(widgets);
+  const defaultOrder=["networth","trend","goals","accounts","activity","quick","fx","insights","spending"];\n  const order=[...(state.settings.dashboard.order || [])];\n  defaultOrder.forEach(id=>{ if(!order.includes(id)) order.push(id); });
   root.innerHTML="";
   order.filter(id=>widgets[id] && !(state.settings.dashboard.hidden||[]).includes(id)).forEach(id=>{ const widget=widgets[id]; widget.draggable=true; widget.dataset.widgetId=id; root.appendChild(widget); });
   const galaxyNetWorth=$("galaxyNetWorth"); if(galaxyNetWorth) galaxyNetWorth.textContent=state.settings.privacyHidden ? "•••••••" : money(netWorth());
@@ -410,8 +410,26 @@ function approveSmartParse() {
   const source=state.accounts.find(a=>!a.archived && a.currency===currency) || state.accounts.find(a=>!a.archived);
   if(!source) return alert("Add an account first.");
   const type = button.dataset.type || "expense";
-  addTransaction({type:type==="income"?"income":"expense",sourceAccountId:source.id,amount,currency:source.currency,category:button.dataset.category||"Other",date:button.dataset.date||today(),note:"Imported from pasted alert",status:"recorded"});
-  if(type==="income") source.balance+=amount; else source.balance-=amount;
+  if(type === "transfer") {
+    $("smartParserDialog").close();
+    openQuick("transfer");
+    $("quickAccount").value = source.id;
+    syncTransferFields();
+    $("quickAmount").value = amount;
+    $("quickNote").value = "Imported from pasted alert — review destination before recording.";
+    $("quickStatus").value = "needs_review";
+    return;
+  }
+  addTransaction({
+    type:type==="income"?"income":"expense",
+    sourceAccountId:source.id,
+    amount,
+    currency:source.currency,
+    category:button.dataset.category||"Other",
+    date:button.dataset.date||today(),
+    note:"Imported from pasted alert",
+    status:"recorded"
+  });
   saveState();
   $("smartParserDialog").close();
 }
@@ -1035,10 +1053,22 @@ document.addEventListener("dragstart", event => { const widget=event.target.clos
 document.addEventListener("dragend", event => { const widget=event.target.closest("[data-widget-id]"); widget?.classList.remove("dragging"); draggedWidgetId=null; });
 document.addEventListener("dragover", event => { const target=event.target.closest("[data-widget-id]"); if(!target || !draggedWidgetId || target.dataset.widgetId===draggedWidgetId) return; event.preventDefault(); const root=$("dashboardGalaxy"); const dragged=root.querySelector("[data-widget-id='"+draggedWidgetId+"']"); if(!dragged) return; const rect=target.getBoundingClientRect(); root.insertBefore(dragged,event.clientY < rect.top+rect.height/2 ? target : target.nextSibling); });
 document.addEventListener("drop", event => { if(!draggedWidgetId) return; const order=[...document.querySelectorAll("#dashboardGalaxy [data-widget-id]")].map(el=>el.dataset.widgetId); state.settings.dashboard.order=order; saveState(); });
-$("dashboardCustomizeButton")?.addEventListener("click", () => { const hidden=state.settings.dashboard.hidden||[]; document.querySelectorAll("[data-widget-hidden]").forEach(el=>el.checked=!hidden.includes(el.dataset.widgetHidden)); $("widgetOrderSelect").value=(state.settings.dashboard.order||[]).join(",") || "networth,trend,goals,accounts,activity,quick,fx"; $("dashboardSettingsDialog").showModal(); });
+$("dashboardCustomizeButton")?.addEventListener("click", () => {
+  const hidden=state.settings.dashboard.hidden||[];
+  document.querySelectorAll("[data-widget-hidden]").forEach(el=>el.checked=!hidden.includes(el.dataset.widgetHidden));
+  const current=(state.settings.dashboard.order||["networth","trend","goals","accounts","activity","quick","fx","insights","spending"]).slice();
+  const select=$("widgetOrderSelect");
+  if(select){
+    const value=current.join(",");
+    let option=[...select.options].find(o=>o.value===value);
+    if(!option){ option=document.createElement("option"); option.value=value; option.textContent="Current workspace order"; select.appendChild(option); }
+    select.value=value;
+  }
+  $("dashboardSettingsDialog").showModal();
+});
 $("dashboardSettingsForm")?.addEventListener("submit", event => {
   event.preventDefault();
-  const order=($("widgetOrderSelect")?.value || "networth,trend,goals,accounts,activity,quick,fx").split(",");
+  const order=($("widgetOrderSelect")?.value || "networth,trend,goals,accounts,activity,quick,fx,insights,spending").split(",");
   const hidden=[...document.querySelectorAll("[data-widget-hidden]:not(:checked)")].map(el=>el.dataset.widgetHidden);
   state.settings.dashboard={...state.settings.dashboard,order,hidden};
   saveState();
