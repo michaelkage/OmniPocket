@@ -29,7 +29,8 @@ const DEFAULT_STATE = {
   },
   accounts: [],
   transactions: [],
-  goals: []
+  goals: [],
+  snapshots: []
 };
 
 let state = clone(DEFAULT_STATE);
@@ -52,6 +53,7 @@ async function bootstrapStorage() {
     state = migrateState(loaded || loadState());
     persistenceReady = true;
     rebuildBalances();
+    OmniPocketEngine.recordDailySnapshot(state);
     if (!loaded) await storage.save(state);
   } catch (error) {
     console.warn("IndexedDB unavailable; using local fallback.", error);
@@ -117,12 +119,22 @@ function migrateState(raw) {
     createdAt: Number(g.createdAt) || Date.now()
   })) : [];
 
+  next.snapshots = Array.isArray(raw.snapshots) ? raw.snapshots.filter(s => s && s.date).map(s => ({
+    id: String(s.id || `${s.date}:${s.baseCurrency || next.settings.baseCurrency}`),
+    date: String(s.date),
+    capturedAt: Number(s.capturedAt) || Date.now(),
+    baseCurrency: CURRENCIES.includes(s.baseCurrency) ? s.baseCurrency : next.settings.baseCurrency,
+    value: Number(s.value) || 0,
+    balances: Array.isArray(s.balances) ? s.balances.map(b => ({ accountId: b.accountId, balance: Number(b.balance) || 0, currency: CURRENCIES.includes(b.currency) ? b.currency : "NGN" })) : [],
+    rates: s.rates && typeof s.rates === "object" ? s.rates : clone(DEFAULT_RATES)
+  })).slice(-730) : [];
   next.schemaVersion = SCHEMA_VERSION;
   return next;
 }
 
 function saveState() {
   render();
+  if (window.OmniPocketEngine) OmniPocketEngine.recordDailySnapshot(state);
   clearTimeout(persistTimer);
   persistTimer = setTimeout(async () => {
     try {
@@ -139,16 +151,11 @@ function account(id) {
 }
 
 function rate(from, to) {
-  if (from === to) return 1;
-  const table = state.settings.fx?.rates || DEFAULT_RATES;
-  return Number(table?.[from]?.[to]) || Number(DEFAULT_RATES?.[from]?.[to]) || 1;
+  return OmniPocketEngine.rate(state, from, to);
 }
 
 function convert(value, from, to, overrideRate = null) {
-  const amount = Number(value) || 0;
-  if (from === to) return amount;
-  if (overrideRate && overrideRate > 0) return amount * overrideRate;
-  return amount * rate(from, to);
+  return OmniPocketEngine.convert(state, value, from, to, overrideRate);
 }
 
 function money(value, currency = state.settings.baseCurrency) {
@@ -164,9 +171,7 @@ function money(value, currency = state.settings.baseCurrency) {
 }
 
 function netWorth() {
-  return state.accounts
-    .filter(a => !a.archived)
-    .reduce((sum, a) => sum + convert(a.balance, a.currency, state.settings.baseCurrency), 0);
+  return OmniPocketEngine.netWorth(state);
 }
 
 function escapeHtml(value) {
@@ -196,26 +201,9 @@ function adjustmentDelta(t) {
 }
 
 function rebuildBalances() {
-  state.accounts.forEach(a => { a.balance = Number(a.openingBalance) || 0; });
-  const txs = state.transactions.slice().sort((a,b) => {
-    const dateCompare = String(a.date).localeCompare(String(b.date));
-    return dateCompare || a.createdAt - b.createdAt;
-  });
-  for (const tx of txs) {
-    const source = account(tx.sourceAccountId);
-    const destination = account(tx.destinationAccountId);
-    if (tx.type === "income" && source) source.balance += tx.amount;
-    if (tx.type === "expense" && source) source.balance -= tx.amount;
-    if (tx.type === "withdrawal") {
-      if (source) source.balance -= tx.amount;
-      if (destination) destination.balance += tx.receivedAmount ?? convert(tx.amount, tx.currency, destination.currency, tx.fxRate);
-    }
-    if (tx.type === "transfer") {
-      if (source) source.balance -= tx.amount;
-      if (destination) destination.balance += tx.receivedAmount ?? convert(tx.amount, tx.currency, destination.currency, tx.fxRate);
-    }
-    if (tx.type === "adjustment" && source) source.balance += adjustmentDelta(tx);
-  }
+  const balances = OmniPocketEngine.balancesAt(state);
+  const byId = new Map(balances.map(a => [a.id, a.balance]));
+  state.accounts.forEach(a => { a.balance = byId.get(a.id) ?? Number(a.openingBalance) || 0; });
 }
 
 function openTransactionDetail(id) {
@@ -333,48 +321,33 @@ function parseClipboardText() {
 function renderNetWorthTrend() {
   const el = $("netWorthTrend");
   if (!el) return;
-  const points = [];
-  const ordered = state.transactions.slice().sort((a,b) => String(a.date).localeCompare(String(b.date)) || a.createdAt - b.createdAt);
-  const snapshots = [{ date: state.accounts.reduce((d,a) => a.createdAt < d ? a.createdAt : d, Date.now()), value: state.accounts.reduce((s,a) => s + convert(Number(a.openingBalance)||0,a.currency,state.settings.baseCurrency),0) }];
-  for (const tx of ordered) {
-    const accounts = clone(state.accounts).map(a => ({...a, balance:Number(a.openingBalance)||0}));
-    for (const prior of ordered) {
-      if (String(prior.date) > String(tx.date) || (String(prior.date) === String(tx.date) && prior.createdAt > tx.createdAt)) break;
-      const src = accounts.find(a => a.id === prior.sourceAccountId), dst = accounts.find(a => a.id === prior.destinationAccountId);
-      if (prior.type === "income" && src) src.balance += prior.amount;
-      if (prior.type === "expense" && src) src.balance -= prior.amount;
-      if ((prior.type === "transfer" || prior.type === "withdrawal")) { if (src) src.balance -= prior.amount; if (dst) dst.balance += prior.receivedAmount ?? convert(prior.amount,prior.currency,dst.currency,prior.fxRate); }
-      if (prior.type === "adjustment" && src) src.balance += adjustmentDelta(prior);
-    }
-    snapshots.push({date:tx.date,value:accounts.filter(a=>!a.archived).reduce((s,a)=>s+convert(a.balance,a.currency,state.settings.baseCurrency),0)});
+  const rows = OmniPocketEngine.historicalNetWorth(state, 90);
+  if (rows.length < 2) {
+    el.innerHTML = '<div class="empty-state">Log transactions across different days to build your wealth trend.</div>';
+    return;
   }
-  const unique = snapshots.reduce((acc,p)=> { const last=acc[acc.length-1]; if(last && last.date===p.date) last.value=p.value; else acc.push(p); return acc; }, []).slice(-30);
-  const width=720,height=240,pad=28;
-  const values=unique.map(p=>p.value), min=Math.min(...values,0), max=Math.max(...values,1), range=max-min||1;
-  const coords=unique.map((p,i)=>[(unique.length===1?width/2:pad+i*(width-pad*2)/(unique.length-1)),height-pad-(p.value-min)/range*(height-pad*2)]);
-  const path=coords.map((p,i)=>(i?"L":"M")+p[0].toFixed(1)+" "+p[1].toFixed(1)).join(" ");
-  el.innerHTML=unique.length>1 ? '<svg viewBox="0 0 '+width+' '+height+'" role="img" aria-label="Net worth trend"><path class="trend-line" d="'+path+'"></path>'+coords.map(p=>'<circle class="trend-dot" cx="'+p[0]+'" cy="'+p[1]+'" r="3"></circle>').join("")+'</svg><div class="trend-meta"><span>'+escapeHtml(unique[0].date)+'</span><strong>'+money(unique[unique.length-1].value)+'</strong><span>'+escapeHtml(unique[unique.length-1].date)+'</span></div>' : '<div class="empty-state">Log transactions to build your wealth trend.</div>';
+  const unique = rows.reduce((acc, p) => {
+    const last = acc[acc.length - 1];
+    if (last && last.date === p.date) last.value = p.value;
+    else acc.push({ date: p.date, value: p.value });
+    return acc;
+  }, []).slice(-30);
+  const width = 720, height = 240, pad = 28;
+  const values = unique.map(p => p.value);
+  const min = Math.min(...values, 0), max = Math.max(...values, 1), range = max - min || 1;
+  const coords = unique.map((p, i) => [
+    unique.length === 1 ? width / 2 : pad + i * (width - pad * 2) / (unique.length - 1),
+    height - pad - (p.value - min) / range * (height - pad * 2)
+  ]);
+  const path = coords.map((p, i) => (i ? "L" : "M") + p[0].toFixed(1) + " " + p[1].toFixed(1)).join(" ");
+  el.innerHTML = '<svg viewBox="0 0 ' + width + ' ' + height + '" role="img" aria-label="Net worth trend"><path class="trend-line" d="' + path + '"></path>' +
+    coords.map(p => '<circle class="trend-dot" cx="' + p[0] + '" cy="' + p[1] + '" r="3"></circle>').join("") +
+    '</svg><div class="trend-meta"><span>' + escapeHtml(unique[0].date) + '</span><strong>' + money(unique[unique.length - 1].value) +
+    '</strong><span>' + escapeHtml(unique[unique.length - 1].date) + '</span></div>';
 }
 
 function spendingSummary(days = 30) {
-  const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - days + 1);
-  const cutoffDate = cutoff.toISOString().slice(0, 10);
-  const totals = {};
-  let total = 0;
-  let income = 0;
-  for (const t of state.transactions) {
-    if (String(t.date) < cutoffDate) continue;
-    if (t.type === "expense") {
-      const value = convert(t.amount, t.currency, state.settings.baseCurrency);
-      const key = t.category || "Other";
-      totals[key] = (totals[key] || 0) + value;
-      total += value;
-    } else if (t.type === "income") {
-      income += convert(t.amount, t.currency, state.settings.baseCurrency);
-    }
-  }
-  return { totals, total, income, days };
+  return OmniPocketEngine.spendingSummary(state, days);
 }
 
 function financialInsights() {
@@ -556,11 +529,7 @@ function renderActivity() {
 }
 
 function goalProgress(goal) {
-  const current = goal.accountIds.reduce((sum, id) => {
-    const a = account(id);
-    return sum + (a ? convert(a.balance, a.currency, goal.currency) : 0);
-  }, 0);
-  return { current, pct: Math.min(100, goal.target ? current / goal.target * 100 : 0) };
+  return OmniPocketEngine.goalProgress(state, goal);
 }
 
 function renderGoal() {
@@ -998,161 +967,3 @@ $("menuButton")?.addEventListener("click", () => navigate("More"));
 $("modeButton")?.addEventListener("click", () => {
   state.settings.mode = state.settings.mode === "offline" ? "hybrid" : "offline";
   $("modeButton").textContent = `Mode · ${state.settings.mode === "offline" ? "Offline" : "Hybrid"}`;
-  saveState();
-});
-
-$("privacySettingsButton")?.addEventListener("click", () => {
-  state.settings.privacyHidden = !state.settings.privacyHidden;
-  $("privacySettingsButton").textContent = `Privacy · ${state.settings.privacyHidden ? "Hidden" : "Visible"}`;
-  saveState();
-});
-
-$("exportButton")?.addEventListener("click", () => {
-  const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `omnipocket-backup-${today()}.json`;
-  link.click();
-  URL.revokeObjectURL(url);
-});
-
-$("importButton")?.addEventListener("click", () => $("importFile")?.click());
-$("importFile")?.addEventListener("change", async event => {
-  const file = event.target.files?.[0];
-  if (!file) return;
-  try {
-    const imported = migrateState(JSON.parse(await file.text()));
-    if (!confirm("Replace current OmniPocket data with this backup?")) return;
-    state = imported;
-    saveState();
-    alert("Backup imported.");
-  } catch {
-    alert("That file is not a valid OmniPocket backup.");
-  } finally {
-    event.target.value = "";
-  }
-});
-
-$("accountForm").addEventListener("submit", event => {
-  event.preventDefault();
-  const accountData = {
-    id: uid(),
-    name: $("accountName").value.trim(),
-    institution: $("accountInstitution").value.trim(),
-    type: $("accountType").value,
-    currency: $("accountCurrency").value,
-    openingBalance: Number($("accountBalance").value) || 0,
-    balance: Number($("accountBalance").value) || 0,
-    archived: false,
-    createdAt: Date.now()
-  };
-  if (!accountData.name) return;
-  state.accounts.push(accountData);
-  saveState();
-  $("accountDialog").close();
-  event.target.reset();
-});
-
-$("quickForm").addEventListener("submit", handleQuickSubmit);
-
-$("privacyButton").onclick = () => {
-  state.settings.privacyHidden = !state.settings.privacyHidden;
-  saveState();
-};
-
-$("baseCurrencyButton").onclick = () => {
-  $("baseCurrencySelect").value = state.settings.baseCurrency;
-  $("currencyDialog").showModal();
-};
-
-$("currencyForm")?.addEventListener("submit", event => {
-  event.preventDefault();
-  state.settings.baseCurrency = $("baseCurrencySelect").value;
-  saveState();
-  $("currencyDialog").close();
-});
-
-$("reconcileForm")?.addEventListener("submit", event => {
-  event.preventDefault();
-  const a = account($("reconcileDialog").dataset.accountId);
-  if (!a) return;
-  const target = Number($("reconcileAmount").value);
-  if (!Number.isFinite(target) || target < 0) return alert("Enter a valid balance.");
-  if (target === a.balance) return $("reconcileDialog").close();
-  const delta = target - a.balance;
-  addTransaction({
-    type:"adjustment",
-    sourceAccountId:a.id,
-    amount:Math.abs(delta),
-    currency:a.currency,
-    category:delta > 0 ? "Reconciliation increase" : "Reconciliation decrease",
-    note:$("reconcileNote").value.trim() || "Balance reconciliation",
-    date:today()
-  });
-  a.balance = target;
-  saveState();
-  $("reconcileDialog").close();
-});
-
-$("addGoalButton").onclick = () => createGoal();
-
-$("smartParseButton")?.addEventListener("click", parseClipboardText);
-$("smartPasteButton")?.addEventListener("click", async () => {
-  try { $("smartTextInput").value = await navigator.clipboard.readText(); parseClipboardText(); }
-  catch { alert("Clipboard access was blocked. Paste the alert into the box instead."); }
-});
-$("smartApprove")?.addEventListener("click", approveSmartParse);
-$("smartReceiptInput")?.addEventListener("change", event => {
-  const file=event.target.files?.[0];
-  if(file) { $("receiptStatus").textContent="Receipt selected. Local OCR adapter is ready for a bundled OCR engine; no image is uploaded by OmniPocket."; }
-});
-$("refreshFxButton")?.addEventListener("click", refreshFxRates);
-let draggedWidgetId=null;
-document.addEventListener("dragstart", event => { const widget=event.target.closest("[data-widget-id]"); if(!widget) return; draggedWidgetId=widget.dataset.widgetId; widget.classList.add("dragging"); });
-document.addEventListener("dragend", event => { const widget=event.target.closest("[data-widget-id]"); widget?.classList.remove("dragging"); draggedWidgetId=null; });
-document.addEventListener("dragover", event => { const target=event.target.closest("[data-widget-id]"); if(!target || !draggedWidgetId || target.dataset.widgetId===draggedWidgetId) return; event.preventDefault(); const root=$("dashboardGalaxy"); const dragged=root.querySelector("[data-widget-id='"+draggedWidgetId+"']"); if(!dragged) return; const rect=target.getBoundingClientRect(); root.insertBefore(dragged,event.clientY < rect.top+rect.height/2 ? target : target.nextSibling); });
-document.addEventListener("drop", event => { if(!draggedWidgetId) return; const order=[...document.querySelectorAll("#dashboardGalaxy [data-widget-id]")].map(el=>el.dataset.widgetId); state.settings.dashboard.order=order; saveState(); });
-$("dashboardCustomizeButton")?.addEventListener("click", () => {
-  const hidden=state.settings.dashboard.hidden||[];
-  document.querySelectorAll("[data-widget-hidden]").forEach(el=>el.checked=!hidden.includes(el.dataset.widgetHidden));
-  const current=(state.settings.dashboard.order||["networth","trend","goals","accounts","activity","quick","fx","insights","spending"]).slice();
-  const select=$("widgetOrderSelect");
-  if(select){
-    const value=current.join(",");
-    let option=[...select.options].find(o=>o.value===value);
-    if(!option){ option=document.createElement("option"); option.value=value; option.textContent="Current workspace order"; select.appendChild(option); }
-    select.value=value;
-  }
-  $("dashboardSettingsDialog").showModal();
-});
-$("dashboardSettingsForm")?.addEventListener("submit", event => {
-  event.preventDefault();
-  const order=($("widgetOrderSelect")?.value || "networth,trend,goals,accounts,activity,quick,fx,insights,spending").split(",");
-  const hidden=[...document.querySelectorAll("[data-widget-hidden]:not(:checked)")].map(el=>el.dataset.widgetHidden);
-  state.settings.dashboard={...state.settings.dashboard,order,hidden};
-  saveState();
-  $("dashboardSettingsDialog").close();
-});
-document.addEventListener("click", event => {
-  const widgetQuick=event.target.closest("[data-dashboard-quick]");
-  if(widgetQuick) openQuick(widgetQuick.dataset.dashboardQuick);
-});
-setupDynamicFields();
-document.querySelectorAll(".nav-item[data-page]").forEach(button => {
-  button.addEventListener("click", () => navigate(button.dataset.page));
-});
-$("activitySearch")?.addEventListener("input", renderFullViews);
-$("clearReviewButton")?.addEventListener("click", () => {
-  navigate("Activity");
-  const review = state.transactions.filter(t => t.status === "needs_review");
-  $("activitySearch").value = "";
-  renderFullViews();
-  if (!review.length) return alert("No transactions need review.");
-  $("activitySearch").value = "review";
-  renderFullViews();
-});
-window.addEventListener("load", async () => {
-  if ("serviceWorker" in navigator && location.protocol !== "file:") navigator.serviceWorker.register("sw.js");
-  await bootstrapStorage();
-});
