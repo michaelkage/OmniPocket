@@ -884,6 +884,17 @@ function navigate(page) {
 }
 
 document.addEventListener("click", event => {
+  const contextCrumb = event.target.closest("[data-context-index]");
+  if (contextCrumb) {
+    event.preventDefault();
+    window.OmniPocketBus?.restoreHistory?.(Number(contextCrumb.dataset.contextIndex));
+    return;
+  }
+  if (event.target.closest("#contextBackButton")) {
+    event.preventDefault();
+    window.OmniPocketBus?.goBack?.();
+    return;
+  }
   const relatedAccount=event.target.closest("[data-related-account]");
   if(relatedAccount){ event.preventDefault(); selectAccountContext(relatedAccount.dataset.relatedAccount); return; }
   const relatedGoal=event.target.closest("[data-related-goal]");
