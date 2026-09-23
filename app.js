@@ -25,7 +25,8 @@ const DEFAULT_STATE = {
     privacyHidden: false,
     mode: "hybrid",
     fx: { provider: "cached", updatedAt: null, rates: clone(DEFAULT_RATES), source: "bundled", base: "NGN" },
-    dashboard: { layout: ["networth","trend","goals","accounts","activity","quick","fx","relations"], hidden: [], order: ["networth","trend","goals","accounts","activity","quick","fx","relations"] }
+    dashboard: { layout: ["networth","trend","goals","accounts","activity","quick","fx","relations"], hidden: [], order: ["networth","trend","goals","accounts","activity","quick","fx","relations"] },
+    integrations: { supabaseUrl: "", monoPublicKey: "" }
   },
   accounts: [],
   transactions: [],
@@ -79,6 +80,10 @@ function migrateState(raw) {
     ...clone(DEFAULT_STATE.settings.dashboard),
     ...(raw.settings?.dashboard || {})
   };
+  next.settings.integrations = {
+    ...clone(DEFAULT_STATE.settings.integrations),
+    ...(raw.settings?.integrations || {})
+  };
   next.accounts = Array.isArray(raw.accounts) ? raw.accounts.map(a => ({
     id: a.id || uid(),
     name: String(a.name || "Unnamed account"),
@@ -90,7 +95,14 @@ function migrateState(raw) {
       : Number(a.balance) || 0,
     balance: Number(a.balance) || 0,
     archived: Boolean(a.archived),
-    createdAt: Number(a.createdAt) || Date.now()
+    createdAt: Number(a.createdAt) || Date.now(),
+    connection: a.connection && typeof a.connection === "object" ? {
+      provider: a.connection.provider || null,
+      providerAccountId: a.connection.providerAccountId || null,
+      status: a.connection.status || "disconnected",
+      lastSyncedAt: a.connection.lastSyncedAt || null,
+      syncStatus: a.connection.syncStatus || null
+    } : null
   })) : [];
 
   next.transactions = Array.isArray(raw.transactions) ? raw.transactions.map(t => ({
@@ -109,7 +121,13 @@ function migrateState(raw) {
     fxSource: t.fxSource || null,
     category: String(t.category || ""),
     note: String(t.note || ""),
-    linkedGoalIds: Array.isArray(t.linkedGoalIds) ? t.linkedGoalIds : []
+    linkedGoalIds: Array.isArray(t.linkedGoalIds) ? t.linkedGoalIds : [],
+    external: t.external && typeof t.external === "object" ? {
+      provider: t.external.provider || null,
+      providerTransactionId: t.external.providerTransactionId || null,
+      importedAt: t.external.importedAt || null,
+      lastSeenAt: t.external.lastSeenAt || null
+    } : null
   })) : [];
 
   next.goals = Array.isArray(raw.goals) ? raw.goals.map(g => ({
@@ -438,6 +456,173 @@ function renderDashboard() {
   renderDashboardContextWidgets();
   const count=$("reviewCount"); if(count) count.textContent=state.transactions.filter(t=>t.status==="needs_review").length+" review";
   const fxStatus=$("fxCacheStatus"); if(fxStatus) fxStatus.textContent=state.settings.fx.updatedAt ? "Cached "+new Date(state.settings.fx.updatedAt).toLocaleString() : "Bundled rates";
+}
+
+function integrationSettings() {
+  const settings = state.settings.integrations || {};
+  return {
+    supabaseUrl: String(settings.supabaseUrl || localStorage.getItem("omnipocket.supabaseUrl") || "").replace(/\\/$/, ""),
+    monoPublicKey: String(settings.monoPublicKey || localStorage.getItem("omnipocket.monoPublicKey") || "")
+  };
+}
+
+function configureBankIntegration() {
+  const current = integrationSettings();
+  const supabaseUrl = prompt("Supabase project URL (for example https://YOUR_PROJECT.supabase.co):", current.supabaseUrl);
+  if (!supabaseUrl) return null;
+  const monoPublicKey = prompt("Mono public key (test_pk_... for sandbox or live_pk_... for production):", current.monoPublicKey);
+  if (!monoPublicKey) return null;
+  state.settings.integrations = { supabaseUrl: supabaseUrl.trim().replace(/\\/$/, ""), monoPublicKey: monoPublicKey.trim() };
+  localStorage.setItem("omnipocket.supabaseUrl", state.settings.integrations.supabaseUrl);
+  localStorage.setItem("omnipocket.monoPublicKey", state.settings.integrations.monoPublicKey);
+  saveState();
+  return integrationSettings();
+}
+
+function minorUnitAmount(value) {
+  return (Number(value) || 0) / 100;
+}
+
+async function exchangeMonoCode(code, accountName) {
+  const config = integrationSettings();
+  if (!config.supabaseUrl) throw new Error("Supabase URL is not configured.");
+  const response = await fetch(config.supabaseUrl + "/functions/v1/mono-exchange-token", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ code })
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data?.error || data?.message || "Mono authorization exchange failed.");
+  const monoAccountId = data?.data?.id || data?.data?.account?.id || data?.id;
+  if (!monoAccountId) throw new Error("Mono linked the account but did not return an account ID.");
+  return syncMonoAccount(monoAccountId, accountName);
+}
+
+async function syncMonoAccount(monoAccountId, accountName = "Connected bank") {
+  const config = integrationSettings();
+  const response = await fetch(config.supabaseUrl + "/functions/v1/mono-account-sync", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ accountId: monoAccountId, realtime: true })
+  });
+  const payload = await response.json();
+  if (!response.ok) throw new Error(payload?.error || "Mono account sync failed.");
+
+  const rawAccount = payload?.account?.data?.account || payload?.account?.data || payload?.account?.account || payload?.account;
+  const rawTransactions = payload?.transactions?.data || [];
+  if (!rawAccount) throw new Error("Mono returned no account details.");
+
+  const currency = CURRENCIES.includes(rawAccount.currency) ? rawAccount.currency : "NGN";
+  const currentBalance = minorUnitAmount(rawAccount.balance);
+  let local = state.accounts.find(a => a.connection?.provider === "mono" && a.connection.providerAccountId === monoAccountId);
+  if (!local) {
+    local = {
+      id: uid(),
+      name: accountName || rawAccount.name || "Connected bank",
+      institution: rawAccount.institution?.name || "",
+      type: rawAccount.type?.toLowerCase().includes("savings") ? "bank" : "bank",
+      currency,
+      openingBalance: currentBalance,
+      balance: currentBalance,
+      archived: false,
+      createdAt: Date.now(),
+      connection: { provider: "mono", providerAccountId: monoAccountId, status: "connected", lastSyncedAt: null, syncStatus: "syncing" }
+    };
+    state.accounts.push(local);
+  }
+
+  const importedAt = Date.now();
+  let importedNet = 0;
+  for (const tx of rawTransactions) {
+    const providerTransactionId = tx.id || tx._id;
+    if (!providerTransactionId) continue;
+    const amount = minorUnitAmount(tx.amount);
+    const isCredit = String(tx.type || "").toLowerCase() === "credit";
+    importedNet += isCredit ? amount : -amount;
+    const existing = state.transactions.find(t => t.external?.provider === "mono" && t.external.providerTransactionId === providerTransactionId);
+    if (existing) {
+      existing.external.lastSeenAt = new Date().toISOString();
+      continue;
+    }
+    state.transactions.push({
+      id: uid(),
+      type: isCredit ? "income" : "expense",
+      status: "recorded",
+      date: String(tx.date || today()).slice(0,10),
+      createdAt: importedAt,
+      sourceAccountId: local.id,
+      destinationAccountId: null,
+      amount,
+      currency,
+      receivedAmount: null,
+      receivedCurrency: null,
+      fxRate: null,
+      fxSource: "bank_import",
+      category: tx.category || "Other",
+      note: tx.narration || "Imported from Mono",
+      linkedGoalIds: [],
+      external: { provider: "mono", providerTransactionId, importedAt: new Date(importedAt).toISOString(), lastSeenAt: new Date(importedAt).toISOString() }
+    });
+  }
+
+  local.openingBalance = currentBalance - importedNet;
+  local.balance = currentBalance;
+  local.institution = rawAccount.institution?.name || local.institution;
+  local.currency = currency;
+  local.connection = {
+    provider: "mono",
+    providerAccountId: monoAccountId,
+    status: "connected",
+    lastSyncedAt: new Date().toISOString(),
+    syncStatus: "healthy"
+  };
+
+  saveState();
+  emitStateEvent("account:updated", { accountId: local.id, provider: "mono" });
+  return local;
+}
+
+async function connectBankAccount() {
+  let config = integrationSettings();
+  if (!config.supabaseUrl || !config.monoPublicKey) {
+    config = configureBankIntegration();
+    if (!config) return;
+  }
+  if (typeof window.Connect !== "function") {
+    alert("Mono Connect is still loading. Please try again in a moment.");
+    return;
+  }
+
+  const accountName = ($("accountName")?.value || "Connected bank").trim();
+  const email = localStorage.getItem("omnipocket.monoEmail") || prompt("Email to associate with this bank connection:", "")?.trim();
+  if (!email) return;
+  localStorage.setItem("omnipocket.monoEmail", email);
+
+  const connect = new window.Connect({
+    key: config.monoPublicKey,
+    scope: "auth",
+    data: { customer: { name: accountName || "OmniPocket user", email } },
+    reference: "omnipocket_" + uid(),
+    onSuccess: async ({ code }) => {
+      try {
+        $("accountDialog")?.close();
+        const button = $("connectBankButton");
+        if (button) button.disabled = true;
+        await exchangeMonoCode(code, accountName);
+        alert("Bank connected. Balance and transactions have been imported.");
+        render();
+      } catch (error) {
+        console.error(error);
+        alert(error.message || "Bank connection completed, but OmniPocket could not import the account.");
+      } finally {
+        const button = $("connectBankButton");
+        if (button) button.disabled = false;
+      }
+    },
+    onClose: () => {}
+  });
+  connect.setup();
+  connect.open();
 }
 
 async function refreshFxRates() {
@@ -1212,6 +1397,7 @@ document.querySelectorAll("[data-dashboard-quick]").forEach(button => {
 });
 $("addAccountButton")?.addEventListener("click", () => $("accountDialog")?.showModal());
 $("addAccountPageButton")?.addEventListener("click", () => $("accountDialog").showModal());
+$("connectBankButton")?.addEventListener("click", connectBankAccount);
 $("addGoalPageButton")?.addEventListener("click", () => createGoal());
 $("menuButton")?.addEventListener("click", () => navigate("More"));
 
