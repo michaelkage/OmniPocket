@@ -1192,13 +1192,13 @@ function setupDynamicFields() {
 
 $("dashboardAddGoal")?.addEventListener("click", createGoal);
 $("dashboardAddAccount")?.addEventListener("click", () => $("accountDialog").showModal());
-$("fab").onclick = () => openQuick("expense");
-document.querySelectorAll("[data-quick]").forEach(button => {
-  button.addEventListener("click", () => openQuick(button.dataset.quick));
+$("fab")?.addEventListener("click", () => openQuick("expense"));
+document.querySelectorAll("[data-dashboard-quick]").forEach(button => {
+  button.addEventListener("click", () => openQuick(button.dataset.dashboardQuick));
 });
-$("addAccountButton").onclick = () => $("accountDialog").showModal();
+$("addAccountButton")?.addEventListener("click", () => $("accountDialog")?.showModal());
 $("addAccountPageButton")?.addEventListener("click", () => $("accountDialog").showModal());
-$("addGoalPageButton")?.addEventListener("click", () => $("addGoalButton").click());
+$("addGoalPageButton")?.addEventListener("click", () => createGoal());
 $("menuButton")?.addEventListener("click", () => navigate("More"));
 
 $("modeButton")?.addEventListener("click", () => {
@@ -1262,15 +1262,15 @@ $("accountForm").addEventListener("submit", event => {
 
 $("quickForm").addEventListener("submit", handleQuickSubmit);
 
-$("privacyButton").onclick = () => {
+$("privacyButton")?.addEventListener("click", () => {
   state.settings.privacyHidden = !state.settings.privacyHidden;
   saveState();
-};
+});
 
-$("baseCurrencyButton").onclick = () => {
+$("baseCurrencyButton")?.addEventListener("click", () => { = () => {
   $("baseCurrencySelect").value = state.settings.baseCurrency;
   $("currencyDialog").showModal();
-};
+});
 
 $("currencyForm")?.addEventListener("submit", event => {
   event.preventDefault();
@@ -1301,7 +1301,7 @@ $("reconcileForm")?.addEventListener("submit", event => {
   $("reconcileDialog").close();
 });
 
-$("addGoalButton").onclick = () => createGoal();
+$("addGoalButton")?.addEventListener("click", () => createGoal());
 
 $("smartParseButton")?.addEventListener("click", parseClipboardText);
 $("smartPasteButton")?.addEventListener("click", async () => {
