@@ -354,18 +354,20 @@ function renderNetWorthTrend() {
 
 function spendingSummary(days=30,context=getAppContext()) {
   const base=OmniPocketEngine.spendingSummary(state,days);
-  const tx=contextTransactions(context).filter(t=>t.type==="expense");
   if(context.scope==="global") return base;
-  const totals={}; let total=0;
+  const cutoff=new Date(); cutoff.setDate(cutoff.getDate()-days);
+  const tx=contextTransactions(context).filter(t=>t.status!=="needs_review" && new Date(t.date+"T23:59:59")>=cutoff);
+  const totals={}; let total=0, income=0;
   for(const t of tx){
-    const value=convert(t.amount,t.currency,state.settings.baseCurrency);
-    total+=value; const key=t.category||"Other"; totals[key]=(totals[key]||0)+value;
+    const value=convert(t.receivedAmount??t.amount,t.receivedCurrency||t.currency,state.settings.baseCurrency,t.fxRate);
+    if(t.type==="expense" || t.type==="withdrawal"){ total+=value; const key=t.category||"Other"; totals[key]=(totals[key]||0)+value; }
+    if(t.type==="income") income+=value;
   }
-  return {total,totals,income:tx.filter(t=>t.type==="income").reduce((s,t)=>s+convert(t.amount,t.currency,state.settings.baseCurrency),0)};
+  return {total,totals,income};
 }
 
 function financialInsights() {
-  const summary = spendingSummary(30);
+  const summary = spendingSummary(30, getAppContext());
   const insights = [];
   const reviewCount = state.transactions.filter(t => t.status === "needs_review").length;
   if (!state.accounts.some(a => !a.archived)) insights.push("Add your first account to start building your wealth graph.");
@@ -391,7 +393,7 @@ function renderIntelligence() {
   }
   const spendingEl = $("spendingContent");
   if (spendingEl) {
-    const summary = spendingSummary(30);
+    const summary = spendingSummary(30, getAppContext());
     const rows = Object.entries(summary.totals).sort((a, b) => b[1] - a[1]).slice(0, 5);
     spendingEl.innerHTML = rows.length ? rows.map(([label, value]) => {
       const pct = summary.total ? Math.round(value / summary.total * 100) : 0;
@@ -636,7 +638,7 @@ function goalProgress(goal) { return OmniPocketEngine.goalProgress(state, goal);
 
 function renderGoal() {
   const el = $("goalContent"); const context=getAppContext();
-  const visibleGoals = context.scope==="goal"&&context.goalId ? state.goals.filter(g=>g.id===context.goalId) : context.scope==="account"&&context.accountId ? state.goals.filter(g=>g.accountIds.includes(context.accountId)) : state.goals;
+  const visibleGoals = context.scope==="goal"&&context.goalId ? (OmniPocketEngine.relatedGoals(state,context).filter(g=>g.id===context.goalId || g.status!=="completed")) : context.scope==="account"&&context.accountId ? state.goals.filter(g=>(g.accountIds||[]).includes(context.accountId)) : state.goals;
   const goal = visibleGoals.find(g=>g.status!=="completed") || visibleGoals[0];
   if (!goal) {
     el.innerHTML = state.goals.length
