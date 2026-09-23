@@ -1,7 +1,7 @@
 /* OmniPocket — V1 financial domain + UI engine */
 const STORAGE_KEY = "omnipocket.v1";
 const storage = new OmniPocketStorage({ dbName: "omnipocket", storeName: "state", legacyKey: STORAGE_KEY });
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 const CURRENCIES = ["NGN", "USD", "GBP", "EUR"];
 const ACCOUNT_TYPES = ["bank", "cash", "wallet", "locked"];
 const TX_TYPES = ["income", "expense", "transfer", "withdrawal", "adjustment"];
@@ -133,8 +133,8 @@ function migrateState(raw) {
 }
 
 function saveState() {
-  render();
   if (window.OmniPocketEngine) OmniPocketEngine.recordDailySnapshot(state);
+  render();
   clearTimeout(persistTimer);
   persistTimer = setTimeout(async () => {
     try {
