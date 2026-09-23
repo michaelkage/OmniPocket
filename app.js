@@ -351,9 +351,9 @@ function renderDashboard() {
   if(!root) return;
   const widgets={
     networth:$("widgetNetWorth"), trend:$("widgetTrend"), goals:$("widgetGoals"), accounts:$("widgetAccounts"),
-    activity:$("widgetActivity"), quick:$("widgetQuick"), fx:$("widgetFx"), insights:$("widgetInsights"), spending:$("widgetSpending")
+    activity:$("widgetActivity"), quick:$("widgetQuick"), fx:$("widgetFx"), relations:$("widgetRelations"), insights:$("widgetInsights"), spending:$("widgetSpending")
   };
-  const defaultOrder=["networth","trend","goals","accounts","activity","quick","fx","insights","spending"];
+  const defaultOrder=["networth","trend","goals","accounts","activity","quick","fx","relations","insights","spending"];
   const order=[...(state.settings.dashboard.order || [])];
   defaultOrder.forEach(id=>{ if(!order.includes(id)) order.push(id); });
   root.innerHTML="";
@@ -440,7 +440,80 @@ function renderContextTrail(context = getAppContext()) { const host = $("dashboa
 
 function renderContextBar(context=getAppContext()) { const bar=$("dashboardContext"),label=$("dashboardContextLabel"); if(!bar||!label)return; let text="Viewing · Global"; if(context.scope==="account"&&context.accountId)text="Viewing · Account: "+(account(context.accountId)?.name||"Unknown"); if(context.scope==="goal"&&context.goalId)text="Viewing · Goal: "+(state.goals.find(g=>g.id===context.goalId)?.name||"Unknown"); if(context.scope==="transaction"&&context.transactionId)text="Viewing · Activity: "+transactionLabel(state.transactions.find(t=>t.id===context.transactionId)||{type:"activity"}); label.textContent=text; bar.hidden=context.scope==="global"; renderContextTrail(context); }
 function contextAccountIds(context=getAppContext()) { if(context.scope==="account"&&context.accountId)return [context.accountId]; if(context.scope==="goal"&&context.goalId)return state.goals.find(g=>g.id===context.goalId)?.accountIds||[]; if(context.scope==="transaction"&&context.transactionId){const t=state.transactions.find(x=>x.id===context.transactionId);return [t?.sourceAccountId,t?.destinationAccountId].filter(Boolean);} return state.accounts.filter(a=>!a.archived).map(a=>a.id); }
-function renderDashboardContextWidgets(context=getAppContext()) { const el=$("galaxyNetWorth"); if(!el)return; let value=netWorth(),label="Your global wealth"; if(context.scope==="account"&&context.accountId){const acc=account(context.accountId);value=acc?convert(acc.balance,acc.currency,state.settings.baseCurrency):0;label=(acc?.name||"Account")+" balance";} else if(context.scope==="goal"&&context.goalId){const g=state.goals.find(x=>x.id===context.goalId);const p=g?goalProgress(g):{current:0};value=g?convert(p.current,g.currency,state.settings.baseCurrency):0;label=(g?.name||"Goal")+" progress";} else if(context.scope==="transaction"&&context.transactionId){const t=state.transactions.find(x=>x.id===context.transactionId);value=t?convert(t.amount,t.currency,state.settings.baseCurrency):0;label=t?transactionLabel(t):"Activity";} el.innerHTML=(state.settings.privacyHidden?"•••••••":escapeHtml(money(value)))+'<div class="muted context-value-label">'+escapeHtml(label)+'</div>'; }
+function renderDashboardContextWidgets(context=getAppContext()) {
+  const el=$("galaxyNetWorth");
+  const relationEl=$("relationshipContent");
+  const relationTitle=$("relationshipTitle");
+  const relationScope=$("relationshipScope");
+  const fxContext=$("fxContextContent");
+  if(!el || !relationEl) return;
+
+  let value=netWorth(), label="Your global wealth";
+  if(context.scope==="account"&&context.accountId){
+    const acc=account(context.accountId);
+    value=acc?convert(acc.balance,acc.currency,state.settings.baseCurrency):0;
+    label=(acc?.name||"Account")+" balance";
+  } else if(context.scope==="goal"&&context.goalId){
+    const g=state.goals.find(x=>x.id===context.goalId);
+    const p=g?goalProgress(g):{current:0};
+    value=g?convert(p.current,g.currency,state.settings.baseCurrency):0;
+    label=(g?.name||"Goal")+" observed progress";
+  } else if(context.scope==="transaction"&&context.transactionId){
+    const t=state.transactions.find(x=>x.id===context.transactionId);
+    value=t?convert(t.amount,t.currency,state.settings.baseCurrency):0;
+    label=t?transactionLabel(t):"Activity";
+  }
+  el.innerHTML=(state.settings.privacyHidden?"•••••••":escapeHtml(money(value)))+'<div class="muted context-value-label">'+escapeHtml(label)+'</div>';
+
+  const engine=window.OmniPocketEngine;
+  const accounts=engine.relatedAccounts(state,context);
+  const goals=engine.relatedGoals(state,context);
+  const transactions=engine.relatedTransactions(state,context);
+  const scopeLabel=context.scope==="account"?"ACCOUNT":context.scope==="goal"?"GOAL":context.scope==="transaction"?"ACTIVITY":"GLOBAL";
+  if(relationTitle) relationTitle.textContent=context.scope==="global"?"Financial network":contextNodeLabel(context);
+  if(relationScope) relationScope.textContent=scopeLabel;
+
+  const accountButtons=accounts.slice(0,6).map(a=>{
+    const valueText=state.settings.privacyHidden?"••••":money(a.balance,a.currency);
+    const exposure=context.scope==="account"&&context.accountId===a.id?engine.accountExposure(state,a.id).selectedShare.toFixed(1)+"% of wealth":"";
+    return '<button class="relationship-node" data-related-account="'+escapeHtml(a.id)+'"><span class="relationship-node-main"><span class="node">◉</span><div><strong>'+escapeHtml(a.name)+'</strong><small>'+escapeHtml(a.currency)+" · "+escapeHtml(a.type)+'</small></div></span><span class="relationship-value">'+escapeHtml(valueText)+(exposure?" · "+escapeHtml(exposure):"")+'</span></button>';
+  }).join("");
+  const goalButtons=goals.slice(0,6).map(g=>{
+    const p=goalProgress(g);
+    return '<button class="relationship-node" data-related-goal="'+escapeHtml(g.id)+'"><span class="relationship-node-main"><span class="node">◎</span><div><strong>'+escapeHtml(g.name)+'</strong><small>'+escapeHtml((g.accountIds||[]).length+" account"+((g.accountIds||[]).length===1?"":"s"))+'</small></div></span><span class="relationship-value">'+escapeHtml(state.settings.privacyHidden?"••••":money(p.current,g.currency))+'</span></button>';
+  }).join("");
+  const txButtons=transactions.slice(0,6).map(t=>{
+    const source=account(t.sourceAccountId), dest=account(t.destinationAccountId);
+    const detail=t.type==="transfer"?((source?.name||"Unknown")+" → "+(dest?.name||"Unknown")):(source?.name||"Unknown account");
+    return '<button class="relationship-node" data-related-transaction="'+escapeHtml(t.id)+'"><span class="relationship-node-main"><span class="node">≋</span><div><strong>'+escapeHtml(transactionLabel(t))+'</strong><small>'+escapeHtml(t.date+" · "+detail)+'</small></div></span><span class="relationship-value">'+escapeHtml(state.settings.privacyHidden?"••••":money(t.amount,t.currency))+'</span></button>';
+  }).join("");
+
+  const exposure=context.scope==="account"&&context.accountId?engine.accountExposure(state,context.accountId):engine.accountExposure(state);
+  const exposureChips=exposure.currencies.slice(0,4).map(row=>{
+    const pct=exposure.totalBase?Math.round(row.baseValue/exposure.totalBase*100):0;
+    return '<span class="relationship-chip">'+escapeHtml(row.currency)+" · "+pct+"%"+'</span>';
+  }).join("");
+
+  const groups=[];
+  groups.push('<div class="relationship-group"><h3>Accounts</h3>'+(accountButtons||'<div class="relationship-empty">No connected accounts.</div>')+'</div>');
+  groups.push('<div class="relationship-group"><h3>Goals</h3>'+(goalButtons||'<div class="relationship-empty">No connected goals.</div>')+'</div>');
+  groups.push('<div class="relationship-group"><h3>Activity</h3>'+(txButtons||'<div class="relationship-empty">No connected activity.</div>')+'</div>');
+  relationEl.innerHTML='<div class="relationship-summary"><div><strong>'+escapeHtml(scopeLabel==="GLOBAL"?"Your financial network":"Connected financial nodes")+'</strong><span>'+escapeHtml(accounts.length+" account"+(accounts.length===1?"":"s")+" · "+goals.length+" goal"+(goals.length===1?"":"s")+" · "+transactions.length+" transaction"+(transactions.length===1?"":"s"))+'</span></div><div class="relationship-chips">'+exposureChips+'</div></div><div class="relationship-grid">'+groups.join("")+'</div><div class="relationship-foot">Connections are derived from account ownership, goal account selections, transaction source/destination links, and explicit transaction-goal links. Shared accounts can appear in multiple goals and are not double-counted in net worth.</div>';
+
+  if(fxContext){
+    if(context.scope==="account"&&context.accountId){
+      const a=account(context.accountId);
+      fxContext.innerHTML='<span class="relationship-chip">'+escapeHtml(a?.currency||state.settings.baseCurrency)+" account · "+escapeHtml(money(a?convert(a.balance,a.currency,state.settings.baseCurrency):0,state.settings.baseCurrency))+'</span>';
+    } else if(context.scope==="transaction"&&context.transactionId){
+      const t=state.transactions.find(x=>x.id===context.transactionId);
+      const cross=t?.receivedCurrency&&t.receivedCurrency!==t.currency;
+      fxContext.innerHTML=cross?'<span class="relationship-chip">FX · '+escapeHtml(t.currency)+" → "+escapeHtml(t.receivedCurrency)+" · "+escapeHtml(t.fxRate?"Actual rate saved":"Snapshot rate")+'</span>':"";
+    } else if(context.scope==="goal"&&context.goalId){
+      const g=state.goals.find(x=>x.id===context.goalId);
+      fxContext.innerHTML=g?'<span class="relationship-chip">Goal currency · '+escapeHtml(g.currency)+'</span>':"";
+    } else fxContext.innerHTML="";
+  }
+}
 
 function render() {
   if (!$("netWorth")) return;
@@ -749,6 +822,12 @@ function navigate(page) {
 }
 
 document.addEventListener("click", event => {
+  const relatedAccount=event.target.closest("[data-related-account]");
+  if(relatedAccount){ event.preventDefault(); selectAccountContext(relatedAccount.dataset.relatedAccount); return; }
+  const relatedGoal=event.target.closest("[data-related-goal]");
+  if(relatedGoal){ event.preventDefault(); selectGoalContext(relatedGoal.dataset.relatedGoal); return; }
+  const relatedTransaction=event.target.closest("[data-related-transaction]");
+  if(relatedTransaction){ event.preventDefault(); selectTransactionContext(relatedTransaction.dataset.relatedTransaction); return; }
   const accountRow = event.target.closest("[data-account-id]");
   if (accountRow && !event.target.closest("button")) { selectAccountContext(accountRow.dataset.accountId); openAccountDetail(accountRow.dataset.accountId); }
   const goalRow = event.target.closest("[data-goal-id]");
