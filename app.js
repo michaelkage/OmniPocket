@@ -1054,7 +1054,32 @@ function handleQuickSubmit(event) {
   }
 }
 
+function renderReviewQueue() {
+  const host = $("activityReviewQueue");
+  if (!host) return;
+  const review = state.transactions.filter(t => t.status === "needs_review").sort((a,b) => {
+    const ad = new Date(a.date || 0).getTime(), bd = new Date(b.date || 0).getTime();
+    return bd - ad || b.createdAt - a.createdAt;
+  });
+  host.hidden = !review.length;
+  if (!review.length) return;
+  host.innerHTML = '<div class="review-queue-head"><div><span class="eyebrow">ACTION NEEDED</span><strong>' + review.length + ' transaction' + (review.length === 1 ? "" : "s") + ' to review</strong><span class="muted">Check imported or deferred activity before treating it as settled.</span></div><button id="reviewQueueOpen" type="button">Review all</button></div>' +
+    '<div class="review-queue-list">' + review.slice(0,3).map(t => {
+      const source = account(t.sourceAccountId);
+      return '<button class="review-queue-item" data-review-transaction="' + escapeHtml(t.id) + '"><span><strong>' + escapeHtml(transactionLabel(t)) + '</strong><small>' + escapeHtml(t.date) + ' · ' + escapeHtml(source?.name || "Unknown account") + '</small></span><strong>' + escapeHtml(money(t.amount,t.currency)) + '</strong></button>';
+    }).join("") + '</div>' +
+    (review.length > 3 ? '<div class="muted review-queue-more">+' + (review.length - 3) + ' more waiting</div>' : "");
+  $("reviewQueueOpen")?.addEventListener("click", () => {
+    $("activitySearch").value = "__review__";
+    renderFullViews();
+  });
+  host.querySelectorAll("[data-review-transaction]").forEach(button => {
+    button.addEventListener("click", () => openTransactionDetail(button.dataset.reviewTransaction));
+  });
+}
+
 function renderFullViews() {
+  renderReviewQueue();
   const accountsEl = $("accountsFullList");
   if (accountsEl) accountsEl.innerHTML = state.accounts.filter(a => !a.archived).map(a => `
     <div class="account-row account-full interactive-row" data-account-id="${escapeHtml(a.id)}" tabindex="0" role="button" aria-label="Open account">
@@ -1069,10 +1094,12 @@ function renderFullViews() {
   }).join("") || '<div class="empty-state">No goals yet.</div>';
 
   const search = ($("activitySearch")?.value || "").toLowerCase();
+  const reviewOnly = search === "__review__";
+  const activitySearch = reviewOnly ? "" : search;
   const activityEl = $("activityFullList");
   if (activityEl) activityEl.innerHTML = state.transactions.slice().sort((a,b)=>b.createdAt-a.createdAt).filter(t => {
     const s = `${transactionLabel(t)} ${t.note} ${t.date} ${t.status} ${t.type} ${account(t.sourceAccountId)?.name || ""} ${account(t.destinationAccountId)?.name || ""}`.toLowerCase();
-    return s.includes(search);
+    return reviewOnly ? t.status === "needs_review" : s.includes(activitySearch);
   }).map(t => {
     const source = account(t.sourceAccountId), dest = account(t.destinationAccountId);
     const direction = transactionDirection(t);
@@ -1594,13 +1621,14 @@ document.querySelectorAll(".nav-item[data-page]").forEach(button => {
   button.addEventListener("click", () => navigate(button.dataset.page));
 });
 $("activitySearch")?.addEventListener("input", renderFullViews);
+$("activitySearch")?.addEventListener("focus", () => {
+  if ($("activitySearch").value === "__review__") $("activitySearch").value = "";
+});
 $("clearReviewButton")?.addEventListener("click", () => {
   navigate("Activity");
   const review = state.transactions.filter(t => t.status === "needs_review");
-  $("activitySearch").value = "";
-  renderFullViews();
   if (!review.length) return alert("No transactions need review.");
-  $("activitySearch").value = "review";
+  $("activitySearch").value = "__review__";
   renderFullViews();
 });
 window.addEventListener("load", async () => {
