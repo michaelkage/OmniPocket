@@ -1323,6 +1323,7 @@ $("transactionReviewButton")?.addEventListener("click", () => {
   const t = state.transactions.find(x => x.id === $("transactionDialog").dataset.transactionId);
   if (!t) return;
   t.status = t.status === "needs_review" ? "recorded" : "needs_review";
+  rebuildBalances();
   saveState();
   openTransactionDetail(t.id);
 });
@@ -1635,6 +1636,7 @@ $("statementImportButton")?.addEventListener("click", () => {
   $("statementImportPreview").innerHTML = "";
   $("statementImportConfirm").disabled = true;
   $("statementImportDialog").showModal();
+  setTimeout(() => $("statementImportFile")?.click(), 0);
 });
 $("statementImportAccount")?.addEventListener("change", () => {
   if (!pendingStatementImport?.text) return;
