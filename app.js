@@ -24,7 +24,8 @@ const DEFAULT_STATE = {
     theme: "dark",
     privacyHidden: false,
     mode: "hybrid",
-    fx: { provider: "manual", updatedAt: null, rates: clone(DEFAULT_RATES) }
+    fx: { provider: "cached", updatedAt: null, rates: clone(DEFAULT_RATES), source: "bundled", base: "NGN" },
+    dashboard: { layout: ["networth","trend","goals","accounts","activity","quick","fx"], hidden: [], order: ["networth","trend","goals","accounts","activity","quick","fx"] }
   },
   accounts: [],
   transactions: [],
@@ -50,6 +51,7 @@ async function bootstrapStorage() {
     const loaded = await storage.load();
     state = migrateState(loaded || loadState());
     persistenceReady = true;
+    rebuildBalances();
     if (!loaded) await storage.save(state);
   } catch (error) {
     console.warn("IndexedDB unavailable; using local fallback.", error);
@@ -66,6 +68,10 @@ function migrateState(raw) {
   next.settings.fx = {
     ...clone(DEFAULT_STATE.settings.fx),
     ...(raw.settings?.fx || {})
+  };
+  next.settings.dashboard = {
+    ...clone(DEFAULT_STATE.settings.dashboard),
+    ...(raw.settings?.dashboard || {})
   };
   next.accounts = Array.isArray(raw.accounts) ? raw.accounts.map(a => ({
     id: a.id || uid(),
@@ -281,6 +287,128 @@ function deleteTransaction(id) {
   $("transactionDialog")?.close();
 }
 
+function parseMoneyText(text) {
+  const raw = String(text || "").replace(/\\s+/g, " ").trim();
+  const currencyMatch = raw.match(/(?:NGN|N|₦|USD|US\\$|\\$|GBP|£|EUR|€)\\s*([0-9][0-9,]*(?:\\.[0-9]+)?)/i)
+    || raw.match(/([0-9][0-9,]*(?:\\.[0-9]+)?)\\s*(?:NGN|Naira|USD|GBP|EUR)/i);
+  if (!currencyMatch) return null;
+  const amount = Number(String(currencyMatch[1]).replace(/,/g, ""));
+  if (!(amount > 0)) return null;
+  const upper = raw.toUpperCase();
+  let currency = "NGN";
+  if (/USD|US\\$|\\$/.test(upper)) currency = "USD";
+  else if (/GBP|£/.test(upper)) currency = "GBP";
+  else if (/EUR|€/.test(upper)) currency = "EUR";
+  let category = "Other";
+  const categories = [
+    ["TRANSFER", "Transfer"], ["AIRTIME|DATA|MTN|GLO|AIRTEL|9MOBILE", "Bills & telecom"],
+    ["FUEL|PETROL|DIESEL|TOTAL|OANDO", "Transport"], ["UBER|BOLT|RIDE", "Transport"],
+    ["SHOP|STORE|MART|SUPERMARKET|GROCERY", "Shopping"], ["RESTAURANT|FOOD|CHICKEN|PIZZA|EAT", "Food"],
+    ["SALARY|PAYROLL|WAGE", "Income"], ["ATM|CASH WITHDRAWAL", "Cash withdrawal"]
+  ];
+  for (const [pattern, label] of categories) if (new RegExp(pattern, "i").test(raw)) { category = label; break; }
+  const dateMatch = raw.match(/\\b(20\\d{2}[-/]\\d{1,2}[-/]\\d{1,2})\\b/);
+  return { amount, currency, category, date: dateMatch ? dateMatch[1].replace(/\\//g, "-") : today(), raw };
+}
+
+function parseClipboardText() {
+  const text = $("smartTextInput")?.value || "";
+  const parsed = parseMoneyText(text);
+  if (!parsed) return alert("I couldn't find a clear amount in that text.");
+  $("smartAmount").textContent = money(parsed.amount, parsed.currency);
+  $("smartCategory").textContent = parsed.category;
+  $("smartDate").textContent = parsed.date;
+  $("smartResult").hidden = false;
+  $("smartApprove").dataset.amount = parsed.amount;
+  $("smartApprove").dataset.currency = parsed.currency;
+  $("smartApprove").dataset.category = parsed.category;
+  $("smartApprove").dataset.date = parsed.date;
+}
+
+function renderNetWorthTrend() {
+  const el = $("netWorthTrend");
+  if (!el) return;
+  const points = [];
+  const ordered = state.transactions.slice().sort((a,b) => String(a.date).localeCompare(String(b.date)) || a.createdAt - b.createdAt);
+  const snapshots = [{ date: state.accounts.reduce((d,a) => a.createdAt < d ? a.createdAt : d, Date.now()), value: state.accounts.reduce((s,a) => s + convert(Number(a.openingBalance)||0,a.currency,state.settings.baseCurrency),0) }];
+  for (const tx of ordered) {
+    const accounts = clone(state.accounts).map(a => ({...a, balance:Number(a.openingBalance)||0}));
+    for (const prior of ordered) {
+      if (String(prior.date) > String(tx.date) || (String(prior.date) === String(tx.date) && prior.createdAt > tx.createdAt)) break;
+      const src = accounts.find(a => a.id === prior.sourceAccountId), dst = accounts.find(a => a.id === prior.destinationAccountId);
+      if (prior.type === "income" && src) src.balance += prior.amount;
+      if (prior.type === "expense" && src) src.balance -= prior.amount;
+      if ((prior.type === "transfer" || prior.type === "withdrawal")) { if (src) src.balance -= prior.amount; if (dst) dst.balance += prior.receivedAmount ?? convert(prior.amount,prior.currency,dst.currency,prior.fxRate); }
+      if (prior.type === "adjustment" && src) src.balance += adjustmentDelta(prior);
+    }
+    snapshots.push({date:tx.date,value:accounts.filter(a=>!a.archived).reduce((s,a)=>s+convert(a.balance,a.currency,state.settings.baseCurrency),0)});
+  }
+  const unique = snapshots.reduce((acc,p)=> { const last=acc[acc.length-1]; if(last && last.date===p.date) last.value=p.value; else acc.push(p); return acc; }, []).slice(-30);
+  const width=720,height=240,pad=28;
+  const values=unique.map(p=>p.value), min=Math.min(...values,0), max=Math.max(...values,1), range=max-min||1;
+  const coords=unique.map((p,i)=>[(unique.length===1?width/2:pad+i*(width-pad*2)/(unique.length-1)),height-pad-(p.value-min)/range*(height-pad*2)]);
+  const path=coords.map((p,i)=>(i?"L":"M")+p[0].toFixed(1)+" "+p[1].toFixed(1)).join(" ");
+  el.innerHTML=unique.length>1 ? '<svg viewBox="0 0 '+width+' '+height+'" role="img" aria-label="Net worth trend"><path class="trend-line" d="'+path+'"></path>'+coords.map(p=>'<circle class="trend-dot" cx="'+p[0]+'" cy="'+p[1]+'" r="3"></circle>').join("")+'</svg><div class="trend-meta"><span>'+escapeHtml(unique[0].date)+'</span><strong>'+money(unique[unique.length-1].value)+'</strong><span>'+escapeHtml(unique[unique.length-1].date)+'</span></div>' : '<div class="empty-state">Log transactions to build your wealth trend.</div>';
+}
+
+function renderDashboard() {
+  const root=$("dashboardGalaxy");
+  if(!root) return;
+  const widgets={
+    networth:$("widgetNetWorth"), trend:$("widgetTrend"), goals:$("widgetGoals"), accounts:$("widgetAccounts"),
+    activity:$("widgetActivity"), quick:$("widgetQuick"), fx:$("widgetFx")
+  };
+  const order=state.settings.dashboard.order || Object.keys(widgets);
+  root.innerHTML="";
+  order.filter(id=>widgets[id] && !(state.settings.dashboard.hidden||[]).includes(id)).forEach(id=>root.appendChild(widgets[id]));
+  renderNetWorthTrend();
+  const count=$("reviewCount"); if(count) count.textContent=state.transactions.filter(t=>t.status==="needs_review").length+" review";
+  const fxStatus=$("fxCacheStatus"); if(fxStatus) fxStatus.textContent=state.settings.fx.updatedAt ? "Cached "+new Date(state.settings.fx.updatedAt).toLocaleString() : "Bundled rates";
+}
+
+async function refreshFxRates() {
+  if (state.settings.mode === "offline") return alert("Offline mode keeps the last cached FX matrix.");
+  const base=state.settings.baseCurrency;
+  try {
+    const response=await fetch("https://open.er-api.com/v6/latest/"+encodeURIComponent(base), {cache:"no-store"});
+    if(!response.ok) throw new Error("FX service unavailable");
+    const data=await response.json();
+    if(!data.rates) throw new Error("No FX matrix returned");
+    const rates={};
+    for(const from of CURRENCIES){
+      rates[from]={};
+      for(const to of CURRENCIES){
+        if(from===to) rates[from][to]=1;
+        else if(from===base && data.rates[to]) rates[from][to]=Number(data.rates[to]);
+        else if(to===base && data.rates[from]) rates[from][to]=1/Number(data.rates[from]);
+        else if(data.rates[from] && data.rates[to]) rates[from][to]=Number(data.rates[to])/Number(data.rates[from]);
+        else rates[from][to]=DEFAULT_RATES[from][to];
+      }
+    }
+    state.settings.fx={provider:"live",updatedAt:Date.now(),rates,source:"open.er-api.com",base};
+    saveState();
+  } catch(error) {
+    alert("Live FX refresh failed. OmniPocket will keep using its cached rates.");
+  }
+}
+
+function openSmartParser() {
+  $("smartTextInput").value="";
+  $("smartResult").hidden=true;
+  $("smartParserDialog").showModal();
+}
+
+function approveSmartParse() {
+  const button=$("smartApprove"), amount=Number(button.dataset.amount), currency=button.dataset.currency;
+  if(!(amount>0)) return;
+  const source=state.accounts.find(a=>!a.archived && a.currency===currency) || state.accounts.find(a=>!a.archived);
+  if(!source) return alert("Add an account first.");
+  addTransaction({type:"expense",sourceAccountId:source.id,amount,currency:source.currency,category:button.dataset.category||"Other",date:button.dataset.date||today(),note:"Imported from pasted alert",status:"recorded"});
+  source.balance-=amount;
+  saveState();
+  $("smartParserDialog").close();
+}
+
 function render() {
   if (!$("netWorth")) return;
   $("netWorth").textContent = state.settings.privacyHidden ? "•••••••" : money(netWorth());
@@ -291,6 +419,7 @@ function render() {
   renderActivity();
   renderGoal();
   renderFullViews();
+  renderDashboard();
 }
 
 function renderAccounts() {
@@ -622,7 +751,9 @@ $("transactionReviewButton")?.addEventListener("click", () => {
   openTransactionDetail(t.id);
 });
 
-$("editTxType")?.addEventListener("change", syncEditTransactionFields);\n\n$("editTransactionForm")?.addEventListener("submit", event => {
+$("editTxType")?.addEventListener("change", syncEditTransactionFields);
+
+$("editTransactionForm")?.addEventListener("submit", event => {
   event.preventDefault();
   const t = state.transactions.find(x => x.id === $("editTransactionDialog").dataset.transactionId);
   if (!t) return;
@@ -879,6 +1010,30 @@ $("reconcileForm")?.addEventListener("submit", event => {
 
 $("addGoalButton").onclick = () => createGoal();
 
+$("smartParseButton")?.addEventListener("click", parseClipboardText);
+$("smartPasteButton")?.addEventListener("click", async () => {
+  try { $("smartTextInput").value = await navigator.clipboard.readText(); parseClipboardText(); }
+  catch { alert("Clipboard access was blocked. Paste the alert into the box instead."); }
+});
+$("smartApprove")?.addEventListener("click", approveSmartParse);
+$("smartReceiptInput")?.addEventListener("change", event => {
+  const file=event.target.files?.[0];
+  if(file) { $("receiptStatus").textContent="Receipt selected. Local OCR adapter is ready for a bundled OCR engine; no image is uploaded by OmniPocket."; }
+});
+$("refreshFxButton")?.addEventListener("click", refreshFxRates);
+$("dashboardCustomizeButton")?.addEventListener("click", () => $("dashboardSettingsDialog").showModal());
+$("dashboardSettingsForm")?.addEventListener("submit", event => {
+  event.preventDefault();
+  const order=[...document.querySelectorAll("[data-widget-order]")].map(el=>el.dataset.widgetOrder);
+  const hidden=[...document.querySelectorAll("[data-widget-hidden]:checked")].map(el=>el.dataset.widgetHidden);
+  state.settings.dashboard={...state.settings.dashboard,order,hidden};
+  saveState();
+  $("dashboardSettingsDialog").close();
+});
+document.addEventListener("click", event => {
+  const widgetQuick=event.target.closest("[data-dashboard-quick]");
+  if(widgetQuick) openQuick(widgetQuick.dataset.dashboardQuick);
+});
 setupDynamicFields();
 document.querySelectorAll(".nav-item[data-page]").forEach(button => {
   button.addEventListener("click", () => navigate(button.dataset.page));
