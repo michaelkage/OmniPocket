@@ -323,6 +323,35 @@
     };
   }
 
+  function goalTrajectory(state, goal, asOf = new Date(), days = 30) {
+    if (!goal) return { points: [], actualNet: 0, requiredNet: 0 };
+    const today = new Date(asOf);
+    today.setHours(0, 0, 0, 0);
+    const start = new Date(today);
+    start.setDate(start.getDate() - Math.max(1, days - 1));
+    const end = new Date(today);
+    const history = goalContributionHistory(state, goal).filter(item => {
+      const date = new Date(item.date + "T00:00:00");
+      return date >= start && date <= end;
+    });
+    const byDate = new Map();
+    history.forEach(item => byDate.set(item.date, (byDate.get(item.date) || 0) + item.value));
+    const points = [];
+    let cumulative = 0;
+    for (let i = 0; i < days; i++) {
+      const date = new Date(start);
+      date.setDate(start.getDate() + i);
+      const key = date.toISOString().slice(0, 10);
+      cumulative += byDate.get(key) || 0;
+      points.push({ date: key, value: cumulative });
+    }
+    const progress = goalProgress(state, goal);
+    const projection = goalProjection(state, goal, asOf);
+    const actualNet = cumulative;
+    const requiredNet = projection.dailyRequired != null ? projection.dailyRequired * Math.max(0, days - 1) : 0;
+    return { points, actualNet, requiredNet };
+  }
+
   function goalIntelligence(state, goal, asOf = new Date()) {
     if (!goal) return {
       goal: null,
@@ -355,6 +384,6 @@
     spendingSummary, flowSummary, goalProjection, snapshot,
     recordDailySnapshot, historicalNetWorth,
     relatedAccounts, relatedGoals, relatedTransactions, accountExposure,
-    goalNetwork, transactionNetwork, goalIntelligence
+    goalNetwork, transactionNetwork, goalIntelligence, goalTrajectory
   };
 })();
