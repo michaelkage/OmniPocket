@@ -288,15 +288,15 @@ function deleteTransaction(id) {
 }
 
 function parseMoneyText(text) {
-  const raw = String(text || "").replace(/\\s+/g, " ").trim();
-  const currencyMatch = raw.match(/(?:NGN|N|₦|USD|US\\$|\\$|GBP|£|EUR|€)\\s*([0-9][0-9,]*(?:\\.[0-9]+)?)/i)
-    || raw.match(/([0-9][0-9,]*(?:\\.[0-9]+)?)\\s*(?:NGN|Naira|USD|GBP|EUR)/i);
+  const raw = String(text || "").replace(/\s+/g, " ").trim();
+  const currencyMatch = raw.match(/(?:NGN|N|₦|USD|US\$|\$|GBP|£|EUR|€)\s*([0-9][0-9,]*(?:\.[0-9]+)?)/i)
+    || raw.match(/([0-9][0-9,]*(?:\.[0-9]+)?)\s*(?:NGN|Naira|USD|GBP|EUR)/i);
   if (!currencyMatch) return null;
   const amount = Number(String(currencyMatch[1]).replace(/,/g, ""));
   if (!(amount > 0)) return null;
   const upper = raw.toUpperCase();
   let currency = "NGN";
-  if (/USD|US\\$|\\$/.test(upper)) currency = "USD";
+  if (/USD|US\$|\$/.test(upper)) currency = "USD";
   else if (/GBP|£/.test(upper)) currency = "GBP";
   else if (/EUR|€/.test(upper)) currency = "EUR";
   let type = /SALARY|PAYROLL|WAGE|CREDITED|CR\b/i.test(raw) ? "income" : "expense";
@@ -310,8 +310,8 @@ function parseMoneyText(text) {
   for (const [pattern, label] of categories) if (new RegExp(pattern, "i").test(raw)) { category = label; break; }
   if (category === "Transfer") type = "transfer";
   if (category === "Income") type = "income";
-  const dateMatch = raw.match(/\\b(20\\d{2}[-/]\\d{1,2}[-/]\\d{1,2})\\b/);
-  return { amount, currency, category, type, date: dateMatch ? dateMatch[1].replace(/\\//g, "-") : today(), raw };
+  const dateMatch = raw.match(/\b(20\\d{2}[-/]\\d{1,2}[-/]\\d{1,2})\b/);
+  return { amount, currency, category, type, date: dateMatch ? dateMatch[1].replace(/\//g, "-") : today(), raw };
 }
 
 function parseClipboardText() {
