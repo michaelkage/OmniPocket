@@ -500,7 +500,11 @@ function navigate(page) {
     const view = $("page"+name);
     if (view) view.hidden = name !== page;
   });
-  document.addEventListener("click", event => {
+  document.querySelectorAll(".nav-item[data-page]").forEach(button => button.classList.toggle("active", button.dataset.page === page));
+  document.querySelector(".main-content")?.scrollTo({top:0,behavior:"smooth"});
+}
+
+document.addEventListener("click", event => {
   const accountRow = event.target.closest("[data-account-id]");
   if (accountRow && !event.target.closest("button")) openAccountDetail(accountRow.dataset.accountId);
   const goalRow = event.target.closest("[data-goal-id]");
@@ -538,9 +542,9 @@ $("goalForm")?.addEventListener("submit", event => {
   const editingId = $("goalDialog").dataset.editingId;
   if (editingId) {
     const g = state.goals.find(x => x.id === editingId);
-    if (g) Object.assign(g, { name, target, currency, accountIds, deadline: $("goalDeadline").value || "" });
+    if (g) Object.assign(g, {name,target,currency,accountIds,deadline:$("goalDeadline").value||""});
   } else {
-    state.goals.push({ id: uid(), name, target, currency, accountIds, deadline: $("goalDeadline").value || "", status: "active", createdAt: Date.now() });
+    state.goals.push({id:uid(),name,target,currency,accountIds,deadline:$("goalDeadline").value||"",status:"active",createdAt:Date.now()});
   }
   delete $("goalDialog").dataset.editingId;
   saveState();
@@ -560,10 +564,6 @@ $("goalDetailEdit")?.addEventListener("click", () => {
   $("goalDialog").dataset.editingId = g.id;
   $("goalDialog").showModal();
 });
-
-document.querySelectorAll(".nav-item[data-page]").forEach(button => button.classList.toggle("active", button.dataset.page === page));
-  document.querySelector(".main-content")?.scrollTo({top:0,behavior:"smooth"});
-}
 
 function createGoal() {
   if (!state.accounts.some(a => !a.archived)) return alert("Add an account first.");
