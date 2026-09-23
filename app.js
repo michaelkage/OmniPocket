@@ -310,7 +310,7 @@ function renderActivity() {
       ? `${source ? escapeHtml(source.name) : "Unknown"} → ${destination ? escapeHtml(destination.name) : "Unknown"}`
       : source ? escapeHtml(source.name) : "";
     return `
-      <div class="activity-row">
+      <div class="activity-row interactive-row" data-transaction-id="${escapeHtml(t.id)}" tabindex="0" role="button">
         <div>
           <div>${escapeHtml(transactionLabel(t))}${t.status === "needs_review" ? ' <span class="muted">· review</span>' : ""}</div>
           <div class="muted">${escapeHtml(t.date)} · ${context}</div>
@@ -339,14 +339,14 @@ function renderGoal() {
     return;
   }
   const { current, pct } = goalProgress(goal);
-  el.innerHTML = `
+  el.innerHTML = `<div class="interactive-row" data-goal-id="${escapeHtml(goal.id)}" tabindex="0" role="button">
     <strong>${escapeHtml(goal.name)}</strong>
     <div class="muted">${escapeHtml(money(current, goal.currency))} of ${escapeHtml(money(goal.target, goal.currency))}</div>
     <div style="height:10px;background:rgba(255,255,255,.08);border-radius:99px;margin:14px 0 8px;overflow:hidden">
       <div style="width:${pct}%;height:100%;background:var(--primary);border-radius:inherit"></div>
     </div>
     <div class="muted">${pct.toFixed(0)}%${goal.deadline ? ` · Deadline ${escapeHtml(goal.deadline)}` : ""}</div>
-  `;
+  </div>`;
 }
 
 function populateAccounts() {
@@ -540,7 +540,7 @@ function renderFullViews() {
   const search = ($("activitySearch")?.value || "").toLowerCase();
   const activityEl = $("activityFullList");
   if (activityEl) activityEl.innerHTML = state.transactions.slice().sort((a,b)=>b.createdAt-a.createdAt).filter(t => {
-    const s = `${transactionLabel(t)} ${t.note} ${t.date} ${account(t.sourceAccountId)?.name || ""}`.toLowerCase();
+    const s = `${transactionLabel(t)} ${t.note} ${t.date} ${t.status} ${t.type} ${account(t.sourceAccountId)?.name || ""} ${account(t.destinationAccountId)?.name || ""}`.toLowerCase();
     return s.includes(search);
   }).map(t => {
     const source = account(t.sourceAccountId), dest = account(t.destinationAccountId);
