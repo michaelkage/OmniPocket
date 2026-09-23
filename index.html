@@ -49,11 +49,27 @@
   </form>
 </dialog>
 <dialog id="goalDetailDialog" class="app-dialog">
-  <div class="dialog-head"><div><span class="eyebrow">TARGET</span><h2 id="goalDetailTitle">Goal</h2></div><button class="icon-button" onclick="this.closest('dialog').close()">✕</button></div>
+  <div class="dialog-head"><div><span class="eyebrow">TARGET INTELLIGENCE</span><h2 id="goalDetailTitle">Goal</h2></div><button class="icon-button" onclick="this.closest('dialog').close()">✕</button></div>
   <div class="detail-balance"><strong id="goalDetailProgress">₦0 of ₦0</strong><span id="goalDetailMeta" class="muted"></span></div>
   <div class="progress-track"><div id="goalDetailBar" class="progress-fill"></div></div>
+  <div class="goal-intelligence-grid">
+    <div class="goal-intel-card"><span class="eyebrow">REMAINING</span><strong id="goalDetailRemaining">₦0</strong></div>
+    <div class="goal-intel-card"><span class="eyebrow">REQUIRED PACE</span><strong id="goalDetailRequired">—</strong></div>
+    <div class="goal-intel-card"><span class="eyebrow">PROJECTED</span><strong id="goalDetailProjected">—</strong></div>
+  </div>
+  <div id="goalDetailProjectionNote" class="goal-intel-note"></div>
   <div class="detail-section"><div class="eyebrow">PACE</div><div id="goalDetailPace" class="detail-callout"></div></div>
   <div class="detail-section"><div class="eyebrow">CONTRIBUTING ACCOUNTS</div><div id="goalDetailAccounts" class="stack"></div></div>
+  <div class="detail-section">
+    <div class="goal-section-head"><div><div class="eyebrow">LINKED ACTIVITY</div><div class="muted">Transactions you explicitly associated with this goal.</div></div></div>
+    <div id="goalDetailLinkedActivity" class="stack"></div>
+  </div>
+  <div class="detail-section">
+    <div class="goal-section-head"><div><div class="eyebrow">CONNECTED ACTIVITY</div><div class="muted">Activity inferred because it touches an included account.</div></div></div>
+    <div id="goalDetailConnectedActivity" class="stack"></div>
+    <div id="goalDetailActivitySummary" class="goal-intel-note"></div>
+  </div>
+  <div class="goal-detail-footnote">Goal progress is based on the balances of included accounts. Linked transactions describe intent and are not added again.</div>
   <div class="dialog-actions"><button id="goalDetailEdit">Edit goal</button><button class="primary" onclick="this.closest('dialog').close()">Done</button></div>
 </dialog><dialog id="reconcileDialog" class="app-dialog">
 <div class="dialog-head"><div><span class="eyebrow">RECONCILIATION</span><h2>Match actual balance</h2><div id="reconcileMeta" class="muted"></div></div><button class="icon-button" onclick="this.closest('dialog').close()">✕</button></div>
