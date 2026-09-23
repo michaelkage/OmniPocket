@@ -721,8 +721,6 @@ function handleQuickSubmit(event) {
         note,
         date
       });
-      source.balance -= amount;
-      destination.balance += received;
     } else if (quickType === "withdrawal") {
       const destination = account($("quickDestination").value);
       if (!destination || destination.id === source.id) return alert("Choose a different cash destination.");
@@ -743,8 +741,6 @@ function handleQuickSubmit(event) {
         note,
         date
       });
-      source.balance -= amount;
-      destination.balance += received;
     } else {
       const type = quickType;
       addTransaction({
@@ -757,8 +753,6 @@ function handleQuickSubmit(event) {
         date,
         status
       });
-      if (type === "income") source.balance += amount;
-      if (type === "expense") source.balance -= amount;
     }
     saveState();
     $("quickDialog").close();
