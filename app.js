@@ -25,7 +25,7 @@ const DEFAULT_STATE = {
     privacyHidden: false,
     mode: "hybrid",
     fx: { provider: "cached", updatedAt: null, rates: clone(DEFAULT_RATES), source: "bundled", base: "NGN" },
-    dashboard: { layout: ["networth","trend","goals","accounts","activity","quick","fx"], hidden: [], order: ["networth","trend","goals","accounts","activity","quick","fx"] }
+    dashboard: { layout: ["networth","trend","goals","accounts","activity","quick","fx","relations"], hidden: [], order: ["networth","trend","goals","accounts","activity","quick","fx","relations"] }
   },
   accounts: [],
   transactions: [],
