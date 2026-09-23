@@ -530,6 +530,48 @@ document.querySelectorAll("[data-quick]").forEach(button => {
   button.addEventListener("click", () => openQuick(button.dataset.quick));
 });
 $("addAccountButton").onclick = () => $("accountDialog").showModal();
+$("addAccountPageButton")?.addEventListener("click", () => $("accountDialog").showModal());
+$("addGoalPageButton")?.addEventListener("click", () => $("addGoalButton").click());
+$("menuButton")?.addEventListener("click", () => navigate("More"));
+
+$("modeButton")?.addEventListener("click", () => {
+  state.settings.mode = state.settings.mode === "offline" ? "hybrid" : "offline";
+  $("modeButton").textContent = `Mode · ${state.settings.mode === "offline" ? "Offline" : "Hybrid"}`;
+  saveState();
+});
+
+$("privacySettingsButton")?.addEventListener("click", () => {
+  state.settings.privacyHidden = !state.settings.privacyHidden;
+  $("privacySettingsButton").textContent = `Privacy · ${state.settings.privacyHidden ? "Hidden" : "Visible"}`;
+  saveState();
+});
+
+$("exportButton")?.addEventListener("click", () => {
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `omnipocket-backup-${today()}.json`;
+  link.click();
+  URL.revokeObjectURL(url);
+});
+
+$("importButton")?.addEventListener("click", () => $("importFile")?.click());
+$("importFile")?.addEventListener("change", async event => {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  try {
+    const imported = migrateState(JSON.parse(await file.text()));
+    if (!confirm("Replace current OmniPocket data with this backup?")) return;
+    state = imported;
+    saveState();
+    alert("Backup imported.");
+  } catch {
+    alert("That file is not a valid OmniPocket backup.");
+  } finally {
+    event.target.value = "";
+  }
+});
 
 $("accountForm").addEventListener("submit", event => {
   event.preventDefault();
