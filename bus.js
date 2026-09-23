@@ -52,7 +52,7 @@
     const changed = Object.keys(next).some(key => next[key] !== context[key]);
     context = next;
     if (changed) {
-      emit("context:changed", { context: getContext(), previous });
+      emit("context:changed", { context: getContext(), previous, history: getHistory() });
       if (next.accountId && next.accountId !== previous.accountId) emit("account:selected", { context: getContext(), accountId: next.accountId });
       if (next.goalId && next.goalId !== previous.goalId) emit("goal:selected", { context: getContext(), goalId: next.goalId });
       if (next.transactionId && next.transactionId !== previous.transactionId) emit("transaction:selected", { context: getContext(), transactionId: next.transactionId });
