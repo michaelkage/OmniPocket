@@ -54,4 +54,21 @@
 <dialog id="currencyDialog" class="app-dialog">
 <div class="dialog-head"><div><span class="eyebrow">DISPLAY</span><h2>Base currency</h2><div class="muted">Net worth will be converted into this currency.</div></div><button class="icon-button" onclick="this.closest('dialog').close()">✕</button></div>
 <form id="currencyForm" class="form-grid"><label>Currency<select id="baseCurrencySelect"><option>NGN</option><option>USD</option><option>GBP</option><option>EUR</option></select></label><div class="dialog-actions"><button type="button" onclick="this.closest('dialog').close()">Cancel</button><button class="primary">Use currency</button></div></form>
+</dialog><dialog id="transactionDialog" class="app-dialog">
+<div class="dialog-head"><div><span class="eyebrow">TRANSACTION</span><h2 id="transactionDetailTitle">Activity</h2><div id="transactionDetailMeta" class="muted"></div></div><button class="icon-button" onclick="this.closest('dialog').close()">✕</button></div>
+<div class="detail-balance"><strong id="transactionDetailAmount">₦0</strong><span id="transactionDetailContext" class="muted"></span></div>
+<div class="detail-section"><div class="eyebrow">STATUS</div><div id="transactionDetailStatus" class="detail-callout"></div></div>
+<div class="detail-section"><div class="eyebrow">NOTE</div><div id="transactionDetailNote" class="muted">No note.</div></div>
+<div class="dialog-actions"><button id="transactionReviewButton">Mark for review</button><button id="transactionEditButton">Edit</button><button id="transactionDeleteButton">Delete</button><button class="primary" onclick="this.closest('dialog').close()">Done</button></div>
+</dialog>
+<dialog id="editTransactionDialog" class="app-dialog">
+<div class="dialog-head"><div><span class="eyebrow">TRANSACTION</span><h2>Edit activity</h2></div><button class="icon-button" onclick="this.closest('dialog').close()">✕</button></div>
+<form id="editTransactionForm" class="form-grid">
+<label>Amount<input id="editTxAmount" type="number" min="0.01" step="0.01" required></label>
+<label>Date<input id="editTxDate" type="date" required></label>
+<label>Category / label<input id="editTxCategory"></label>
+<label>Note<input id="editTxNote"></label>
+<label>Status<select id="editTxStatus"><option value="recorded">Recorded</option><option value="needs_review">Handle later</option></select></label>
+<div class="dialog-actions"><button type="button" onclick="this.closest('dialog').close()">Cancel</button><button class="primary">Save changes</button></div>
+</form>
 </dialog><script src="storage.js"></script><script src="app.js"></script></body></html>
