@@ -361,6 +361,7 @@ function renderDashboard() {
   const order=state.settings.dashboard.order || Object.keys(widgets);
   root.innerHTML="";
   order.filter(id=>widgets[id] && !(state.settings.dashboard.hidden||[]).includes(id)).forEach(id=>root.appendChild(widgets[id]));
+  const galaxyNetWorth=$("galaxyNetWorth"); if(galaxyNetWorth) galaxyNetWorth.textContent=state.settings.privacyHidden ? "•••••••" : money(netWorth());
   renderNetWorthTrend();
   const count=$("reviewCount"); if(count) count.textContent=state.transactions.filter(t=>t.status==="needs_review").length+" review";
   const fxStatus=$("fxCacheStatus"); if(fxStatus) fxStatus.textContent=state.settings.fx.updatedAt ? "Cached "+new Date(state.settings.fx.updatedAt).toLocaleString() : "Bundled rates";
@@ -899,6 +900,8 @@ function setupDynamicFields() {
   $("quickDestination").addEventListener("change", syncTransferFields);
 }
 
+$("dashboardAddGoal")?.addEventListener("click", createGoal);
+$("dashboardAddAccount")?.addEventListener("click", () => $("accountDialog").showModal());
 $("fab").onclick = () => openQuick("expense");
 document.querySelectorAll("[data-quick]").forEach(button => {
   button.addEventListener("click", () => openQuick(button.dataset.quick));
@@ -1024,7 +1027,7 @@ $("refreshFxButton")?.addEventListener("click", refreshFxRates);
 $("dashboardCustomizeButton")?.addEventListener("click", () => $("dashboardSettingsDialog").showModal());
 $("dashboardSettingsForm")?.addEventListener("submit", event => {
   event.preventDefault();
-  const order=[...document.querySelectorAll("[data-widget-order]")].map(el=>el.dataset.widgetOrder);
+  const order=($("widgetOrderSelect")?.value || "networth,trend,goals,accounts,activity,quick,fx").split(",");
   const hidden=[...document.querySelectorAll("[data-widget-hidden]:checked")].map(el=>el.dataset.widgetHidden);
   state.settings.dashboard={...state.settings.dashboard,order,hidden};
   saveState();
