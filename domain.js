@@ -199,9 +199,112 @@
     return [snapshot(state)];
   }
 
+  function activeAccounts(state) {
+    return (state.accounts || []).filter(account => !account.archived);
+  }
+
+  function relatedAccounts(state, context = {}) {
+    const accounts = activeAccounts(state);
+    if (context.scope === "account" && context.accountId) {
+      return accounts.filter(account => account.id === context.accountId);
+    }
+    if (context.scope === "goal" && context.goalId) {
+      const goal = (state.goals || []).find(item => item.id === context.goalId);
+      const ids = new Set(goal?.accountIds || []);
+      return accounts.filter(account => ids.has(account.id));
+    }
+    if (context.scope === "transaction" && context.transactionId) {
+      const tx = (state.transactions || []).find(item => item.id === context.transactionId);
+      const ids = new Set([tx?.sourceAccountId, tx?.destinationAccountId].filter(Boolean));
+      return accounts.filter(account => ids.has(account.id));
+    }
+    return accounts;
+  }
+
+  function relatedGoals(state, context = {}) {
+    const goals = (state.goals || []).filter(goal => goal.status !== "completed");
+    if (context.scope === "goal" && context.goalId) return goals.filter(goal => goal.id === context.goalId);
+    if (context.scope === "account" && context.accountId) {
+      return goals.filter(goal => (goal.accountIds || []).includes(context.accountId));
+    }
+    if (context.scope === "transaction" && context.transactionId) {
+      const tx = (state.transactions || []).find(item => item.id === context.transactionId);
+      const explicit = new Set(tx?.linkedGoalIds || []);
+      const accountIds = new Set([tx?.sourceAccountId, tx?.destinationAccountId].filter(Boolean));
+      return goals.filter(goal => explicit.has(goal.id) || (goal.accountIds || []).some(id => accountIds.has(id)));
+    }
+    return goals;
+  }
+
+  function relatedTransactions(state, context = {}) {
+    const transactions = (state.transactions || []).slice().sort((a, b) =>
+      String(b.date).localeCompare(String(a.date)) || Number(b.createdAt) - Number(a.createdAt)
+    );
+    if (context.scope === "transaction" && context.transactionId) {
+      return transactions.filter(tx => tx.id === context.transactionId);
+    }
+    if (context.scope === "account" && context.accountId) {
+      return transactions.filter(tx => tx.sourceAccountId === context.accountId || tx.destinationAccountId === context.accountId);
+    }
+    if (context.scope === "goal" && context.goalId) {
+      const goal = (state.goals || []).find(item => item.id === context.goalId);
+      const ids = new Set(goal?.accountIds || []);
+      return transactions.filter(tx =>
+        (tx.linkedGoalIds || []).includes(context.goalId) ||
+        ids.has(tx.sourceAccountId) ||
+        ids.has(tx.destinationAccountId)
+      );
+    }
+    return transactions;
+  }
+
+  function accountExposure(state, accountId = null) {
+    const accounts = activeAccounts(state);
+    const totalBase = netWorth(state, accounts, state.settings.baseCurrency);
+    const rows = accounts.reduce((map, account) => {
+      const baseValue = convert(state, account.balance, account.currency, state.settings.baseCurrency);
+      const row = map.get(account.currency) || { currency: account.currency, balance: 0, baseValue: 0, accounts: 0 };
+      row.balance += Number(account.balance) || 0;
+      row.baseValue += baseValue;
+      row.accounts += 1;
+      map.set(account.currency, row);
+      return map;
+    }, new Map());
+    const selected = accountId ? accounts.find(account => account.id === accountId) : null;
+    return {
+      totalBase,
+      selectedBase: selected ? convert(state, selected.balance, selected.currency, state.settings.baseCurrency) : 0,
+      selectedShare: selected && totalBase ? convert(state, selected.balance, selected.currency, state.settings.baseCurrency) / totalBase * 100 : 0,
+      currencies: [...rows.values()].sort((a, b) => b.baseValue - a.baseValue)
+    };
+  }
+
+  function goalNetwork(state, goalId) {
+    const goal = (state.goals || []).find(item => item.id === goalId);
+    if (!goal) return { goal: null, accounts: [], transactions: [] };
+    const context = { scope: "goal", goalId };
+    return {
+      goal,
+      accounts: relatedAccounts(state, context),
+      transactions: relatedTransactions(state, context)
+    };
+  }
+
+  function transactionNetwork(state, transactionId) {
+    const context = { scope: "transaction", transactionId };
+    const tx = (state.transactions || []).find(item => item.id === transactionId) || null;
+    return {
+      transaction: tx,
+      accounts: relatedAccounts(state, context),
+      goals: relatedGoals(state, context)
+    };
+  }
+
   window.OmniPocketEngine = {
     DAY, rate, convert, balancesAt, netWorth, goalProgress,
     spendingSummary, flowSummary, goalProjection, snapshot,
-    recordDailySnapshot, historicalNetWorth
+    recordDailySnapshot, historicalNetWorth,
+    relatedAccounts, relatedGoals, relatedTransactions, accountExposure,
+    goalNetwork, transactionNetwork
   };
 })();
