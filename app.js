@@ -1140,6 +1140,17 @@ document.addEventListener("click", event => {
 
 $("accountDetailRefresh")?.addEventListener("click", () => refreshLocalAccount($("accountDetailDialog").dataset.accountId));
 $("accountDetailSync")?.addEventListener("click", () => requestBankSync($("accountDetailDialog").dataset.accountId));
+$("accountDetailReconcile")?.addEventListener("click", () => {
+  const id = $("accountDetailDialog").dataset.accountId;
+  const a = account(id);
+  if (!a) return;
+  $("accountDetailDialog").close();
+  $("reconcileMeta").textContent = a.name + " · " + a.currency + " · Current " + money(a.balance, a.currency);
+  $("reconcileAmount").value = a.balance;
+  $("reconcileNote").value = "";
+  $("reconcileDialog").dataset.accountId = id;
+  $("reconcileDialog").showModal();
+});
 $("transactionEditButton")?.addEventListener("click", () => editTransaction($("transactionDialog").dataset.transactionId));
 $("transactionDeleteButton")?.addEventListener("click", () => deleteTransaction($("transactionDialog").dataset.transactionId));
 document.addEventListener("click", event => { const goalLink = event.target.closest("[data-goal-from-transaction]"); if (goalLink) { $("transactionDialog")?.close(); selectGoalContext(goalLink.dataset.goalFromTransaction); openGoalDetail(goalLink.dataset.goalFromTransaction); } });
@@ -1514,18 +1525,23 @@ $("reconcileForm")?.addEventListener("submit", event => {
   if (!a) return;
   const target = Number($("reconcileAmount").value);
   if (!Number.isFinite(target) || target < 0) return alert("Enter a valid balance.");
-  if (target === a.balance) return $("reconcileDialog").close();
-  const delta = target - a.balance;
+  const current = Number(a.balance) || 0;
+  const delta = target - current;
+  if (Math.abs(delta) < 0.0000001) {
+    $("reconcileDialog").close();
+    return;
+  }
+  const note = $("reconcileNote").value.trim() || "Balance reconciliation";
   addTransaction({
     type:"adjustment",
     sourceAccountId:a.id,
     amount:Math.abs(delta),
     currency:a.currency,
     category:delta > 0 ? "Reconciliation increase" : "Reconciliation decrease",
-    note:$("reconcileNote").value.trim() || "Balance reconciliation",
+    note,
     date:today()
   });
-  a.balance = target;
+  rebuildBalances();
   saveState();
   $("reconcileDialog").close();
 });
