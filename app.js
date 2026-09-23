@@ -1058,7 +1058,7 @@ function renderFullViews() {
   const accountsEl = $("accountsFullList");
   if (accountsEl) accountsEl.innerHTML = state.accounts.filter(a => !a.archived).map(a => `
     <div class="account-row account-full interactive-row" data-account-id="${escapeHtml(a.id)}" tabindex="0" role="button" aria-label="Open account">
-      <div class="account-main"><span class="node">◉</span><div><strong>${escapeHtml(a.name)}</strong><div class="muted">${escapeHtml(a.institution || "Personal")} · ${escapeHtml(a.type)} · ${escapeHtml(a.currency)}</div></div></div>
+      <div class="account-main"><span class="node">◉</span><div><div class="row-title-with-context"><strong>${escapeHtml(a.name)}</strong>${a.connection?.provider === "mono" ? '<span class="context-link-badge">Connected</span>' : ""}</div><div class="muted">${escapeHtml(a.institution || "Personal")} · ${escapeHtml(a.type)} · ${escapeHtml(a.currency)}</div></div></div>
       <div class="account-tools"><strong>${state.settings.privacyHidden ? "••••" : escapeHtml(money(a.balance,a.currency))}</strong><button data-reconcile="${escapeHtml(a.id)}">Reconcile</button></div>
     </div>`).join("") || '<div class="empty-state">No accounts yet.</div>';
 
@@ -1138,6 +1138,8 @@ document.addEventListener("click", event => {
   if (txRow && !event.target.closest("button")) { selectTransactionContext(txRow.dataset.transactionId); openTransactionDetail(txRow.dataset.transactionId); }
 });
 
+$("accountDetailRefresh")?.addEventListener("click", () => refreshLocalAccount($("accountDetailDialog").dataset.accountId));
+$("accountDetailSync")?.addEventListener("click", () => requestBankSync($("accountDetailDialog").dataset.accountId));
 $("transactionEditButton")?.addEventListener("click", () => editTransaction($("transactionDialog").dataset.transactionId));
 $("transactionDeleteButton")?.addEventListener("click", () => deleteTransaction($("transactionDialog").dataset.transactionId));
 document.addEventListener("click", event => { const goalLink = event.target.closest("[data-goal-from-transaction]"); if (goalLink) { $("transactionDialog")?.close(); selectGoalContext(goalLink.dataset.goalFromTransaction); openGoalDetail(goalLink.dataset.goalFromTransaction); } });
@@ -1229,6 +1231,26 @@ function readTransactionGoals(containerId) {
 }
 
 
+function accountConnectionStatus(a) {
+  const c = a?.connection;
+  if (!c || c.provider !== "mono") return { label: "Local account", tone: "local", detail: "Managed entirely on this device." };
+  if (c.status === "connected" && c.syncStatus === "healthy") return { label: "Connected", tone: "connected", detail: c.lastSyncedAt ? "Last synced " + new Date(c.lastSyncedAt).toLocaleString() : "Bank connection active." };
+  if (c.syncStatus === "syncing") return { label: "Syncing", tone: "syncing", detail: "Bank data is being refreshed." };
+  return { label: "Connection needs attention", tone: "warning", detail: "The bank connection is not currently healthy." };
+}
+function refreshLocalAccount(id) {
+  const a = account(id);
+  if (!a) return;
+  rebuildBalances();
+  saveState();
+  openAccountDetail(id);
+}
+function requestBankSync(id) {
+  const a = account(id);
+  if (!a?.connection?.providerAccountId) return alert("This account is local. Use Reconcile to match it with your actual balance.");
+  alert("Live bank sync is paused for now. Your linked account and imported history remain stored locally. Reconciliation is still available.");
+}
+
 function openAccountDetail(id) {
   const a = account(id);
   if (!a) return;
@@ -1238,7 +1260,10 @@ function openAccountDetail(id) {
   $("accountDetailMeta").textContent = [a.institution || "Personal", a.type, a.currency].join(" · ");
   $("accountDetailBalance").textContent = state.settings.privacyHidden ? "••••••" : money(a.balance, a.currency);
   $("accountDetailConverted").textContent = state.settings.privacyHidden ? "••••••" : "≈ " + money(convert(a.balance, a.currency, state.settings.baseCurrency), state.settings.baseCurrency);
-  $("accountDetailStats").innerHTML = "<span>" + txs.length + " transaction" + (txs.length === 1 ? "" : "s") + "</span><span>" + (a.archived ? "Archived" : "Active") + "</span>";
+  const connection = accountConnectionStatus(a);
+  $("accountDetailStats").innerHTML = "<span>" + txs.length + " transaction" + (txs.length === 1 ? "" : "s") + "</span><span>" + (a.archived ? "Archived" : "Active") + "</span><span class=\"account-connection-chip\" data-tone=\"" + escapeHtml(connection.tone) + "\">" + escapeHtml(connection.label) + "</span>";
+  const syncMeta = $("accountDetailSyncMeta");
+  if (syncMeta) syncMeta.textContent = connection.detail;
   $("accountDetailGoals").innerHTML = goals.length ? goals.map(g => '<button class="link-row" data-goal-from-account="' + escapeHtml(g.id) + '"><strong>' + escapeHtml(g.name) + "</strong><span>" + escapeHtml(money(goalProgress(g).current, g.currency)) + "</span></button>").join("") : '<div class="empty-state">This account is not contributing to a goal.</div>';
   $("accountDetailActivity").innerHTML = txs.slice(0,8).map(t => {
     const incoming = t.destinationAccountId === id && t.sourceAccountId !== id;
