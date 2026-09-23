@@ -938,6 +938,7 @@ document.addEventListener("click", event => {
 $("transactionEditButton")?.addEventListener("click", () => editTransaction($("transactionDialog").dataset.transactionId));
 $("transactionDeleteButton")?.addEventListener("click", () => deleteTransaction($("transactionDialog").dataset.transactionId));
 document.addEventListener("click", event => { const goalLink = event.target.closest("[data-goal-from-transaction]"); if (goalLink) { $("transactionDialog")?.close(); selectGoalContext(goalLink.dataset.goalFromTransaction); openGoalDetail(goalLink.dataset.goalFromTransaction); } });
+document.addEventListener("click", event => { const tx = event.target.closest("[data-transaction-from-goal]"); if (tx) { $("goalDetailDialog")?.close(); selectTransactionContext(tx.dataset.transactionFromGoal); openTransactionDetail(tx.dataset.transactionFromGoal); } });
 $("clearDashboardContext")?.addEventListener("click", () => window.OmniPocketBus?.clearContext?.());
 
 $("transactionReviewButton")?.addEventListener("click", () => {
