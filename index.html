@@ -126,6 +126,7 @@
 <label>Type<select id="accountType"><option value="bank">Bank</option><option value="cash">Cash</option><option value="wallet">Digital wallet</option><option value="locked">Fixed / locked savings</option></select></label>
 <label>Currency<select id="accountCurrency"><option>NGN</option><option>USD</option><option>GBP</option><option>EUR</option></select></label>
 <label>Current balance<input id="accountBalance" type="number" step="0.01" required value="0"></label>
+<div class="account-connect-panel"><div><span class="eyebrow">LIVE CONNECTION</span><strong>Connect this account to your bank</strong><span class="muted">Use Mono to securely link the bank and import its balance and transactions.</span></div><button id="connectBankButton" type="button">Connect bank</button></div>
 <div class="dialog-actions"><button type="button" onclick="this.closest('dialog').close()">Cancel</button><button class="primary" type="submit">Create account</button></div>
 </form></dialog>
-<script src="storage.js"></script><script src="domain.js"></script><script src="bus.js"></script><script src="app.js"></script></body></html>
+<script src="storage.js"></script><script src="domain.js"></script><script src="bus.js"></script><script src="https://connect.withmono.com/connect.js" async></script><script src="app.js"></script></body></html>
