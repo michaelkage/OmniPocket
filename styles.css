@@ -69,3 +69,11 @@ textarea{width:100%;resize:vertical;border:1px solid #4a4650;background:#151419;
 .account-connect-panel .muted{font-size:11px;line-height:1.4}
 .account-connect-panel button{flex:0 0 auto;white-space:nowrap}
 @media(max-width:520px){.account-connect-panel{align-items:flex-start;flex-direction:column}.account-connect-panel button{width:100%}}
+
+.account-sync-status{display:grid;gap:4px;padding:12px 14px;border-radius:16px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.06);margin-bottom:4px}
+.account-sync-status strong{font-size:12px;font-weight:600;color:var(--muted)}
+.account-connection-chip{color:var(--primary)!important}
+.account-connection-chip[data-tone="connected"]{color:#b8f5cf!important}
+.account-connection-chip[data-tone="warning"]{color:#ffd59a!important}
+.account-connection-chip[data-tone="syncing"]{color:#d8c8ff!important}
+@media(max-width:520px){.account-sync-status{padding:11px 12px}}
