@@ -204,7 +204,7 @@ function renderAccounts() {
     return;
   }
   el.innerHTML = accounts.map(a => `
-    <div class="account-row">
+    <div class="account-row interactive-row" data-account-id="${escapeHtml(a.id)}" tabindex="0" role="button" aria-label="Open account">
       <div class="account-main">
         <span class="node">◉</span>
         <div class="truncate">
@@ -408,6 +408,28 @@ function handleQuickSubmit(event) {
       });
       source.balance -= amount;
       destination.balance += received;
+    } else if (quickType === "withdrawal") {
+      const destination = account($("quickDestination").value);
+      if (!destination || destination.id === source.id) return alert("Choose a different cash destination.");
+      if (destination.type !== "cash") return alert("Cash out must land in a Cash account.");
+      const receivedRaw = $("quickReceivedAmount")?.value.trim() || "";
+      const received = receivedRaw ? Number(receivedRaw) : convert(amount, source.currency, destination.currency);
+      if (!(received >= 0)) return alert("Enter a valid received amount.");
+      addTransaction({
+        type: "withdrawal",
+        sourceAccountId: source.id,
+        destinationAccountId: destination.id,
+        amount,
+        currency: source.currency,
+        receivedAmount: received,
+        receivedCurrency: destination.currency,
+        fxRate: source.currency === destination.currency ? 1 : null,
+        fxSource: "snapshot",
+        note,
+        date
+      });
+      source.balance -= amount;
+      destination.balance += received;
     } else {
       const type = quickType;
       addTransaction({
@@ -421,7 +443,7 @@ function handleQuickSubmit(event) {
         status
       });
       if (type === "income") source.balance += amount;
-      if (type === "expense" || type === "withdrawal") source.balance -= amount;
+      if (type === "expense") source.balance -= amount;
     }
     saveState();
     $("quickDialog").close();
@@ -434,7 +456,7 @@ function handleQuickSubmit(event) {
 function renderFullViews() {
   const accountsEl = $("accountsFullList");
   if (accountsEl) accountsEl.innerHTML = state.accounts.filter(a => !a.archived).map(a => `
-    <div class="account-row account-full">
+    <div class="account-row account-full interactive-row" data-account-id="${escapeHtml(a.id)}" tabindex="0" role="button" aria-label="Open account">
       <div class="account-main"><span class="node">◉</span><div><strong>${escapeHtml(a.name)}</strong><div class="muted">${escapeHtml(a.institution || "Personal")} · ${escapeHtml(a.type)} · ${escapeHtml(a.currency)}</div></div></div>
       <div class="account-tools"><strong>${state.settings.privacyHidden ? "••••" : escapeHtml(money(a.balance,a.currency))}</strong><button data-reconcile="${escapeHtml(a.id)}">Reconcile</button></div>
     </div>`).join("") || '<div class="empty-state">No accounts yet.</div>';
@@ -442,7 +464,7 @@ function renderFullViews() {
   const goalsEl = $("goalsFullList");
   if (goalsEl) goalsEl.innerHTML = state.goals.map(g => {
     const p = goalProgress(g);
-    return `<div class="goal-row"><div><strong>${escapeHtml(g.name)}</strong><div class="muted">${escapeHtml(money(p.current,g.currency))} of ${escapeHtml(money(g.target,g.currency))} · ${p.pct.toFixed(0)}%${g.deadline ? " · "+escapeHtml(g.deadline) : ""}</div></div><span class="status-chip">${escapeHtml(g.status)}</span></div>`;
+    return `<div class="goal-row interactive-row" data-goal-id="${escapeHtml(g.id)}" tabindex="0" role="button" aria-label="Open goal"><div><strong>${escapeHtml(g.name)}</strong><div class="muted">${escapeHtml(money(p.current,g.currency))} of ${escapeHtml(money(g.target,g.currency))} · ${p.pct.toFixed(0)}%${g.deadline ? " · "+escapeHtml(g.deadline) : ""}</div></div><span class="status-chip">${escapeHtml(g.status)}</span></div>`;
   }).join("") || '<div class="empty-state">No goals yet.</div>';
 
   const search = ($("activitySearch")?.value || "").toLowerCase();
@@ -478,22 +500,142 @@ function navigate(page) {
     const view = $("page"+name);
     if (view) view.hidden = name !== page;
   });
-  document.querySelectorAll(".nav-item[data-page]").forEach(button => button.classList.toggle("active", button.dataset.page === page));
+  document.addEventListener("click", event => {
+  const accountRow = event.target.closest("[data-account-id]");
+  if (accountRow && !event.target.closest("button")) openAccountDetail(accountRow.dataset.accountId);
+  const goalRow = event.target.closest("[data-goal-id]");
+  if (goalRow && !event.target.closest("button")) openGoalDetail(goalRow.dataset.goalId);
+  const goalLink = event.target.closest("[data-goal-from-account]");
+  if (goalLink) { $("accountDetailDialog")?.close(); openGoalDetail(goalLink.dataset.goalFromAccount); }
+  const accountLink = event.target.closest("[data-account-from-goal]");
+  if (accountLink) { $("goalDetailDialog")?.close(); openAccountDetail(accountLink.dataset.accountFromGoal); }
+});
+
+$("accountDetailEdit")?.addEventListener("click", () => editAccount($("accountDetailDialog").dataset.accountId));
+$("accountDetailArchive")?.addEventListener("click", () => archiveAccount($("accountDetailDialog").dataset.accountId));
+
+$("editAccountForm")?.addEventListener("submit", event => {
+  event.preventDefault();
+  const a = account($("editAccountDialog").dataset.accountId);
+  if (!a) return;
+  a.name = $("editAccountName").value.trim() || a.name;
+  a.institution = $("editAccountInstitution").value.trim();
+  a.type = $("editAccountType").value;
+  a.currency = $("editAccountCurrency").value;
+  saveState();
+  $("editAccountDialog").close();
+  $("accountDetailDialog")?.close();
+  openAccountDetail(a.id);
+});
+
+$("goalForm")?.addEventListener("submit", event => {
+  event.preventDefault();
+  const name = $("goalName").value.trim();
+  const target = Number($("goalTarget").value);
+  const currency = $("goalCurrency").value;
+  if (!name || !(target > 0)) return alert("Enter a goal name and target.");
+  const accountIds = [...document.querySelectorAll('input[name="goalAccount"]:checked')].map(input => input.value);
+  const editingId = $("goalDialog").dataset.editingId;
+  if (editingId) {
+    const g = state.goals.find(x => x.id === editingId);
+    if (g) Object.assign(g, { name, target, currency, accountIds, deadline: $("goalDeadline").value || "" });
+  } else {
+    state.goals.push({ id: uid(), name, target, currency, accountIds, deadline: $("goalDeadline").value || "", status: "active", createdAt: Date.now() });
+  }
+  delete $("goalDialog").dataset.editingId;
+  saveState();
+  $("goalDialog").close();
+  event.target.reset();
+});
+
+$("goalDetailEdit")?.addEventListener("click", () => {
+  const g = state.goals.find(x => x.id === $("goalDetailDialog").dataset.goalId);
+  if (!g) return;
+  $("goalDetailDialog").close();
+  $("goalName").value = g.name;
+  $("goalTarget").value = g.target;
+  $("goalCurrency").value = g.currency;
+  $("goalDeadline").value = g.deadline || "";
+  populateGoalAccounts(g.accountIds);
+  $("goalDialog").dataset.editingId = g.id;
+  $("goalDialog").showModal();
+});
+
+document.querySelectorAll(".nav-item[data-page]").forEach(button => button.classList.toggle("active", button.dataset.page === page));
   document.querySelector(".main-content")?.scrollTo({top:0,behavior:"smooth"});
 }
 
 function createGoal() {
   if (!state.accounts.some(a => !a.archived)) return alert("Add an account first.");
-  const name = prompt("Goal name:");
-  if (!name?.trim()) return;
-  const target = Number(prompt("Target amount:", "100000"));
-  if (!(target > 0)) return;
-  const currency = (prompt("Goal currency (NGN, USD, GBP, EUR):", state.settings.baseCurrency) || state.settings.baseCurrency).toUpperCase();
-  if (!CURRENCIES.includes(currency)) return alert("Unsupported currency.");
-  const selected = state.accounts.filter(a => !a.archived).filter(a => confirm(`Include ${a.name} (${a.currency}) in this goal?`));
-  const deadline = prompt("Deadline (YYYY-MM-DD, optional):", "");
-  state.goals.push({id:uid(),name:name.trim(),target,currency,accountIds:selected.map(a=>a.id),deadline:deadline || "",status:"active",createdAt:Date.now()});
+  delete $("goalDialog").dataset.editingId;
+  $("goalForm")?.reset();
+  populateGoalAccounts();
+  $("goalDialog")?.showModal();
+}
+
+function populateGoalAccounts(selectedIds = []) {
+  const el = $("goalAccounts");
+  if (!el) return;
+  el.innerHTML = state.accounts.filter(a => !a.archived).map(a =>
+    '<label class="check-row"><input type="checkbox" name="goalAccount" value="' + escapeHtml(a.id) + '" ' + (selectedIds.includes(a.id) ? "checked" : "") + '><span>' + escapeHtml(a.name) + " · " + escapeHtml(a.currency) + "</span></label>"
+  ).join("");
+}
+
+function openAccountDetail(id) {
+  const a = account(id);
+  if (!a) return;
+  const txs = state.transactions.filter(t => t.sourceAccountId === id || t.destinationAccountId === id).sort((x,y) => y.createdAt - x.createdAt);
+  const goals = state.goals.filter(g => g.accountIds.includes(id));
+  $("accountDetailTitle").textContent = a.name;
+  $("accountDetailMeta").textContent = [a.institution || "Personal", a.type, a.currency].join(" · ");
+  $("accountDetailBalance").textContent = state.settings.privacyHidden ? "••••••" : money(a.balance, a.currency);
+  $("accountDetailConverted").textContent = state.settings.privacyHidden ? "••••••" : "≈ " + money(convert(a.balance, a.currency, state.settings.baseCurrency), state.settings.baseCurrency);
+  $("accountDetailStats").innerHTML = "<span>" + txs.length + " transaction" + (txs.length === 1 ? "" : "s") + "</span><span>" + (a.archived ? "Archived" : "Active") + "</span>";
+  $("accountDetailGoals").innerHTML = goals.length ? goals.map(g => '<button class="link-row" data-goal-from-account="' + escapeHtml(g.id) + '"><strong>' + escapeHtml(g.name) + "</strong><span>" + escapeHtml(money(goalProgress(g).current, g.currency)) + "</span></button>").join("") : '<div class="empty-state">This account is not contributing to a goal.</div>';
+  $("accountDetailActivity").innerHTML = txs.slice(0,8).map(t => {
+    const incoming = t.destinationAccountId === id && t.sourceAccountId !== id;
+    const sign = incoming ? "+" : transactionDirection(t) === "out" ? "−" : "";
+    const other = t.sourceAccountId === id ? account(t.destinationAccountId) : account(t.sourceAccountId);
+    return '<div class="activity-row"><div><strong>' + escapeHtml(transactionLabel(t)) + "</strong><div class=\"muted\">" + escapeHtml(t.date) + " · " + escapeHtml(other?.name || "") + "</div></div><span class=\"amount\">" + sign + escapeHtml(money(t.amount, t.currency)) + "</span></div>";
+  }).join("") || '<div class="empty-state">No activity yet.</div>';
+  $("accountDetailDialog").dataset.accountId = id;
+  $("accountDetailDialog").showModal();
+}
+
+function editAccount(id) {
+  const a = account(id);
+  if (!a) return;
+  $("editAccountName").value = a.name;
+  $("editAccountInstitution").value = a.institution;
+  $("editAccountType").value = a.type;
+  $("editAccountCurrency").value = a.currency;
+  $("editAccountDialog").dataset.accountId = id;
+  $("editAccountDialog").showModal();
+}
+
+function archiveAccount(id) {
+  const a = account(id);
+  if (!a) return;
+  if (!confirm("Archive " + a.name + "? Its history will be kept.")) return;
+  a.archived = true;
   saveState();
+  $("accountDetailDialog")?.close();
+}
+
+function openGoalDetail(id) {
+  const g = state.goals.find(x => x.id === id);
+  if (!g) return;
+  const p = goalProgress(g);
+  const days = g.deadline ? Math.max(0, Math.ceil((new Date(g.deadline) - new Date(today())) / 86400000)) : null;
+  $("goalDetailTitle").textContent = g.name;
+  $("goalDetailProgress").textContent = state.settings.privacyHidden ? "••••••" : money(p.current, g.currency) + " of " + money(g.target, g.currency);
+  $("goalDetailBar").style.width = p.pct + "%";
+  $("goalDetailMeta").textContent = p.pct.toFixed(0) + "% complete" + (days !== null ? " · " + days + " day" + (days === 1 ? "" : "s") + " remaining" : "");
+  $("goalDetailAccounts").innerHTML = g.accountIds.map(id => account(id)).filter(Boolean).map(a => '<button class="link-row" data-account-from-goal="' + escapeHtml(a.id) + '"><strong>' + escapeHtml(a.name) + "</strong><span>" + escapeHtml(money(a.balance, a.currency)) + "</span></button>").join("") || '<div class="empty-state">No contributing accounts selected.</div>';
+  const pace = days && p.current < g.target ? (g.target - p.current) / days : 0;
+  $("goalDetailPace").textContent = pace > 0 ? "Needed pace: " + money(pace, g.currency) + " / day" : p.current >= g.target ? "Target reached." : "No deadline set.";
+  $("goalDetailDialog").dataset.goalId = id;
+  $("goalDetailDialog").showModal();
 }
 
 function setupDynamicFields() {
@@ -608,29 +750,7 @@ $("baseCurrencyButton").onclick = () => {
   }
 };
 
-$("addGoalButton").onclick = () => {
-  if (!state.accounts.length) return alert("Add an account first.");
-  const name = prompt("Goal name:");
-  if (!name?.trim()) return;
-  const target = Number(prompt("Target amount:", "100000"));
-  if (!(target > 0)) return;
-  const currency = (prompt("Goal currency (NGN, USD, GBP, EUR):", state.settings.baseCurrency) || state.settings.baseCurrency).toUpperCase();
-  if (!CURRENCIES.includes(currency)) return alert("Unsupported currency.");
-  const selected = state.accounts.filter(a => !a.archived).filter(a =>
-    confirm(`Include ${a.name} (${a.currency}) in this goal?`)
-  );
-  state.goals.push({
-    id: uid(),
-    name: name.trim(),
-    target,
-    currency,
-    accountIds: selected.map(a => a.id),
-    deadline: "",
-    status: "active",
-    createdAt: Date.now()
-  });
-  saveState();
-};
+$("addGoalButton").onclick = () => createGoal();
 
 setupDynamicFields();
 document.querySelectorAll(".nav-item[data-page]").forEach(button => {
