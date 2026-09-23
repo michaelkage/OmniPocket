@@ -73,6 +73,20 @@ function bindOmniPocketBus() {
   OmniPocketBus.on("dashboard:updated", () => {
     renderDashboard();
   });
+  OmniPocketBus.on("context:changed", payload => {
+    renderContextBar(payload.context);
+    renderAccounts();
+    renderGoal();
+    renderActivity();
+    renderDashboardContextWidgets(payload.context);
+  });
+  OmniPocketBus.on("context:cleared", payload => {
+    renderContextBar(payload.context);
+    renderAccounts();
+    renderGoal();
+    renderActivity();
+    renderDashboardContextWidgets(payload.context);
+  });
 }
 
 
@@ -426,6 +440,24 @@ function renderIntelligence() {
   }
 }
 
+function renderDashboardContextWidgets(context = getAppContext()) {
+  const netEl = $("galaxyNetWorth");
+  if (netEl) {
+    let value = netWorth();
+    let label = "Your global wealth";
+    if (context.scope === "account" && context.accountId) {
+      const acc = account(context.accountId); value = acc ? convert(acc.balance, acc.currency, state.settings.baseCurrency) : 0;
+      label = (acc?.name || "Account") + " balance";
+    } else if (context.scope === "goal" && context.goalId) {
+      const g = state.goals.find(x => x.id === context.goalId); const p = g ? goalProgress(g) : { current: 0 };
+      value = g ? convert(p.current, g.currency, state.settings.baseCurrency) : 0; label = (g?.name || "Goal") + " progress";
+    } else if (context.scope === "transaction" && context.transactionId) {
+      const t = state.transactions.find(x => x.id === context.transactionId); value = t ? convert(t.amount, t.currency, state.settings.baseCurrency) : 0; label = t ? transactionLabel(t) : "Activity";
+    }
+    netEl.innerHTML = (state.settings.privacyHidden ? "•••••••" : escapeHtml(money(value))) + '<div class="muted context-value-label">' + escapeHtml(label) + '</div>';
+  }
+}
+
 function renderDashboard() {
   const root=$("dashboardGalaxy");
   if(!root) return;
@@ -521,9 +553,44 @@ function render() {
   renderDashboard();
 }
 
+function getAppContext() {
+  return window.OmniPocketBus?.getContext?.() || { scope: "global", accountId: null, goalId: null, transactionId: null };
+}
+
+function selectAccountContext(id) { if (window.OmniPocketBus) OmniPocketBus.selectAccount(id); }
+function selectGoalContext(id) { if (window.OmniPocketBus) OmniPocketBus.selectGoal(id); }
+function selectTransactionContext(id) {
+  const t = state.transactions.find(x => x.id === id);
+  if (window.OmniPocketBus) OmniPocketBus.selectTransaction(id, t?.sourceAccountId || null);
+}
+
+function renderContextBar(context = getAppContext()) {
+  const bar = $("dashboardContext");
+  const label = $("dashboardContextLabel");
+  if (!bar || !label) return;
+  let text = "Viewing · Global";
+  if (context.scope === "account" && context.accountId) text = "Viewing · Account: " + (account(context.accountId)?.name || "Unknown");
+  if (context.scope === "goal" && context.goalId) text = "Viewing · Goal: " + (state.goals.find(g => g.id === context.goalId)?.name || "Unknown");
+  if (context.scope === "transaction" && context.transactionId) text = "Viewing · Activity: " + transactionLabel(state.transactions.find(t => t.id === context.transactionId) || { type: "activity" });
+  label.textContent = text;
+  bar.hidden = context.scope === "global";
+}
+
+function contextAccountIds(context = getAppContext()) {
+  if (context.scope === "account" && context.accountId) return [context.accountId];
+  if (context.scope === "goal" && context.goalId) return state.goals.find(g => g.id === context.goalId)?.accountIds || [];
+  if (context.scope === "transaction" && context.transactionId) {
+    const t = state.transactions.find(x => x.id === context.transactionId);
+    return [t?.sourceAccountId, t?.destinationAccountId].filter(Boolean);
+  }
+  return state.accounts.filter(a => !a.archived).map(a => a.id);
+}
+
 function renderAccounts() {
   const el = $("accountList");
-  const accounts = state.accounts.filter(a => !a.archived).slice(0, 5);
+  const context = getAppContext();
+  const allowed = new Set(contextAccountIds(context));
+  const accounts = state.accounts.filter(a => !a.archived && allowed.has(a.id)).slice(0, 5);
   if (!accounts.length) {
     el.innerHTML = '<div class="empty-state">No money nodes yet. Add your first account.</div>';
     return;
@@ -544,7 +611,12 @@ function renderAccounts() {
 
 function renderActivity() {
   const el = $("activityList");
-  const rows = state.transactions.slice().sort((a, b) => b.createdAt - a.createdAt).slice(0, 5);
+  const context = getAppContext();
+  const allowed = new Set(contextAccountIds(context));
+  const rows = state.transactions.filter(t => {
+    if (context.scope === "transaction") return t.id === context.transactionId;
+    return !allowed.size || allowed.has(t.sourceAccountId) || allowed.has(t.destinationAccountId);
+  }).slice().sort((a, b) => b.createdAt - a.createdAt).slice(0, 5);
   if (!rows.length) {
     el.innerHTML = '<div class="empty-state">Transactions will appear here.</div>';
     return;
@@ -575,7 +647,13 @@ function goalProgress(goal) {
 
 function renderGoal() {
   const el = $("goalContent");
-  const goal = state.goals.find(g => g.status !== "completed");
+  const context = getAppContext();
+  const visibleGoals = context.scope === "goal" && context.goalId
+    ? state.goals.filter(g => g.id === context.goalId)
+    : context.scope === "account" && context.accountId
+      ? state.goals.filter(g => g.accountIds.includes(context.accountId))
+      : state.goals;
+  const goal = visibleGoals.find(g => g.status !== "completed") || visibleGoals[0];
   if (!goal) {
     el.innerHTML = state.goals.length
       ? '<div class="empty-state">All goals completed. Create another target.</div>'
@@ -815,23 +893,25 @@ function navigate(page) {
 
 document.addEventListener("click", event => {
   const accountRow = event.target.closest("[data-account-id]");
-  if (accountRow && !event.target.closest("button")) openAccountDetail(accountRow.dataset.accountId);
+  if (accountRow && !event.target.closest("button")) { selectAccountContext(accountRow.dataset.accountId); openAccountDetail(accountRow.dataset.accountId); }
   const goalRow = event.target.closest("[data-goal-id]");
-  if (goalRow && !event.target.closest("button")) openGoalDetail(goalRow.dataset.goalId);
+  if (goalRow && !event.target.closest("button")) { selectGoalContext(goalRow.dataset.goalId); openGoalDetail(goalRow.dataset.goalId); }
   const goalLink = event.target.closest("[data-goal-from-account]");
-  if (goalLink) { $("accountDetailDialog")?.close(); openGoalDetail(goalLink.dataset.goalFromAccount); }
+  if (goalLink) { $("accountDetailDialog")?.close(); selectGoalContext(goalLink.dataset.goalFromAccount); openGoalDetail(goalLink.dataset.goalFromAccount); }
   const accountLink = event.target.closest("[data-account-from-goal]");
-  if (accountLink) { $("goalDetailDialog")?.close(); openAccountDetail(accountLink.dataset.accountFromGoal); }
+  if (accountLink) { $("goalDetailDialog")?.close(); selectAccountContext(accountLink.dataset.accountFromGoal); openAccountDetail(accountLink.dataset.accountFromGoal); }
 });
 
 document.addEventListener("click", event => {
   const txRow = event.target.closest("[data-transaction-id]");
-  if (txRow && !event.target.closest("button")) openTransactionDetail(txRow.dataset.transactionId);
+  if (txRow && !event.target.closest("button")) { selectTransactionContext(txRow.dataset.transactionId); openTransactionDetail(txRow.dataset.transactionId); }
 });
 
 $("transactionEditButton")?.addEventListener("click", () => editTransaction($("transactionDialog").dataset.transactionId));
 $("transactionDeleteButton")?.addEventListener("click", () => deleteTransaction($("transactionDialog").dataset.transactionId));
-document.addEventListener("click", event => { const goalLink = event.target.closest("[data-goal-from-transaction]"); if (goalLink) { $("transactionDialog")?.close(); openGoalDetail(goalLink.dataset.goalFromTransaction); } });
+document.addEventListener("click", event => { const goalLink = event.target.closest("[data-goal-from-transaction]"); if (goalLink) { $("transactionDialog")?.close(); selectGoalContext(goalLink.dataset.goalFromTransaction); openGoalDetail(goalLink.dataset.goalFromTransaction); } });
+
+$("clearDashboardContext")?.addEventListener("click", () => window.OmniPocketBus?.clearContext?.());
 
 $("transactionReviewButton")?.addEventListener("click", () => {
   const t = state.transactions.find(x => x.id === $("transactionDialog").dataset.transactionId);
