@@ -223,7 +223,12 @@
 
   function relatedGoals(state, context = {}) {
     const goals = (state.goals || []).filter(goal => goal.status !== "completed");
-    if (context.scope === "goal" && context.goalId) return goals.filter(goal => goal.id === context.goalId);
+    if (context.scope === "goal" && context.goalId) {
+      const selected = goals.find(goal => goal.id === context.goalId);
+      if (!selected) return [];
+      const accountIds = new Set(selected.accountIds || []);
+      return goals.filter(goal => goal.id === context.goalId || (goal.accountIds || []).some(id => accountIds.has(id)));
+    }
     if (context.scope === "account" && context.accountId) {
       return goals.filter(goal => (goal.accountIds || []).includes(context.accountId));
     }
