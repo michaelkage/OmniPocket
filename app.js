@@ -203,7 +203,7 @@ function adjustmentDelta(t) {
 function rebuildBalances() {
   const balances = OmniPocketEngine.balancesAt(state);
   const byId = new Map(balances.map(a => [a.id, a.balance]));
-  state.accounts.forEach(a => { a.balance = byId.get(a.id) ?? Number(a.openingBalance) || 0; });
+  state.accounts.forEach(a => { a.balance = byId.has(a.id) ? byId.get(a.id) : (Number(a.openingBalance) || 0); });
 }
 
 function openTransactionDetail(id) {
