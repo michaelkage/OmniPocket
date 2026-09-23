@@ -306,9 +306,63 @@ function parseClipboardText() {
   $("smartApprove").dataset.date = parsed.date;
 }
 
-function renderNetWorthTrend() { const el = $("netWorthTrend"); if (!el) return; const rows = OmniPocketEngine.historicalNetWorth(state, 90); if (rows.length < 2) { el.innerHTML = '<div class="empty-state">Log transactions across different days to build your wealth trend.</div>'; return; } const unique = rows.reduce((acc,p) => { const last=acc[acc.length-1]; if(last&&last.date===p.date) last.value=p.value; else acc.push({date:p.date,value:p.value}); return acc; },[]).slice(-30); const width=720,height=240,pad=28; const values=unique.map(p=>p.value),min=Math.min(...values,0),max=Math.max(...values,1),range=max-min||1; const coords=unique.map((p,i)=>[unique.length===1?width/2:pad+i*(width-pad*2)/(unique.length-1),height-pad-(p.value-min)/range*(height-pad*2)]); const path=coords.map((p,i)=>(i?"L":"M")+p[0].toFixed(1)+" "+p[1].toFixed(1)).join(" "); el.innerHTML='<svg viewBox="0 0 '+width+" "+height+'" role="img" aria-label="Net worth trend"><path class="trend-line" d="'+path+'"></path>'+coords.map(p=>'<circle class="trend-dot" cx="'+p[0]+'" cy="'+p[1]+'" r="3"></circle>').join("")+'</svg><div class="trend-meta"><span>'+escapeHtml(unique[0].date)+'</span><strong>'+money(unique[unique.length-1].value)+'</strong><span>'+escapeHtml(unique[unique.length-1].date)+'</span></div>'; }
+function contextScopedAccountIds(context=getAppContext()) {
+  return new Set(contextAccountIds(context));
+}
 
-function spendingSummary(days = 30) { return OmniPocketEngine.spendingSummary(state, days); }
+function contextTransactions(context=getAppContext()) {
+  const engine=window.OmniPocketEngine;
+  return engine?.relatedTransactions ? engine.relatedTransactions(state,context) : state.transactions;
+}
+
+function renderNetWorthTrend() {
+  const el=$("netWorthTrend"); if(!el) return;
+  const context=getAppContext();
+  const scoped=contextTransactions(context);
+  const relevantIds=contextScopedAccountIds(context);
+  const snapshots=OmniPocketEngine.historicalNetWorth(state,90);
+  let rows=snapshots;
+  if(context.scope==="account"&&context.accountId){
+    const a=account(context.accountId);
+    if(a){
+      let running=Number(a.openingBalance)||0;
+      const tx=state.transactions.filter(t=>t.sourceAccountId===a.id||t.destinationAccountId===a.id).sort((x,y)=>String(x.date).localeCompare(String(y.date)));
+      const byDate=new Map();
+      for(const t of tx){
+        if(t.type==="income" || (t.type==="transfer"&&t.destinationAccountId===a.id)) running+=Number(t.receivedAmount??t.amount)||0;
+        else if(t.type==="expense" || t.type==="withdrawal" || (t.type==="transfer"&&t.sourceAccountId===a.id)) running-=Number(t.amount)||0;
+        else if(t.type==="adjustment") running+=adjustmentDelta(t);
+        byDate.set(t.date,running);
+      }
+      rows=[...byDate.entries()].map(([date,value])=>({date,value}));
+    }
+  } else if(context.scope==="goal"&&context.goalId){
+    const g=state.goals.find(x=>x.id===context.goalId);
+    if(g) rows=OmniPocketEngine.goalContributionHistory(state,g).map(x=>({date:x.date,value:x.value}));
+  } else if(context.scope==="transaction"&&context.transactionId){
+    const t=state.transactions.find(x=>x.id===context.transactionId);
+    rows=t?[{date:t.date,value:convert(t.receivedAmount??t.amount,t.receivedCurrency||t.currency,state.settings.baseCurrency)}]:[];
+  }
+  if(rows.length<2){el.innerHTML='<div class="empty-state">'+escapeHtml(context.scope==="global"?"Log transactions across different days to build your wealth trend.":"Not enough history in this context to draw a trend yet.")+'</div>';return;}
+  const unique=rows.reduce((acc,p)=>{const last=acc[acc.length-1];if(last&&last.date===p.date)last.value=p.value;else acc.push({date:p.date,value:p.value});return acc;},[]).slice(-30);
+  const width=720,height=240,pad=28,values=unique.map(p=>p.value),min=Math.min(...values,0),max=Math.max(...values,1),range=max-min||1;
+  const coords=unique.map((p,i)=>[unique.length===1?width/2:pad+i*(width-pad*2)/(unique.length-1),height-pad-(p.value-min)/range*(height-pad*2)]);
+  const path=coords.map((p,i)=>(i?"L":"M")+p[0].toFixed(1)+" "+p[1].toFixed(1)).join(" ");
+  const scopeLabel=context.scope==="global"?"Global wealth":context.scope==="account"?(account(context.accountId)?.name||"Account")+" balance":context.scope==="goal"?(state.goals.find(g=>g.id===context.goalId)?.name||"Goal")+" contributions":transactionLabel(state.transactions.find(t=>t.id===context.transactionId)||{type:"activity"});
+  el.innerHTML='<div class="muted context-value-label">'+escapeHtml(scopeLabel)+'</div><svg viewBox="0 0 '+width+" "+height+'" role="img" aria-label="'+escapeHtml(scopeLabel)+' trend"><path class="trend-line" d="'+path+'"></path>'+coords.map(p=>'<circle class="trend-dot" cx="'+p[0]+'" cy="'+p[1]+'" r="3"></circle>').join("")+'</svg><div class="trend-meta"><span>'+escapeHtml(unique[0].date)+'</span><strong>'+escapeHtml(state.settings.privacyHidden?"••••••":money(unique[unique.length-1].value))+'</strong><span>'+escapeHtml(unique[unique.length-1].date)+'</span></div>';
+}
+
+function spendingSummary(days=30,context=getAppContext()) {
+  const base=OmniPocketEngine.spendingSummary(state,days);
+  const tx=contextTransactions(context).filter(t=>t.type==="expense");
+  if(context.scope==="global") return base;
+  const totals={}; let total=0;
+  for(const t of tx){
+    const value=convert(t.amount,t.currency,state.settings.baseCurrency);
+    total+=value; const key=t.category||"Other"; totals[key]=(totals[key]||0)+value;
+  }
+  return {total,totals,income:tx.filter(t=>t.type==="income").reduce((s,t)=>s+convert(t.amount,t.currency,state.settings.baseCurrency),0)};
+}
 
 function financialInsights() {
   const summary = spendingSummary(30);
