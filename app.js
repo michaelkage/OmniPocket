@@ -1,5 +1,6 @@
 /* OmniPocket — V1 financial domain + UI engine */
 const STORAGE_KEY = "omnipocket.v1";
+const storage = new OmniPocketStorage({ dbName: "omnipocket", storeName: "state", legacyKey: STORAGE_KEY });
 const SCHEMA_VERSION = 2;
 const CURRENCIES = ["NGN", "USD", "GBP", "EUR"];
 const ACCOUNT_TYPES = ["bank", "cash", "wallet", "locked"];
@@ -30,7 +31,9 @@ const DEFAULT_STATE = {
   goals: []
 };
 
-let state = loadState();
+let state = clone(DEFAULT_STATE);
+let persistTimer = null;
+let persistenceReady = false;
 let quickType = "expense";
 
 function loadState() {
@@ -40,6 +43,19 @@ function loadState() {
   } catch {
     return clone(DEFAULT_STATE);
   }
+}
+
+async function bootstrapStorage() {
+  try {
+    const loaded = await storage.load();
+    state = migrateState(loaded || loadState());
+    persistenceReady = true;
+    if (!loaded) await storage.save(state);
+  } catch (error) {
+    console.warn("IndexedDB unavailable; using local fallback.", error);
+    state = loadState();
+  }
+  render();
 }
 
 function migrateState(raw) {
@@ -100,8 +116,16 @@ function migrateState(raw) {
 }
 
 function saveState() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   render();
+  clearTimeout(persistTimer);
+  persistTimer = setTimeout(async () => {
+    try {
+      if (persistenceReady) await storage.save(state);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch (error) {
+      console.warn("Could not persist OmniPocket state.", error);
+    }
+  }, 0);
 }
 
 function account(id) {
@@ -567,7 +591,11 @@ $("addGoalButton").onclick = () => {
 };
 
 setupDynamicFields();
-window.addEventListener("load", () => {
+document.querySelectorAll(".nav-item[data-page]").forEach(button => {
+  button.addEventListener("click", () => navigate(button.dataset.page));
+});
+$("activitySearch")?.addEventListener("input", renderFullViews);
+window.addEventListener("load", async () => {
   if ("serviceWorker" in navigator && location.protocol !== "file:") navigator.serviceWorker.register("sw.js");
-  render();
+  await bootstrapStorage();
 });
