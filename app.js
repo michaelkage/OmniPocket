@@ -495,6 +495,17 @@ function contextNodeLabel(item) { if (!item) return "Global"; if (item.scope ===
 function renderContextTrail(context = getAppContext()) { const host = $("dashboardContextTrail"); if (!host) return; const history = window.OmniPocketBus?.getHistory?.() || []; const crumbs = [{ scope: "global" }, ...history]; const seen = new Set(); const unique = crumbs.filter(x => { const key = [x.scope,x.accountId||"",x.goalId||"",x.transactionId||""].join(":"); if (seen.has(key)) return false; seen.add(key); return true; }); host.innerHTML = unique.map((item,i) => { const label=escapeHtml(contextNodeLabel(item)); return i < unique.length-1 ? '<button class="context-crumb" data-context-index="'+i+'">'+label+'</button><span class="context-separator">›</span>' : '<strong class="context-current">'+label+'</strong>'; }).join("") + (context.scope !== "global" ? '<button class="context-back" id="contextBackButton">Back</button>' : ""); }
 
 function renderContextBar(context=getAppContext()) { const bar=$("dashboardContext"),label=$("dashboardContextLabel"); if(!bar||!label)return; let text="Viewing · Global"; if(context.scope==="account"&&context.accountId)text="Viewing · Account: "+(account(context.accountId)?.name||"Unknown"); if(context.scope==="goal"&&context.goalId)text="Viewing · Goal: "+(state.goals.find(g=>g.id===context.goalId)?.name||"Unknown"); if(context.scope==="transaction"&&context.transactionId)text="Viewing · Activity: "+transactionLabel(state.transactions.find(t=>t.id===context.transactionId)||{type:"activity"}); label.textContent=text; bar.hidden=context.scope==="global"; renderContextTrail(context); }
+function contextConnectionLabel(context=getAppContext()) {
+  if (context.scope === "account" && context.accountId) return "Connected to this account";
+  if (context.scope === "goal" && context.goalId) return "Connected to this goal";
+  if (context.scope === "transaction" && context.transactionId) return "Connected to this activity";
+  return "";
+}
+function contextBadge(context=getAppContext()) {
+  const label = contextConnectionLabel(context);
+  return label ? '<span class="context-link-badge">↳ '+escapeHtml(label)+'</span>' : "";
+}
+
 function contextAccountIds(context=getAppContext()) { if(context.scope==="account"&&context.accountId)return [context.accountId]; if(context.scope==="goal"&&context.goalId)return state.goals.find(g=>g.id===context.goalId)?.accountIds||[]; if(context.scope==="transaction"&&context.transactionId){const t=state.transactions.find(x=>x.id===context.transactionId);return [t?.sourceAccountId,t?.destinationAccountId].filter(Boolean);} return state.accounts.filter(a=>!a.archived).map(a=>a.id); }
 function renderDashboardContextWidgets(context=getAppContext()) {
   const el=$("galaxyNetWorth");
@@ -603,7 +614,7 @@ function renderAccounts() {
       <div class="account-main">
         <span class="node">◉</span>
         <div class="truncate">
-          <div>${escapeHtml(a.name)}</div>
+          <div class="row-title-with-context"><span>${escapeHtml(a.name)}</span>${context.scope==="account"&&context.accountId===a.id?'<span class="context-link-badge">Selected</span>':""}</div>
           <div class="muted">${escapeHtml(a.currency)} · ${escapeHtml(a.type)}</div>
         </div>
       </div>
@@ -631,7 +642,7 @@ function renderActivity() {
     return `
       <div class="activity-row interactive-row" data-transaction-id="${escapeHtml(t.id)}" tabindex="0" role="button">
         <div>
-          <div>${escapeHtml(transactionLabel(t))}${t.status === "needs_review" ? ' <span class="muted">· review</span>' : ""}</div>
+          <div class="row-title-with-context"><span>${escapeHtml(transactionLabel(t))}</span>${context.scope==="transaction"&&context.transactionId===t.id?'<span class="context-link-badge">Selected</span>':context.scope!=="global"&&((context.scope==="account"&&contextAccountIds(context).includes(t.sourceAccountId))||(context.scope==="goal"&&contextAccountIds(context).some(id=>id===t.sourceAccountId||id===t.destinationAccountId)))?'<span class="context-link-badge">Connected</span>':""}</div>
           <div class="muted">${escapeHtml(t.date)} · ${context}</div>
         </div>
         <span class="amount">${sign}${escapeHtml(money(t.amount, t.currency))}</span>
@@ -654,7 +665,7 @@ function renderGoal() {
   }
   const { current, pct } = goalProgress(goal);
   el.innerHTML = `<div class="interactive-row" data-goal-id="${escapeHtml(goal.id)}" tabindex="0" role="button">
-    <strong>${escapeHtml(goal.name)}</strong>
+    <div class="row-title-with-context"><strong>${escapeHtml(goal.name)}</strong>${contextBadge(context)}</div>
     <div class="muted">${escapeHtml(money(current, goal.currency))} of ${escapeHtml(money(goal.target, goal.currency))}</div>
     <div style="height:10px;background:rgba(255,255,255,.08);border-radius:99px;margin:14px 0 8px;overflow:hidden">
       <div style="width:${pct}%;height:100%;background:var(--primary);border-radius:inherit"></div>
