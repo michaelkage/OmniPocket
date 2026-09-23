@@ -99,3 +99,6 @@ textarea{width:100%;resize:vertical;border:1px solid #4a4650;background:#151419;
 .statement-import-row:last-child{border-bottom:0}
 .statement-import-row>span{min-width:0}
 .statement-import-row small{display:block;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+.statement-mapping-panel{display:grid;gap:10px;padding:14px;border:1px solid rgba(208,188,255,.14);border-radius:18px;background:rgba(208,188,255,.045)}
+.statement-mapping-panel>div:first-child{display:grid;gap:3px;margin-bottom:3px}.statement-mapping-panel strong{font-size:12px}.statement-mapping-panel select{width:100%}.mapping-divider{text-align:center;font-size:10px;color:var(--muted);letter-spacing:.12em}.statement-import-invalid{opacity:.72}.statement-import-invalid strong:last-child{font-size:10px;color:#ffd59a}
