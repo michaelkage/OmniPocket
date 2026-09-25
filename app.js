@@ -1,7 +1,7 @@
 /* OmniPocket — V1 financial domain + UI engine */
 const STORAGE_KEY = "omnipocket.v1";
 const storage = new OmniPocketStorage({ dbName: "omnipocket", storeName: "state", legacyKey: STORAGE_KEY });
-const SCHEMA_VERSION = 5;
+const SCHEMA_VERSION = 6;
 const CURRENCIES = ["NGN", "USD", "GBP", "EUR"];
 const ACCOUNT_TYPES = ["bank", "cash", "wallet", "locked"];
 const TX_TYPES = ["income", "expense", "transfer", "withdrawal", "adjustment"];
@@ -127,6 +127,8 @@ function migrateState(raw) {
     suggestedType: ["income","expense","transfer","withdrawal","adjustment"].includes(t.suggestedType) ? t.suggestedType : null,
     suggestedSourceAccountId: t.suggestedSourceAccountId || null,
     suggestedPairTransactionId: t.suggestedPairTransactionId || null,
+    suggestedPairCandidates: Array.isArray(t.suggestedPairCandidates) ? t.suggestedPairCandidates.filter(id => typeof id === "string") : [],
+    suggestedPairCandidateMeta: t.suggestedPairCandidateMeta && typeof t.suggestedPairCandidateMeta === "object" ? t.suggestedPairCandidateMeta : {},
     suggestedPairConfidence: Number.isFinite(Number(t.suggestedPairConfidence)) ? Number(t.suggestedPairConfidence) : null,
     suggestedPairReason: String(t.suggestedPairReason || ""),
     pairedTransactionId: t.pairedTransactionId || null,
@@ -319,6 +321,17 @@ function adjustmentDelta(t) {
 
 function rebuildBalances() { const balances = OmniPocketEngine.balancesAt(state); const byId = new Map(balances.map(a => [a.id, a.balance])); state.accounts.forEach(a => { a.balance = byId.has(a.id) ? byId.get(a.id) : (Number(a.openingBalance) || 0); }); }
 
+function pairCandidateConfidence(t, id) {
+  const index = (t.suggestedPairCandidates || []).indexOf(id);
+  if (index === -1) return Number(t.suggestedPairConfidence) || 0;
+  if (t.suggestedPairCandidateMeta?.[id]?.confidence != null) return Number(t.suggestedPairCandidateMeta[id].confidence) || 0;
+  return id === t.suggestedPairTransactionId ? Number(t.suggestedPairConfidence) || 0 : 0;
+}
+
+function pairCandidateReason(t, id) {
+  return t.suggestedPairCandidateMeta?.[id]?.reason || (id === t.suggestedPairTransactionId ? t.suggestedPairReason : "Possible transfer match");
+}
+
 function openTransactionDetail(id) {
   const t = state.transactions.find(x => x.id === id);
   if (!t) return;
@@ -374,26 +387,38 @@ function openTransactionDetail(id) {
       handlingBox.textContent = "";
     }
   }
-  const pair = account(t.sourceAccountId) && t.suggestedPairTransactionId
+  const pairCandidates = Array.isArray(t.suggestedPairCandidates)
+    ? t.suggestedPairCandidates.map(id => state.transactions.find(x => x.id === id)).filter(Boolean)
+    : [];
+  const pair = t.suggestedPairTransactionId
     ? state.transactions.find(x => x.id === t.suggestedPairTransactionId)
     : null;
   const pairWrap = $("transactionPairSection");
   const pairBox = $("transactionPair");
   const pairButton = $("transactionAcceptPair");
   if (pairWrap && pairBox && pairButton) {
-    if (pair) {
-      const pairAccount = account(pair.sourceAccountId);
+    if (pairCandidates.length) {
       pairWrap.hidden = false;
-      pairBox.innerHTML = "<strong>Possible matching transfer leg</strong> · " +
-        Math.round((Number(t.suggestedPairConfidence) || 0) * 100) + "% confidence" +
-        "<div style=\"margin-top:4px\">" + escapeHtml(pairAccount?.name || "Another account") +
-        " · " + escapeHtml(money(pair.amount, pair.currency)) + " · " + escapeHtml(pair.date) + "</div>" +
-        (t.suggestedPairReason ? "<div class=\"muted\" style=\"margin-top:4px\">" + escapeHtml(t.suggestedPairReason) + "</div>" : "");
-      pairButton.textContent = "Merge as transfer";
-      pairButton.disabled = false;
+      const selected = pair ? pair.id : "";
+      pairBox.innerHTML = "<strong>" + (pair ? "Selected transfer match" : "Possible transfer matches") + "</strong>" +
+        (pair ? " · " + Math.round((Number(t.suggestedPairConfidence) || 0) * 100) + "% confidence" : "") +
+        '<div class="transfer-candidate-list">' +
+        pairCandidates.map(candidate => {
+          const candidateAccount = account(candidate.sourceAccountId);
+          const isSelected = candidate.id === selected;
+          return '<button type="button" class="review-queue-item transfer-candidate' + (isSelected ? ' is-selected' : '') + '" data-transfer-candidate="' + escapeHtml(candidate.id) + '">' +
+            '<span><strong>' + escapeHtml(candidateAccount?.name || "Another account") + '</strong><small>' +
+            escapeHtml(money(candidate.amount, candidate.currency)) + ' · ' + escapeHtml(candidate.date) + ' · ' +
+            escapeHtml(pairCandidateReason(t, candidate.id)) + '</small></span><strong>' +
+            Math.round(pairCandidateConfidence(t, candidate.id) * 100) + '%</strong></button>';
+        }).join("") + '</div>' +
+        (pair ? '<div class="muted" style="margin-top:6px">Choose a different match above if this one is not correct.</div>' : '<div class="muted" style="margin-top:6px">No match is merged automatically. Choose a candidate, then confirm.</div>');
+      pairButton.textContent = pair ? "Merge selected transfer" : "Choose a match";
+      pairButton.disabled = !pair;
     } else {
       pairWrap.hidden = true;
       pairBox.textContent = "";
+      pairButton.disabled = true;
     }
   }
   const linkedGoals = state.goals.filter(g => (t.linkedGoalIds || []).includes(g.id));
@@ -1408,25 +1433,24 @@ function findTransferCounterpart(input) {
   }
 
   candidates.sort((a, b) => b.score - a.score);
-  const best = candidates[0];
-  const runnerUp = candidates[1];
+  if (!candidates.length) return null;
 
-  if (!best || best.score < 0.78) return null;
+  const strong = candidates.filter(candidate => candidate.score >= 0.70).slice(0, 4);
+  if (!strong.length) return null;
 
-  // Never choose arbitrarily between two near-identical candidates unless a
-  // strong exact-reference match uniquely identifies the counterpart.
-  if (
-    runnerUp &&
-    !best.exactReference &&
-    Math.abs(best.score - runnerUp.score) < 0.08
-  ) {
-    return null;
-  }
+  const best = strong[0];
+  const runnerUp = strong[1];
+  const ambiguous = runnerUp && !best.exactReference && Math.abs(best.score - runnerUp.score) < 0.08;
 
   return {
-    transactionId: best.transaction.id,
+    transactionId: ambiguous ? null : best.transaction.id,
     confidence: best.score,
-    reason: "Matched " + reasonsForTransferPair(best)
+    reason: ambiguous ? "Multiple plausible transfer matches require review" : "Matched " + reasonsForTransferPair(best),
+    candidates: strong.map(candidate => ({
+      transactionId: candidate.transaction.id,
+      confidence: candidate.score,
+      reason: reasonsForTransferPair(candidate)
+    }))
   };
 }
 
@@ -1474,6 +1498,8 @@ function importTransaction(input, options = {}) {
     suggestedType: handling?.type || null,
     suggestedDestinationAccountId: handling?.destinationAccountId || null,
     suggestedPairTransactionId: pair?.transactionId || null,
+    suggestedPairCandidates: pair?.candidates?.map(candidate => candidate.transactionId) || [],
+    suggestedPairCandidateMeta: Object.fromEntries((pair?.candidates || []).map(candidate => [candidate.transactionId, { confidence: candidate.confidence, reason: candidate.reason }])),
     suggestedPairConfidence: pair?.confidence ?? null,
     suggestedPairReason: pair?.reason || "",
     handlingConfidence: handling?.confidence ?? null,
@@ -1505,6 +1531,8 @@ function addTransaction(input) {
     suggestedType: ["income","expense","transfer","withdrawal","adjustment"].includes(input.suggestedType) ? input.suggestedType : null,
     suggestedSourceAccountId: input.suggestedSourceAccountId || null,
     suggestedPairTransactionId: input.suggestedPairTransactionId || null,
+    suggestedPairCandidates: Array.isArray(input.suggestedPairCandidates) ? [...new Set(input.suggestedPairCandidates.filter(Boolean))].slice(0, 4) : [],
+    suggestedPairCandidateMeta: input.suggestedPairCandidateMeta && typeof input.suggestedPairCandidateMeta === "object" ? input.suggestedPairCandidateMeta : {},
     suggestedPairConfidence: Number.isFinite(Number(input.suggestedPairConfidence)) ? Number(input.suggestedPairConfidence) : null,
     suggestedPairReason: input.suggestedPairReason || "",
     pairedTransactionId: input.pairedTransactionId || null,
@@ -1779,6 +1807,21 @@ $("transactionAcceptSuggestion")?.addEventListener("click", () => {
   t.suggestedCategory = null;
   t.categoryConfidence = null;
   t.categoryReason = "";
+  saveState();
+  openTransactionDetail(t.id);
+});
+
+$("transactionPair")?.addEventListener("click", event => {
+  const button = event.target.closest("[data-transfer-candidate]");
+  if (!button) return;
+  const t = state.transactions.find(x => x.id === $("transactionDialog").dataset.transactionId);
+  if (!t) return;
+  const candidateId = button.dataset.transferCandidate;
+  const candidate = state.transactions.find(x => x.id === candidateId);
+  if (!candidate || candidate.status !== "needs_review" || candidate.type === t.type) return;
+  t.suggestedPairTransactionId = candidate.id;
+  t.suggestedPairConfidence = pairCandidateConfidence(t, candidate.id);
+  t.suggestedPairReason = pairCandidateReason(t, candidate.id);
   saveState();
   openTransactionDetail(t.id);
 });
