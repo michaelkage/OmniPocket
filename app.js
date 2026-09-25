@@ -1,7 +1,7 @@
 /* OmniPocket — V1 financial domain + UI engine */
 const STORAGE_KEY = "omnipocket.v1";
 const storage = new OmniPocketStorage({ dbName: "omnipocket", storeName: "state", legacyKey: STORAGE_KEY });
-const SCHEMA_VERSION = 4;
+const SCHEMA_VERSION = 5;
 const CURRENCIES = ["NGN", "USD", "GBP", "EUR"];
 const ACCOUNT_TYPES = ["bank", "cash", "wallet", "locked"];
 const TX_TYPES = ["income", "expense", "transfer", "withdrawal", "adjustment"];
@@ -124,6 +124,10 @@ function migrateState(raw) {
     suggestedCategory: String(t.suggestedCategory || "") || null,
     categoryConfidence: Number.isFinite(Number(t.categoryConfidence)) ? Number(t.categoryConfidence) : null,
     categoryReason: String(t.categoryReason || ""),
+    suggestedType: ["income","expense","transfer","withdrawal","adjustment"].includes(t.suggestedType) ? t.suggestedType : null,
+    suggestedDestinationAccountId: t.suggestedDestinationAccountId || null,
+    handlingConfidence: Number.isFinite(Number(t.handlingConfidence)) ? Number(t.handlingConfidence) : null,
+    handlingReason: String(t.handlingReason || ""),
     note: String(t.note || ""),
     linkedGoalIds: Array.isArray(t.linkedGoalIds) ? t.linkedGoalIds : [],
     external: t.external && typeof t.external === "object" ? {
@@ -255,6 +259,54 @@ function suggestTransactionCategory(input = {}) {
   return { category: match.category, confidence: match.confidence, reason: "Matched " + matched };
 }
 
+function suggestTransactionHandling(input = {}) {
+  const text = String([input.description, input.note, input.reference, input.providerCategory]
+    .filter(Boolean).join(" ")).replace(/\s+/g, " ").trim();
+  if (!text || !input.accountId) return null;
+  const amount = Math.abs(Number(input.signedAmount ?? input.amount) || 0);
+  if (!amount) return null;
+  const source = account(input.accountId);
+  const accounts = state.accounts.filter(a => !a.archived && a.id !== input.accountId);
+  const normalized = value => String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const haystack = normalized(text);
+  const direction = Number(input.signedAmount ?? 0) >= 0 ? "in" : "out";
+  const transferIn = /\b(TRANSFER FROM|TRF FROM|FROM\s+(?:MY\s+)?ACCOUNT|INWARD TRANSFER|CREDIT TRANSFER|NIP CREDIT|NIP INWARD)\b/i.test(text);
+  const transferOut = /\b(TRANSFER TO|TRF TO|TO\s+(?:MY\s+)?ACCOUNT|OUTWARD TRANSFER|DEBIT TRANSFER|NIP DEBIT|NIP OUTWARD)\b/i.test(text);
+  const genericTransfer = /\b(TRANSFER|TRF|NIP)\b/i.test(text);
+  if (!(transferIn || transferOut || genericTransfer)) return null;
+  let best = null;
+  for (const candidate of accounts) {
+    const aliases = [candidate.name, candidate.institution].flatMap(v => {
+      const n = normalized(v);
+      return n ? [n, ...n.split(" ").filter(part => part.length >= 4)] : [];
+    }).filter(Boolean);
+    let score = 0, matched = "";
+    for (const alias of aliases) {
+      if (alias.length >= 4 && haystack.includes(alias)) {
+        const points = alias.includes(" ") ? 0.96 : 0.9;
+        if (points > score) { score = points; matched = alias; }
+      }
+    }
+    if (score > (best?.score || 0)) best = { account: candidate, score, matched };
+  }
+  if (best && best.score >= 0.9) {
+    const incoming = transferIn || (genericTransfer && direction === "in");
+    return {
+      type: "transfer",
+      destinationAccountId: incoming ? source.id : best.account.id,
+      suggestedSourceAccountId: incoming ? best.account.id : source.id,
+      confidence: Math.min(0.99, best.score + (transferIn || transferOut ? 0.02 : 0)),
+      reason: "Matched local account " + best.account.name
+    };
+  }
+  if (transferIn || transferOut) {
+    return { type:"transfer", destinationAccountId: transferIn ? source.id : null, suggestedSourceAccountId: transferIn ? null : source.id, confidence:0.84, reason:"Transfer language detected, but the other account could not be matched locally" };
+  }
+  return { type:"transfer", destinationAccountId:null, suggestedSourceAccountId:direction === "out" ? source.id : null, confidence:0.72, reason:"Possible transfer detected from the transaction narration" };
+}
+
+
+
 function adjustmentDelta(t) {
   const label = (t.category || "").toLowerCase();
   return label.includes("decrease") ? -Math.abs(t.amount) : Math.abs(t.amount);
@@ -291,6 +343,23 @@ function openTransactionDetail(id) {
       suggestionWrap.hidden = true;
       suggestionBox.textContent = "";
       suggestionButton.hidden = true;
+    }
+  }
+  const handlingWrap = $("transactionHandlingSection");
+  const handlingBox = $("transactionHandling");
+  const handlingButton = $("transactionAcceptHandling");
+  if (handlingWrap && handlingBox && handlingButton) {
+    if (t.suggestedType === "transfer") {
+      const destination = account(t.suggestedDestinationAccountId);
+      handlingWrap.hidden = false;
+      handlingBox.innerHTML = "<strong>Likely transfer</strong> · " + Math.round((Number(t.handlingConfidence) || 0) * 100) + "% confidence" +
+        (destination ? "<div style="margin-top:4px">Matched destination: <strong>" + escapeHtml(destination.name) + "</strong></div>" : "<div class="muted" style="margin-top:4px">Destination not matched locally. Choose it before recording.</div>") +
+        (t.handlingReason ? "<div class="muted" style="margin-top:4px">" + escapeHtml(t.handlingReason) + "</div>" : "");
+      handlingButton.disabled = !destination;
+      handlingButton.textContent = destination ? "Accept transfer" : "Choose destination in Edit";
+    } else {
+      handlingWrap.hidden = true;
+      handlingBox.textContent = "";
     }
   }
   const linkedGoals = state.goals.filter(g => (t.linkedGoalIds || []).includes(g.id));
@@ -486,7 +555,8 @@ function previewStatementImportObjects(parsed, accountId, mapping = {}) {
     if (!date) return {rowNumber:index+2, invalid:true, reason:"Invalid date", description};
     if (!signed) return {rowNumber:index+2, invalid:true, reason:"Missing or zero amount", description};
     const suggestion = suggestTransactionCategory({ description, reference });
-    return {rowNumber:index+2,date,description,reference,signedAmount:signed,type:signed>0?"income":"expense",currency:accountTarget.currency,accountId:accountTarget.id,suggestedCategory:suggestion?.category||null,categoryConfidence:suggestion?.confidence??null,categoryReason:suggestion?.reason||""};
+    const handling = suggestTransactionHandling({ accountId: accountTarget.id, description, reference, signedAmount: signed });
+    return {rowNumber:index+2,date,description,reference,signedAmount:signed,type:signed>0?"income":"expense",currency:accountTarget.currency,accountId:accountTarget.id,suggestedCategory:suggestion?.category||null,categoryConfidence:suggestion?.confidence??null,categoryReason:suggestion?.reason||"",suggestedType:handling?.type||null,suggestedDestinationAccountId:handling?.destinationAccountId||null,handlingConfidence:handling?.confidence??null,handlingReason:handling?.reason||""};
   });
   return {headers,rows,account:accountTarget,mapping:{date:dateCol,description:descCol,reference:refCol,amount:amountCol,debit:debitCol,credit:creditCol}};
 }
@@ -1170,6 +1240,7 @@ function findImportedTransaction(external) {
 }
 
 function importTransaction(input, options = {}) {
+  const handling = input.suggestedType ? { type: input.suggestedType, destinationAccountId: input.suggestedDestinationAccountId || null, confidence: input.handlingConfidence, reason: input.handlingReason } : suggestTransactionHandling(input);
   const suggestion = input.suggestedCategory
     ? { category: input.suggestedCategory, confidence: input.categoryConfidence, reason: input.categoryReason }
     : suggestTransactionCategory({
@@ -1200,6 +1271,10 @@ function importTransaction(input, options = {}) {
     suggestedCategory,
     categoryConfidence: suggestion?.confidence ?? null,
     categoryReason: suggestion?.reason || "",
+    suggestedType: handling?.type || null,
+    suggestedDestinationAccountId: handling?.destinationAccountId || null,
+    handlingConfidence: handling?.confidence ?? null,
+    handlingReason: handling?.reason || "",
     status: input.status || 'needs_review',
     external
   });
@@ -1224,6 +1299,10 @@ function addTransaction(input) {
     suggestedCategory: input.suggestedCategory || null,
     categoryConfidence: Number.isFinite(Number(input.categoryConfidence)) ? Number(input.categoryConfidence) : null,
     categoryReason: input.categoryReason || "",
+    suggestedType: ["income","expense","transfer","withdrawal","adjustment"].includes(input.suggestedType) ? input.suggestedType : null,
+    suggestedDestinationAccountId: input.suggestedDestinationAccountId || null,
+    handlingConfidence: Number.isFinite(Number(input.handlingConfidence)) ? Number(input.handlingConfidence) : null,
+    handlingReason: input.handlingReason || "",
     note: input.note || "",
     adjustmentSign: input.adjustmentSign === -1 ? -1 : 1,
     linkedGoalIds: Array.isArray(input.linkedGoalIds) ? [...new Set(input.linkedGoalIds)] : [],
@@ -1492,6 +1571,24 @@ $("transactionAcceptSuggestion")?.addEventListener("click", () => {
   t.suggestedCategory = null;
   t.categoryConfidence = null;
   t.categoryReason = "";
+  saveState();
+  openTransactionDetail(t.id);
+});
+
+$("transactionAcceptHandling")?.addEventListener("click", () => {
+  const t = state.transactions.find(x => x.id === $("transactionDialog").dataset.transactionId);
+  const source = account(t?.sourceAccountId);
+  const destination = account(t?.suggestedDestinationAccountId);
+  if (!t || t.suggestedType !== "transfer" || !source || !destination || source.id === destination.id) return;
+  t.type = "transfer";
+  t.destinationAccountId = destination.id;
+  t.category = "Bank transfer";
+  t.suggestedType = null;
+  t.suggestedDestinationAccountId = null;
+  t.handlingConfidence = null;
+  t.handlingReason = "";
+  t.status = "recorded";
+  rebuildBalances();
   saveState();
   openTransactionDetail(t.id);
 });
@@ -1864,7 +1961,7 @@ $("statementImportButton")?.addEventListener("click", () => {
   $("statementImportAccount").innerHTML = active.map(a => '<option value="' + escapeHtml(a.id) + '">' + escapeHtml(a.name) + ' · ' + escapeHtml(a.currency) + '</option>').join("");
   pendingStatementImport = null;
   $("statementMappingPanel").hidden = true;
-  $("statementImportSummary").textContent = "Choose an account and CSV file.";
+  $("statementImportSummary").textContent = "Choose an account and statement file.";
   $("statementImportPreview").innerHTML = "";
   $("statementImportConfirm").disabled = true;
   $("statementImportDialog").showModal();
