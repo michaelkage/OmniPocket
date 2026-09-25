@@ -1701,12 +1701,27 @@ function statementMapping() {
     credit: $("statementMapCredit")?.value || ""
   };
 }
+function statementProfileKey(accountTarget) {
+  return "omnipocket.statementProfile." + String(accountTarget?.institution || accountTarget?.name || "default").trim().toLowerCase().replace(/[^a-z0-9]+/g,"-");
+}
+function readStatementProfile(accountTarget) {
+  try { return JSON.parse(localStorage.getItem(statementProfileKey(accountTarget)) || "null"); } catch { return null; }
+}
+function saveStatementProfile(accountTarget, mapping) {
+  try { localStorage.setItem(statementProfileKey(accountTarget), JSON.stringify(mapping)); } catch {}
+}
+function effectiveStatementMapping(accountTarget, headers) {
+  const saved = readStatementProfile(accountTarget);
+  if (!saved) return null;
+  const valid = Object.values(saved).every(value => !value || headers.includes(value));
+  return valid ? saved : null;
+}
 
 function renderStatementMapping(headers) {
   const p = $("statementMappingPanel");
   if (!p) return;
   const preview = pendingStatementImport?.preview;
-  const map = preview?.mapping || {};
+  const map = preview?.mapping || effectiveStatementMapping(account($("statementImportAccount")?.value), headers) || {};
   $("statementMapDate").innerHTML = statementHeaderOptions(headers, map.date, "Select date column");
   $("statementMapDescription").innerHTML = statementHeaderOptions(headers, map.description, "No description");
   $("statementMapReference").innerHTML = statementHeaderOptions(headers, map.reference, "No reference");
@@ -1783,9 +1798,12 @@ $("statementImportFilePicker")?.addEventListener("change", async event => {
 $("statementPreviewButton")?.addEventListener("click", () => {
   if (!pendingStatementImport?.text) return;
   try {
+    const targetAccount = account($("statementImportAccount").value);
+    const mapping = statementMapping();
     pendingStatementImport.preview = pendingStatementImport.spreadsheetRows
-      ? previewStatementImportObjects(pendingStatementImport.spreadsheetRows, $("statementImportAccount").value, statementMapping())
-      : previewStatementImport(pendingStatementImport.text, $("statementImportAccount").value, statementMapping());
+      ? previewStatementImportObjects(pendingStatementImport.spreadsheetRows, targetAccount.id, mapping)
+      : previewStatementImport(pendingStatementImport.text, targetAccount.id, mapping);
+    if ($("statementRememberMapping")?.checked) saveStatementProfile(targetAccount, mapping);
     renderStatementPreview();
   } catch (error) {
     $("statementImportSummary").textContent = error.message || "Could not preview the statement.";
