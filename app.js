@@ -445,6 +445,7 @@ function previewStatementImport(text, accountId, mapping = {}) {
     if (!date && !signed) return { rowNumber:index+2, invalid:true, reason:"Missing date and amount", description };
     if (!date) return { rowNumber:index+2, invalid:true, reason:"Invalid date", description };
     if (!signed) return { rowNumber:index+2, invalid:true, reason:"Missing or zero amount", description };
+    const suggestion = suggestTransactionCategory({ description, reference });
     return {
       rowNumber: index + 2,
       date,
@@ -453,7 +454,10 @@ function previewStatementImport(text, accountId, mapping = {}) {
       signedAmount: signed,
       type: signed > 0 ? "income" : "expense",
       currency: accountTarget.currency,
-      accountId: accountTarget.id
+      accountId: accountTarget.id,
+      suggestedCategory: suggestion?.category || null,
+      categoryConfidence: suggestion?.confidence ?? null,
+      categoryReason: suggestion?.reason || ""
     };
   });
   return { headers, rows, account: accountTarget, mapping: { date:dateCol, description:descCol, reference:refCol, amount:amountCol, debit:debitCol, credit:creditCol } };
@@ -481,7 +485,8 @@ function previewStatementImportObjects(parsed, accountId, mapping = {}) {
     const reference = refCol ? String(row[refCol] || "").trim() : "";
     if (!date) return {rowNumber:index+2, invalid:true, reason:"Invalid date", description};
     if (!signed) return {rowNumber:index+2, invalid:true, reason:"Missing or zero amount", description};
-    return {rowNumber:index+2,date,description,reference,signedAmount:signed,type:signed>0?"income":"expense",currency:accountTarget.currency,accountId:accountTarget.id};
+    const suggestion = suggestTransactionCategory({ description, reference });
+    return {rowNumber:index+2,date,description,reference,signedAmount:signed,type:signed>0?"income":"expense",currency:accountTarget.currency,accountId:accountTarget.id,suggestedCategory:suggestion?.category||null,categoryConfidence:suggestion?.confidence??null,categoryReason:suggestion?.reason||""};
   });
   return {headers,rows,account:accountTarget,mapping:{date:dateCol,description:descCol,reference:refCol,amount:amountCol,debit:debitCol,credit:creditCol}};
 }
@@ -1805,7 +1810,9 @@ function statementMapping() {
   };
 }
 function statementProfileKey(accountTarget) {
-  return "omnipocket.statementProfile." + String(accountTarget?.institution || accountTarget?.name || "default").trim().toLowerCase().replace(/[^a-z0-9]+/g,"-");
+  const institution = String(accountTarget?.institution || "").trim().toLowerCase();
+  const accountName = String(accountTarget?.name || "default").trim().toLowerCase();
+  return "omnipocket.statementProfile." + [institution, accountName].filter(Boolean).join("-").replace(/[^a-z0-9]+/g,"-");
 }
 function readStatementProfile(accountTarget) {
   try { return JSON.parse(localStorage.getItem(statementProfileKey(accountTarget)) || "null"); } catch { return null; }
@@ -1846,7 +1853,7 @@ function renderStatementPreview() {
   }).length;
   $("statementImportSummary").innerHTML = '<strong>' + valid.length + ' valid</strong> · ' + duplicateCount + ' duplicate' + (duplicateCount === 1 ? "" : "s") + ' · ' + invalid.length + ' invalid';
   $("statementImportPreview").innerHTML = '<div class="statement-import-preview">' +
-    rows.slice(0,12).map(row => '<div class="statement-import-row ' + (row.invalid ? 'statement-import-invalid' : '') + '"><span><strong>' + escapeHtml(row.date || ("Row " + row.rowNumber)) + '</strong><small>' + escapeHtml(row.description || row.reason || "No description") + '</small></span><strong>' + (row.invalid ? escapeHtml(row.reason) : escapeHtml((row.signedAmount > 0 ? "+" : "−") + money(Math.abs(row.signedAmount), row.currency))) + '</strong></div>').join("") +
+    rows.slice(0,12).map(row => '<div class="statement-import-row ' + (row.invalid ? 'statement-import-invalid' : '') + '"><span><strong>' + escapeHtml(row.date || ("Row " + row.rowNumber)) + '</strong><small>' + escapeHtml(row.description || row.reason || "No description") + '</small>' + (row.suggestedCategory ? '<small>Suggested: ' + escapeHtml(row.suggestedCategory) + ' · ' + Math.round((Number(row.categoryConfidence) || 0) * 100) + '%</small>' : '') + '</span><strong>' + (row.invalid ? escapeHtml(row.reason) : escapeHtml((row.signedAmount > 0 ? "+" : "−") + money(Math.abs(row.signedAmount), row.currency))) + '</strong></div>').join("") +
     '</div>' + (rows.length > 12 ? '<div class="muted">Showing first 12 of ' + rows.length + ' rows.</div>' : "");
   $("statementImportConfirm").disabled = !valid.length;
 }
@@ -1899,7 +1906,7 @@ $("statementImportFilePicker")?.addEventListener("change", async event => {
 });
 
 $("statementPreviewButton")?.addEventListener("click", () => {
-  if (!pendingStatementImport?.text) return;
+  if (!pendingStatementImport?.workbookSheet) return;
   try {
     const targetAccount = account($("statementImportAccount").value);
     const mapping = statementMapping();
@@ -1916,9 +1923,13 @@ $("statementPreviewButton")?.addEventListener("click", () => {
 });
 
 $("statementImportAccount")?.addEventListener("change", () => {
-  if (!pendingStatementImport?.text) return;
+  if (!pendingStatementImport?.workbookSheet) return;
   try {
-    pendingStatementImport.preview = previewStatementImport(pendingStatementImport.text, $("statementImportAccount").value, statementMapping());
+    const targetAccountId = $("statementImportAccount").value;
+    const mapping = statementMapping();
+    pendingStatementImport.preview = pendingStatementImport.spreadsheetRows
+      ? previewStatementImportObjects(pendingStatementImport.spreadsheetRows, targetAccountId, mapping)
+      : previewStatementImport(pendingStatementImport.text, targetAccountId, mapping);
     renderStatementMapping(pendingStatementImport.preview.headers);
     renderStatementPreview();
   } catch (error) {
