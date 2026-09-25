@@ -89,6 +89,7 @@
 <div class="dialog-head"><div><span class="eyebrow">TRANSACTION</span><h2 id="transactionDetailTitle">Activity</h2><div id="transactionDetailMeta" class="muted"></div></div><button class="icon-button" onclick="this.closest('dialog').close()">✕</button></div>
 <div class="detail-balance"><strong id="transactionDetailAmount">₦0</strong><span id="transactionDetailContext" class="muted"></span></div>
 <div class="detail-section"><div class="eyebrow">STATUS</div><div id="transactionDetailStatus" class="detail-callout"></div></div>
+<div id="transactionSuggestionSection" class="detail-section" hidden><div class="eyebrow">SMART CATEGORY</div><div id="transactionSuggestion" class="detail-callout"></div><div class="dialog-actions"><button id="transactionAcceptSuggestion" class="primary">Accept suggestion</button></div></div>
 <div class="detail-section"><div class="eyebrow">GOALS</div><div id="transactionDetailGoals" class="stack"></div></div><div class="detail-section"><div class="eyebrow">NOTE</div><div id="transactionDetailNote" class="muted">No note.</div></div>
 <div class="dialog-actions"><button id="transactionReviewButton">Mark for review</button><button id="transactionEditButton">Edit</button><button id="transactionDeleteButton">Delete</button><button class="primary" onclick="this.closest('dialog').close()">Done</button></div>
 </dialog>
@@ -136,7 +137,7 @@
   <div class="dialog-head"><div><span class="eyebrow">LOCAL IMPORT</span><h2>Bank statement import</h2><div class="muted">CSV, XLSX and XLS files are processed locally. New rows enter the review queue.</div></div><button class="icon-button" onclick="this.closest('dialog').close()">✕</button></div>
   <div class="form-grid">
     <label>Account<select id="statementImportAccount"></select></label>
-    <label>Statement file<input id="statementImportFilePicker" type="file" accept=".csv,text/csv"></label>
+    <label>Statement file<input id="statementImportFilePicker" type="file" accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"></label>
     <div id="statementMappingPanel" class="statement-mapping-panel" hidden>
       <div><span class="eyebrow">COLUMN MAPPING</span><strong>Tell OmniPocket what each column means</strong></div>
       <label>Date<select id="statementMapDate"></select></label>
