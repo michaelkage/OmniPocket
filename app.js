@@ -1595,7 +1595,11 @@ $("transactionAcceptHandling")?.addEventListener("click", () => {
   const source = account(t?.sourceAccountId);
   const suggestedSource = account(t?.suggestedSourceAccountId) || source;
   const destination = account(t?.suggestedDestinationAccountId);
-  if (!t || t.suggestedType !== "transfer" || !source || !suggestedSource || !destination || suggestedSource.id === destination.id) return;
+  if (!t || t.suggestedType !== "transfer" || !source) return;
+  if (!destination || !suggestedSource || suggestedSource.id === destination.id) {
+    editTransaction(t.id);
+    return;
+  }
   t.type = "transfer";
   t.sourceAccountId = suggestedSource.id;
   t.destinationAccountId = destination.id;
