@@ -1,7 +1,7 @@
 /* OmniPocket — V1 financial domain + UI engine */
 const STORAGE_KEY = "omnipocket.v1";
 const storage = new OmniPocketStorage({ dbName: "omnipocket", storeName: "state", legacyKey: STORAGE_KEY });
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 const CURRENCIES = ["NGN", "USD", "GBP", "EUR"];
 const ACCOUNT_TYPES = ["bank", "cash", "wallet", "locked"];
 const TX_TYPES = ["income", "expense", "transfer", "withdrawal", "adjustment"];
@@ -121,6 +121,9 @@ function migrateState(raw) {
     fxRate: t.fxRate == null ? null : Number(t.fxRate),
     fxSource: t.fxSource || null,
     category: String(t.category || ""),
+    suggestedCategory: String(t.suggestedCategory || "") || null,
+    categoryConfidence: Number.isFinite(Number(t.categoryConfidence)) ? Number(t.categoryConfidence) : null,
+    categoryReason: String(t.categoryReason || ""),
     note: String(t.note || ""),
     linkedGoalIds: Array.isArray(t.linkedGoalIds) ? t.linkedGoalIds : [],
     external: t.external && typeof t.external === "object" ? {
@@ -219,6 +222,39 @@ function transactionDirection(t) {
   return "neutral";
 }
 
+/* Local, deterministic transaction categorization. Suggestions never change
+ * accounting semantics and imported rows remain in the review queue. */
+function suggestTransactionCategory(input = {}) {
+  const text = String([input.description, input.note, input.reference, input.providerCategory]
+    .filter(Boolean).join(" ")).replace(/\\s+/g, " ").trim();
+  if (!text) return null;
+  const rules = [
+    { pattern: /\\b(SALARY|PAYROLL|WAGES?|MONTHLY PAY|CREDIT SALARY)\\b/i, category: "Salary / income", confidence: 0.98 },
+    { pattern: /\\b(UBER|BOLT|INDRIVE|INDRIVER|TAXIFY)\\b/i, category: "Transport", confidence: 0.98 },
+    { pattern: /\\b(MTN|AIRTEL|GLO|9MOBILE|ETISALAT)\\b.*\\b(AIRTIME|DATA|BUNDLE|RECHARGE|TOP.?UP)\\b|\\b(AIRTIME|DATA|BUNDLE|RECHARGE|TOP.?UP)\\b.*\\b(MTN|AIRTEL|GLO|9MOBILE|ETISALAT)\\b/i, category: "Mobile & telecom", confidence: 0.97 },
+    { pattern: /\\b(MTN|AIRTEL|GLO|9MOBILE|ETISALAT)\\b/i, category: "Mobile & telecom", confidence: 0.90 },
+    { pattern: /\\b(PHED|PHCN|AEDC|EKEDC|IKEDC|EKO ELECTRIC|EEDC|JEDC|KEDCO)\\b/i, category: "Utilities", confidence: 0.97 },
+    { pattern: /\\b(NETFLIX|SPOTIFY|YOUTUBE PREMIUM|YOUTUBE MUSIC|APPLE MUSIC|SHOWMAX|DSTV|GOtv|AMAZON PRIME)\\b/i, category: "Subscriptions", confidence: 0.97 },
+    { pattern: /\\b(OPAY|PALMPAY)\\b/i, category: "Digital wallet", confidence: 0.96 },
+    { pattern: /\\b(SHOPRITE|SPAR|JUSTRITE|PICK N PAY|GAME STORE|MARKET SQUARE)\\b/i, category: "Groceries", confidence: 0.96 },
+    { pattern: /\\b(JUMIA|KONGA)\\b/i, category: "Shopping", confidence: 0.96 },
+    { pattern: /\\b(PAYSTACK|FLUTTERWAVE|MONIEPOINT)\\b/i, category: "Payments", confidence: 0.93 },
+    { pattern: /\\b(SCHOOL|SCHOOL FEES|TUITION|UNIVERSITY|COLLEGE|WAEC|NECO|JAMB)\\b/i, category: "Education", confidence: 0.94 },
+    { pattern: /\\b(TRANSFER TO|TRANSFER FROM|NIP|NIP TRANSFER|INWARD TRANSFER|OUTWARD TRANSFER|TRF TO|TRF FROM)\\b/i, category: "Bank transfer", confidence: 0.92 },
+    { pattern: /\\b(GTBANK|GTB|ACCESS BANK|ZENITH|UBA|FIRSTBANK|FIRST BANK|STERLING BANK|FCMB|KUDA)\\b/i, category: "Banking / transfer", confidence: 0.88 },
+    { pattern: /\\b(TOTAL|OANDO|MRS|ARDOVA|CONOIL|FUEL|PETROL|DIESEL|FILLING STATION)\\b/i, category: "Fuel", confidence: 0.95 },
+    { pattern: /\\b(RESTAURANT|FOOD|CHICKEN|PIZZA|BURGER|CAFE|EATERY|KFC|DOMINO)\\b/i, category: "Food & dining", confidence: 0.93 },
+    { pattern: /\\b(ATM|CASH WITHDRAWAL|CASH ADVANCE)\\b/i, category: "Cash withdrawal", confidence: 0.98 },
+    { pattern: /\\b(PHARMACY|HOSPITAL|CLINIC|MEDICAL|HEALTH)\\b/i, category: "Health", confidence: 0.94 },
+    { pattern: /\\b(RENT|LANDLORD|PROPERTY|ESTATE)\\b/i, category: "Housing", confidence: 0.91 },
+    { pattern: /\\b(BET9JA|SPORTYBET|BETKING|BETWAY)\\b/i, category: "Gambling", confidence: 0.99 }
+  ];
+  const match = rules.find(rule => rule.pattern.test(text));
+  if (!match) return null;
+  const matched = text.match(match.pattern)?.[0] || "transaction narration";
+  return { category: match.category, confidence: match.confidence, reason: "Matched " + matched };
+}
+
 function adjustmentDelta(t) {
   const label = (t.category || "").toLowerCase();
   return label.includes("decrease") ? -Math.abs(t.amount) : Math.abs(t.amount);
@@ -241,6 +277,22 @@ function openTransactionDetail(id) {
     ? (source?.name || "Unknown") + " → " + (dest?.name || "Unknown")
     : source?.name || incoming?.name || "Unknown account";
   $("transactionDetailStatus").textContent = t.status === "needs_review" ? "Needs review — handle later" : "Recorded";
+  const suggestionWrap = $("transactionSuggestionSection");
+  const suggestionBox = $("transactionSuggestion");
+  const suggestionButton = $("transactionAcceptSuggestion");
+  if (suggestionWrap && suggestionBox && suggestionButton) {
+    if (t.suggestedCategory) {
+      suggestionWrap.hidden = false;
+      suggestionBox.innerHTML = "<strong>" + escapeHtml(t.suggestedCategory) + "</strong> · " +
+        Math.round((Number(t.categoryConfidence) || 0) * 100) + "% confidence" +
+        (t.categoryReason ? "<div class=\"muted\" style=\"margin-top:4px\">" + escapeHtml(t.categoryReason) + "</div>" : "");
+      suggestionButton.hidden = t.category === t.suggestedCategory;
+    } else {
+      suggestionWrap.hidden = true;
+      suggestionBox.textContent = "";
+      suggestionButton.hidden = true;
+    }
+  }
   const linkedGoals = state.goals.filter(g => (t.linkedGoalIds || []).includes(g.id));
   $("transactionDetailGoals").innerHTML = linkedGoals.length
     ? linkedGoals.map(g => '<button class="link-row" data-goal-from-transaction="' + escapeHtml(g.id) + '"><strong>' + escapeHtml(g.name) + '</strong><span><span class="context-link-badge">Linked</span> ' + escapeHtml(money(goalProgress(g).current, g.currency)) + '</span></button>').join("")
@@ -439,7 +491,7 @@ function importStatementRows(rows) {
   for (const row of rows) {
     if (row.invalid) { invalid++; continue; }
     const fingerprint = [row.accountId, row.date, row.signedAmount.toFixed(2), row.description.toLowerCase().replace(/\\s+/g," ").trim(), row.reference.toLowerCase().trim()].join("|");
-    const existing = state.transactions.find(t => t.external?.provider === "statement_csv" && t.external.providerTransactionId === fingerprint);
+    const existing = state.transactions.find(t => (t.external?.provider === "statement_import" || t.external?.provider === "statement_csv") && t.external.providerTransactionId === fingerprint);
     if (existing) {
       existing.external.lastSeenAt = new Date().toISOString();
       duplicates++;
@@ -451,9 +503,11 @@ function importStatementRows(rows) {
       amount: Math.abs(row.signedAmount),
       currency: row.currency,
       category: row.type === "income" ? "Imported income" : "Other",
-      note: row.description || "Imported from CSV statement",
+      description: row.description,
+      reference: row.reference,
+      note: row.description || "Imported from bank statement",
       date: row.date,
-      external: { provider: "statement_csv", providerTransactionId: fingerprint }
+      external: { provider: "statement_import", providerTransactionId: fingerprint }
     });
     imported++;
   }
@@ -723,6 +777,18 @@ async function syncMonoAccount(monoAccountId, accountName = "Connected bank") {
       fxRate: null,
       fxSource: "bank_import",
       category: tx.category || "Other",
+      suggestedCategory: suggestTransactionCategory({
+        description: tx.narration,
+        providerCategory: tx.category
+      })?.category || null,
+      categoryConfidence: suggestTransactionCategory({
+        description: tx.narration,
+        providerCategory: tx.category
+      })?.confidence || null,
+      categoryReason: suggestTransactionCategory({
+        description: tx.narration,
+        providerCategory: tx.category
+      })?.reason || "",
       note: tx.narration || "Imported from Mono",
       linkedGoalIds: [],
       external: { provider: "mono", providerTransactionId, importedAt: new Date(importedAt).toISOString(), lastSeenAt: new Date(importedAt).toISOString() }
@@ -1099,6 +1165,18 @@ function findImportedTransaction(external) {
 }
 
 function importTransaction(input, options = {}) {
+  const suggestion = input.suggestedCategory
+    ? { category: input.suggestedCategory, confidence: input.categoryConfidence, reason: input.categoryReason }
+    : suggestTransactionCategory({
+        description: input.description,
+        note: input.note,
+        reference: input.reference,
+        providerCategory: input.providerCategory
+      });
+  const suggestedCategory = suggestion?.category || null;
+  const category = input.category && input.category !== "Other" && input.category !== "Imported income"
+    ? input.category
+    : (suggestedCategory || input.category || "");
   const external = input.external && typeof input.external === 'object' ? {
     provider: input.external.provider || null,
     providerTransactionId: input.external.providerTransactionId || null,
@@ -1111,7 +1189,15 @@ function importTransaction(input, options = {}) {
     if (options.updateExisting && input.note) existing.note = input.note;
     return { transaction: existing, duplicate: true };
   }
-  const transaction = addTransaction({ ...input, status: input.status || 'needs_review', external });
+  const transaction = addTransaction({
+    ...input,
+    category,
+    suggestedCategory,
+    categoryConfidence: suggestion?.confidence ?? null,
+    categoryReason: suggestion?.reason || "",
+    status: input.status || 'needs_review',
+    external
+  });
   return { transaction, duplicate: false };
 }
 function addTransaction(input) {
@@ -1130,6 +1216,9 @@ function addTransaction(input) {
     fxRate: input.fxRate == null ? null : Number(input.fxRate),
     fxSource: input.fxSource || null,
     category: input.category || "",
+    suggestedCategory: input.suggestedCategory || null,
+    categoryConfidence: Number.isFinite(Number(input.categoryConfidence)) ? Number(input.categoryConfidence) : null,
+    categoryReason: input.categoryReason || "",
     note: input.note || "",
     adjustmentSign: input.adjustmentSign === -1 ? -1 : 1,
     linkedGoalIds: Array.isArray(input.linkedGoalIds) ? [...new Set(input.linkedGoalIds)] : [],
@@ -1391,6 +1480,17 @@ $("transactionReviewButton")?.addEventListener("click", () => {
   openTransactionDetail(t.id);
 });
 
+$("transactionAcceptSuggestion")?.addEventListener("click", () => {
+  const t = state.transactions.find(x => x.id === $("transactionDialog").dataset.transactionId);
+  if (!t?.suggestedCategory) return;
+  t.category = t.suggestedCategory;
+  t.suggestedCategory = null;
+  t.categoryConfidence = null;
+  t.categoryReason = "";
+  saveState();
+  openTransactionDetail(t.id);
+});
+
 $("editTxType")?.addEventListener("change", syncEditTransactionFields);
 
 $("editTransactionForm")?.addEventListener("submit", event => {
@@ -1413,7 +1513,10 @@ $("editTransactionForm")?.addEventListener("submit", event => {
   t.fxRate = type === "transfer" || type === "withdrawal" ? (Number($("editTxFxRate").value) || null) : null;
   t.fxSource = t.fxRate ? "manual" : (type === "transfer" || type === "withdrawal" ? "snapshot" : null);
   t.date = $("editTxDate").value || t.date;
-  t.category = $("editTxCategory").value.trim();
+t.category = $("editTxCategory").value.trim();
+  t.suggestedCategory = null;
+  t.categoryConfidence = null;
+  t.categoryReason = "";
   t.note = $("editTxNote").value.trim();
   t.status = $("editTxStatus").value;
   t.linkedGoalIds = readTransactionGoals("editTxGoals");
@@ -1739,7 +1842,7 @@ function renderStatementPreview() {
   const invalid = rows.filter(row => row.invalid);
   const duplicateCount = valid.filter(row => {
     const fingerprint = [row.accountId,row.date,row.signedAmount.toFixed(2),row.description.toLowerCase().replace(/\\s+/g," ").trim(),row.reference.toLowerCase().trim()].join("|");
-    return state.transactions.some(t => t.external?.provider === "statement_csv" && t.external.providerTransactionId === fingerprint);
+    return state.transactions.some(t => (t.external?.provider === "statement_import" || t.external?.provider === "statement_csv") && t.external.providerTransactionId === fingerprint);
   }).length;
   $("statementImportSummary").innerHTML = '<strong>' + valid.length + ' valid</strong> · ' + duplicateCount + ' duplicate' + (duplicateCount === 1 ? "" : "s") + ' · ' + invalid.length + ' invalid';
   $("statementImportPreview").innerHTML = '<div class="statement-import-preview">' +
