@@ -1836,6 +1836,8 @@ $("transactionAcceptPair")?.addEventListener("click", () => {
     t.suggestedPairTransactionId = null;
     t.suggestedPairConfidence = null;
     t.suggestedPairReason = "";
+    t.suggestedPairCandidates = [];
+    t.suggestedPairCandidateMeta = {};
     saveState();
     openTransactionDetail(t.id);
     return;
@@ -1863,6 +1865,8 @@ $("transactionAcceptPair")?.addEventListener("click", () => {
   t.suggestedPairTransactionId = null;
   t.suggestedPairConfidence = null;
   t.suggestedPairReason = "";
+  t.suggestedPairCandidates = [];
+  t.suggestedPairCandidateMeta = {};
   t.pairedTransactionId = pair.id;
   t.suggestedType = null;
   t.suggestedSourceAccountId = null;
@@ -1875,6 +1879,8 @@ $("transactionAcceptPair")?.addEventListener("click", () => {
   pair.suggestedPairTransactionId = null;
   pair.suggestedPairConfidence = null;
   pair.suggestedPairReason = "";
+  pair.suggestedPairCandidates = [];
+  pair.suggestedPairCandidateMeta = {};
   pair.suggestedType = null;
   pair.suggestedSourceAccountId = null;
   pair.suggestedDestinationAccountId = null;
@@ -1934,6 +1940,11 @@ $("editTransactionForm")?.addEventListener("submit", event => {
     }
     t.pairedTransactionId = null;
   }
+  t.suggestedPairTransactionId = null;
+  t.suggestedPairCandidates = [];
+  t.suggestedPairCandidateMeta = {};
+  t.suggestedPairConfidence = null;
+  t.suggestedPairReason = "";
   t.type = type;
   t.sourceAccountId = source.id;
   t.destinationAccountId = type === "transfer" || type === "withdrawal" ? destination.id : null;
