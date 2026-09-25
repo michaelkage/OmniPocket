@@ -235,28 +235,28 @@ function transactionDirection(t) {
  * accounting semantics and imported rows remain in the review queue. */
 function suggestTransactionCategory(input = {}) {
   const text = String([input.description, input.note, input.reference, input.providerCategory]
-    .filter(Boolean).join(" ")).replace(/\\s+/g, " ").trim();
+    .filter(Boolean).join(" ")).replace(/\s+/g, " ").trim();
   if (!text) return null;
   const rules = [
-    { pattern: /\\b(SALARY|PAYROLL|WAGES?|MONTHLY PAY|CREDIT SALARY)\\b/i, category: "Salary / income", confidence: 0.98 },
-    { pattern: /\\b(UBER|BOLT|INDRIVE|INDRIVER|TAXIFY)\\b/i, category: "Transport", confidence: 0.98 },
-    { pattern: /\\b(MTN|AIRTEL|GLO|9MOBILE|ETISALAT)\\b.*\\b(AIRTIME|DATA|BUNDLE|RECHARGE|TOP.?UP)\\b|\\b(AIRTIME|DATA|BUNDLE|RECHARGE|TOP.?UP)\\b.*\\b(MTN|AIRTEL|GLO|9MOBILE|ETISALAT)\\b/i, category: "Mobile & telecom", confidence: 0.97 },
-    { pattern: /\\b(MTN|AIRTEL|GLO|9MOBILE|ETISALAT)\\b/i, category: "Mobile & telecom", confidence: 0.90 },
-    { pattern: /\\b(PHED|PHCN|AEDC|EKEDC|IKEDC|EKO ELECTRIC|EEDC|JEDC|KEDCO)\\b/i, category: "Utilities", confidence: 0.97 },
-    { pattern: /\\b(NETFLIX|SPOTIFY|YOUTUBE PREMIUM|YOUTUBE MUSIC|APPLE MUSIC|SHOWMAX|DSTV|GOtv|AMAZON PRIME)\\b/i, category: "Subscriptions", confidence: 0.97 },
-    { pattern: /\\b(OPAY|PALMPAY)\\b/i, category: "Digital wallet", confidence: 0.96 },
-    { pattern: /\\b(SHOPRITE|SPAR|JUSTRITE|PICK N PAY|GAME STORE|MARKET SQUARE)\\b/i, category: "Groceries", confidence: 0.96 },
-    { pattern: /\\b(JUMIA|KONGA)\\b/i, category: "Shopping", confidence: 0.96 },
-    { pattern: /\\b(PAYSTACK|FLUTTERWAVE|MONIEPOINT)\\b/i, category: "Payments", confidence: 0.93 },
-    { pattern: /\\b(SCHOOL|SCHOOL FEES|TUITION|UNIVERSITY|COLLEGE|WAEC|NECO|JAMB)\\b/i, category: "Education", confidence: 0.94 },
-    { pattern: /\\b(TRANSFER TO|TRANSFER FROM|NIP|NIP TRANSFER|INWARD TRANSFER|OUTWARD TRANSFER|TRF TO|TRF FROM)\\b/i, category: "Bank transfer", confidence: 0.92 },
-    { pattern: /\\b(GTBANK|GTB|ACCESS BANK|ZENITH|UBA|FIRSTBANK|FIRST BANK|STERLING BANK|FCMB|KUDA)\\b/i, category: "Banking / transfer", confidence: 0.88 },
-    { pattern: /\\b(TOTAL|OANDO|MRS|ARDOVA|CONOIL|FUEL|PETROL|DIESEL|FILLING STATION)\\b/i, category: "Fuel", confidence: 0.95 },
-    { pattern: /\\b(RESTAURANT|FOOD|CHICKEN|PIZZA|BURGER|CAFE|EATERY|KFC|DOMINO)\\b/i, category: "Food & dining", confidence: 0.93 },
-    { pattern: /\\b(ATM|CASH WITHDRAWAL|CASH ADVANCE)\\b/i, category: "Cash withdrawal", confidence: 0.98 },
-    { pattern: /\\b(PHARMACY|HOSPITAL|CLINIC|MEDICAL|HEALTH)\\b/i, category: "Health", confidence: 0.94 },
-    { pattern: /\\b(RENT|LANDLORD|PROPERTY|ESTATE)\\b/i, category: "Housing", confidence: 0.91 },
-    { pattern: /\\b(BET9JA|SPORTYBET|BETKING|BETWAY)\\b/i, category: "Gambling", confidence: 0.99 }
+    { pattern: /\b(SALARY|PAYROLL|WAGES?|MONTHLY PAY|CREDIT SALARY)\b/i, category: "Salary / income", confidence: 0.98 },
+    { pattern: /\b(UBER|BOLT|INDRIVE|INDRIVER|TAXIFY)\b/i, category: "Transport", confidence: 0.98 },
+    { pattern: /\b(MTN|AIRTEL|GLO|9MOBILE|ETISALAT)\b.*\b(AIRTIME|DATA|BUNDLE|RECHARGE|TOP.?UP)\b|\b(AIRTIME|DATA|BUNDLE|RECHARGE|TOP.?UP)\b.*\b(MTN|AIRTEL|GLO|9MOBILE|ETISALAT)\b/i, category: "Mobile & telecom", confidence: 0.97 },
+    { pattern: /\b(MTN|AIRTEL|GLO|9MOBILE|ETISALAT)\b/i, category: "Mobile & telecom", confidence: 0.90 },
+    { pattern: /\b(PHED|PHCN|AEDC|EKEDC|IKEDC|EKO ELECTRIC|EEDC|JEDC|KEDCO)\b/i, category: "Utilities", confidence: 0.97 },
+    { pattern: /\b(NETFLIX|SPOTIFY|YOUTUBE PREMIUM|YOUTUBE MUSIC|APPLE MUSIC|SHOWMAX|DSTV|GOtv|AMAZON PRIME)\b/i, category: "Subscriptions", confidence: 0.97 },
+    { pattern: /\b(OPAY|PALMPAY)\b/i, category: "Digital wallet", confidence: 0.96 },
+    { pattern: /\b(SHOPRITE|SPAR|JUSTRITE|PICK N PAY|GAME STORE|MARKET SQUARE)\b/i, category: "Groceries", confidence: 0.96 },
+    { pattern: /\b(JUMIA|KONGA)\b/i, category: "Shopping", confidence: 0.96 },
+    { pattern: /\b(PAYSTACK|FLUTTERWAVE|MONIEPOINT)\b/i, category: "Payments", confidence: 0.93 },
+    { pattern: /\b(SCHOOL|SCHOOL FEES|TUITION|UNIVERSITY|COLLEGE|WAEC|NECO|JAMB)\b/i, category: "Education", confidence: 0.94 },
+    { pattern: /\b(TRANSFER TO|TRANSFER FROM|NIP|NIP TRANSFER|INWARD TRANSFER|OUTWARD TRANSFER|TRF TO|TRF FROM)\b/i, category: "Bank transfer", confidence: 0.92 },
+    { pattern: /\b(GTBANK|GTB|ACCESS BANK|ZENITH|UBA|FIRSTBANK|FIRST BANK|STERLING BANK|FCMB|KUDA)\b/i, category: "Banking / transfer", confidence: 0.88 },
+    { pattern: /\b(TOTAL|OANDO|MRS|ARDOVA|CONOIL|FUEL|PETROL|DIESEL|FILLING STATION)\b/i, category: "Fuel", confidence: 0.95 },
+    { pattern: /\b(RESTAURANT|FOOD|CHICKEN|PIZZA|BURGER|CAFE|EATERY|KFC|DOMINO)\b/i, category: "Food & dining", confidence: 0.93 },
+    { pattern: /\b(ATM|CASH WITHDRAWAL|CASH ADVANCE)\b/i, category: "Cash withdrawal", confidence: 0.98 },
+    { pattern: /\b(PHARMACY|HOSPITAL|CLINIC|MEDICAL|HEALTH)\b/i, category: "Health", confidence: 0.94 },
+    { pattern: /\b(RENT|LANDLORD|PROPERTY|ESTATE)\b/i, category: "Housing", confidence: 0.91 },
+    { pattern: /\b(BET9JA|SPORTYBET|BETKING|BETWAY)\b/i, category: "Gambling", confidence: 0.99 }
   ];
   const match = rules.find(rule => rule.pattern.test(text));
   if (!match) return null;
@@ -333,7 +333,7 @@ function openTransactionDetail(id) {
   $("transactionDetailContext").textContent = t.type === "transfer" || t.type === "withdrawal"
     ? (source?.name || "Unknown") + " → " + (dest?.name || "Unknown")
     : source?.name || incoming?.name || "Unknown account";
-  $("transactionDetailStatus").textContent = t.status === "needs_review" ? "Needs review — handle later" : "Recorded";
+  $("transactionDetailStatus").textContent = t.status === "needs_review" ? "Needs review — handle later" : t.status === "superseded" ? "Paired transfer leg — excluded from ledger" : "Recorded";
   const suggestionWrap = $("transactionSuggestionSection");
   const suggestionBox = $("transactionSuggestion");
   const suggestionButton = $("transactionAcceptSuggestion");
@@ -570,7 +570,7 @@ function previewStatementImportObjects(parsed, accountId, mapping = {}) {
   const headers = parsed.headers;
   const dateCol = mapping.date || statementColumn(headers, [/^date$/i, /transaction.*date/i, /posting.*date/i, /value.*date/i]);
   const descCol = mapping.description || statementColumn(headers, [/description/i, /narration/i, /details/i, /memo/i, /particular/i]);
-  const refCol = mapping.reference || statementColumn(headers, [/reference/i, /ref\\.?\\s*(no|number)?$/i, /transaction.*id/i]);
+  const refCol = mapping.reference || statementColumn(headers, [/reference/i, /ref\\.?\s*(no|number)?$/i, /transaction.*id/i]);
   const amountCol = mapping.amount || statementColumn(headers, [/^amount$/i, /transaction.*amount/i, /value/i]);
   const debitCol = mapping.debit || statementColumn(headers, [/debit/i, /withdrawal/i, /paid.*out/i]);
   const creditCol = mapping.credit || statementColumn(headers, [/credit/i, /deposit/i, /paid.*in/i]);
@@ -599,7 +599,7 @@ function importStatementRows(rows) {
   let imported = 0, duplicates = 0, invalid = 0;
   for (const row of rows) {
     if (row.invalid) { invalid++; continue; }
-    const fingerprint = [row.accountId, row.date, row.signedAmount.toFixed(2), row.description.toLowerCase().replace(/\\s+/g," ").trim(), row.reference.toLowerCase().trim()].join("|");
+    const fingerprint = [row.accountId, row.date, row.signedAmount.toFixed(2), row.description.toLowerCase().replace(/\s+/g," ").trim(), row.reference.toLowerCase().trim()].join("|");
     const existing = state.transactions.find(t => (t.external?.provider === "statement_import" || t.external?.provider === "statement_csv") && t.external.providerTransactionId === fingerprint);
     if (existing) {
       existing.external.lastSeenAt = new Date().toISOString();
@@ -1283,8 +1283,8 @@ function normalizeTransferText(value) {
   return String(value || "")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, " ")
-    .replace(/\\b(?:transfer|trf|nip|inward|outward|credit|debit|from|to|payment|transaction|txn|ref|reference)\\b/g, " ")
-    .replace(/\\s+/g, " ")
+    .replace(/\b(?:transfer|trf|nip|inward|outward|credit|debit|from|to|payment|transaction|txn|ref|reference)\b/g, " ")
+    .replace(/\s+/g, " ")
     .trim();
 }
 
@@ -1381,7 +1381,7 @@ function findTransferCounterpart(input) {
       }
     }
 
-    if (/\\b(?:transfer|trf|nip)\\b/i.test(combinedText)) {
+    if (/\b(?:transfer|trf|nip)\b/i.test(combinedText)) {
       score += 0.08;
       reasons.push("transfer language");
     }
@@ -1678,7 +1678,7 @@ function renderFullViews() {
   const activityEl = $("activityFullList");
   if (activityEl) activityEl.innerHTML = state.transactions.slice().sort((a,b)=>b.createdAt-a.createdAt).filter(t => {
     const s = `${transactionLabel(t)} ${t.note} ${t.date} ${t.status} ${t.type} ${account(t.sourceAccountId)?.name || ""} ${account(t.destinationAccountId)?.name || ""}`.toLowerCase();
-    return reviewOnly ? t.status === "needs_review" : s.includes(activitySearch);
+    return reviewOnly ? t.status === "needs_review" : t.status !== "superseded" && s.includes(activitySearch);
   }).map(t => {
     const source = account(t.sourceAccountId), dest = account(t.destinationAccountId);
     const direction = transactionDirection(t);
@@ -2230,7 +2230,7 @@ function renderStatementPreview() {
   const valid = rows.filter(row => !row.invalid);
   const invalid = rows.filter(row => row.invalid);
   const duplicateCount = valid.filter(row => {
-    const fingerprint = [row.accountId,row.date,row.signedAmount.toFixed(2),row.description.toLowerCase().replace(/\\s+/g," ").trim(),row.reference.toLowerCase().trim()].join("|");
+    const fingerprint = [row.accountId,row.date,row.signedAmount.toFixed(2),row.description.toLowerCase().replace(/\s+/g," ").trim(),row.reference.toLowerCase().trim()].join("|");
     return state.transactions.some(t => (t.external?.provider === "statement_import" || t.external?.provider === "statement_csv") && t.external.providerTransactionId === fingerprint);
   }).length;
   $("statementImportSummary").innerHTML = '<strong>' + valid.length + ' valid</strong> · ' + duplicateCount + ' duplicate' + (duplicateCount === 1 ? "" : "s") + ' · ' + invalid.length + ' invalid';
