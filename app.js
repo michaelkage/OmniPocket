@@ -615,13 +615,14 @@ function previewStatementImportObjects(parsed, accountId, mapping = {}) {
     if (!signed) return {rowNumber:index+2, invalid:true, reason:"Missing or zero amount", description};
     const suggestion = suggestTransactionCategory({ description, reference });
     const handling = suggestTransactionHandling({ accountId: accountTarget.id, description, reference, signedAmount: signed });
-    return {rowNumber:index+2,date,description,reference,signedAmount:signed,type:signed>0?"income":"expense",currency:accountTarget.currency,accountId:accountTarget.id,suggestedCategory:suggestion?.category||null,categoryConfidence:suggestion?.confidence??null,categoryReason:suggestion?.reason||"",suggestedType:handling?.type||null,suggestedSourceAccountId:handling?.suggestedSourceAccountId||null,suggestedDestinationAccountId:handling?.destinationAccountId||null,handlingConfidence:handling?.confidence??null,handlingReason:handling?.reason||""};
+    const pair = findTransferCounterpart({ id: "preview-" + index, type: signed > 0 ? "income" : "expense", sourceAccountId: accountTarget.id, amount: Math.abs(signed), currency: accountTarget.currency, date, description, reference, external: { provider: "statement_import" } });
+    return {rowNumber:index+2,date,description,reference,signedAmount:signed,type:signed>0?"income":"expense",currency:accountTarget.currency,accountId:accountTarget.id,suggestedCategory:suggestion?.category||null,categoryConfidence:suggestion?.confidence??null,categoryReason:suggestion?.reason||"",suggestedType:handling?.type||null,suggestedSourceAccountId:handling?.suggestedSourceAccountId||null,suggestedDestinationAccountId:handling?.destinationAccountId||null,handlingConfidence:handling?.confidence??null,handlingReason:handling?.reason||"",suggestedPairTransactionId:pair?.transactionId||null,suggestedPairCandidates:pair?.candidates?.map(candidate=>candidate.transactionId)||[],suggestedPairCandidateMeta:Object.fromEntries((pair?.candidates||[]).map(candidate=>[candidate.transactionId,{confidence:candidate.confidence,reason:candidate.reason}])),suggestedPairConfidence:pair?.confidence??null,suggestedPairReason:pair?.reason||""};
   });
   const analyzedRows = rows.filter(row => !row.invalid);
   const previewFingerprint = row => [row.accountId,row.date,row.signedAmount.toFixed(2),row.description.toLowerCase().replace(/\s+/g," ").trim(),row.reference.toLowerCase().trim()].join("|");
   const duplicateRows = analyzedRows.filter(row => state.transactions.some(t => (t.external?.provider === "statement_import" || t.external?.provider === "statement_csv") && t.external.providerTransactionId === previewFingerprint(row)));
   const transferRows = analyzedRows.filter(row => row.suggestedType === "transfer");
-  const ambiguousTransferRows = transferRows.filter(row => !row.suggestedDestinationAccountId || !row.suggestedSourceAccountId || (row.suggestedPairCandidates?.length > 1));
+  const ambiguousTransferRows = transferRows.filter(row => (row.suggestedPairCandidates?.length > 1) || (!row.suggestedPairTransactionId && row.suggestedType === "transfer"));
   return {headers,rows,account:accountTarget,mapping:{date:dateCol,description:descCol,reference:refCol,amount:amountCol,debit:debitCol,credit:creditCol},stats:{valid:analyzedRows.length,invalid:rows.length-analyzedRows.length,duplicates:duplicateRows.length,likelyTransfers:transferRows.length,ambiguousTransfers:ambiguousTransferRows.length}};
 }
 
@@ -645,6 +646,11 @@ function importStatementRows(rows) {
       suggestedType: row.suggestedType,
       suggestedSourceAccountId: row.suggestedSourceAccountId,
       suggestedDestinationAccountId: row.suggestedDestinationAccountId,
+      suggestedPairTransactionId: row.suggestedPairTransactionId,
+      suggestedPairCandidates: row.suggestedPairCandidates,
+      suggestedPairCandidateMeta: row.suggestedPairCandidateMeta,
+      suggestedPairConfidence: row.suggestedPairConfidence,
+      suggestedPairReason: row.suggestedPairReason,
       handlingConfidence: row.handlingConfidence,
       handlingReason: row.handlingReason,
       category: row.type === "income" ? "Imported income" : "Other",
