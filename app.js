@@ -621,6 +621,8 @@ function previewStatementImportObjects(parsed, accountId, mapping = {}) {
   const analyzedRows = rows.filter(row => !row.invalid);
   const previewFingerprint = row => [row.accountId,row.date,row.signedAmount.toFixed(2),row.description.toLowerCase().replace(/\s+/g," ").trim(),row.reference.toLowerCase().trim()].join("|");
   const duplicateRows = analyzedRows.filter(row => state.transactions.some(t => (t.external?.provider === "statement_import" || t.external?.provider === "statement_csv") && t.external.providerTransactionId === previewFingerprint(row)));
+  const duplicateFingerprints = new Set(duplicateRows.map(previewFingerprint));
+  analyzedRows.forEach(row => { row.isDuplicate = duplicateFingerprints.has(previewFingerprint(row)); });
   const transferRows = analyzedRows.filter(row => row.suggestedType === "transfer");
   const ambiguousTransferRows = transferRows.filter(row => (row.suggestedPairCandidates?.length > 1) || (!row.suggestedPairTransactionId && row.suggestedType === "transfer"));
   return {headers,rows,account:accountTarget,mapping:{date:dateCol,description:descCol,reference:refCol,amount:amountCol,debit:debitCol,credit:creditCol},stats:{valid:analyzedRows.length,invalid:rows.length-analyzedRows.length,duplicates:duplicateRows.length,likelyTransfers:transferRows.length,ambiguousTransfers:ambiguousTransferRows.length}};
@@ -2245,6 +2247,7 @@ $("exportButton")?.addEventListener("click", () => {
 });
 
 let pendingStatementImport = null;
+let statementPreviewFilter = "all";
 
 function statementMapping() {
   return {
@@ -2288,33 +2291,103 @@ function renderStatementMapping(headers) {
   p.hidden = false;
 }
 
+function statementPreviewRowsForFilter(preview) {
+  const rows = preview?.rows || [];
+  switch (statementPreviewFilter) {
+    case "transfer": return rows.filter(row => !row.invalid && row.suggestedType === "transfer");
+    case "ambiguous": return rows.filter(row => !row.invalid && row.suggestedType === "transfer" && (!row.suggestedPairTransactionId || (row.suggestedPairCandidates?.length || 0) > 1));
+    case "duplicate": return rows.filter(row => row.isDuplicate);
+    case "invalid": return rows.filter(row => row.invalid);
+    default: return rows;
+  }
+}
+
 function renderStatementPreview() {
   const preview = pendingStatementImport?.preview;
   if (!preview) return;
-  const rows = preview.rows;
+  const rows = preview.rows || [];
   const valid = rows.filter(row => !row.invalid);
-  const invalid = rows.filter(row => row.invalid);
-  const duplicateCount = valid.filter(row => {
-    const fingerprint = [row.accountId,row.date,row.signedAmount.toFixed(2),row.description.toLowerCase().replace(/\s+/g," ").trim(),row.reference.toLowerCase().trim()].join("|");
-    return state.transactions.some(t => (t.external?.provider === "statement_import" || t.external?.provider === "statement_csv") && t.external.providerTransactionId === fingerprint);
-  }).length;
-  const stats = preview.stats || { valid: valid.length, invalid: invalid.length, duplicates: duplicateCount, likelyTransfers: valid.filter(row => row.suggestedType === "transfer").length, ambiguousTransfers: 0 };
+  const duplicateRows = valid.filter(row => row.isDuplicate);
+  const stats = preview.stats || {
+    valid: valid.length,
+    invalid: rows.filter(row => row.invalid).length,
+    duplicates: duplicateRows.length,
+    likelyTransfers: valid.filter(row => row.suggestedType === "transfer").length,
+    ambiguousTransfers: valid.filter(row => row.suggestedType === "transfer" && (!row.suggestedPairTransactionId || (row.suggestedPairCandidates?.length || 0) > 1)).length
+  };
+  const filterRows = statementPreviewRowsForFilter(preview);
+  const filterLabels = [["all","All",rows.length],["transfer","Likely transfers",stats.likelyTransfers],["ambiguous","Ambiguous",stats.ambiguousTransfers],["duplicate","Duplicates",stats.duplicates],["invalid","Invalid",stats.invalid]];
+  const filteredLabel = filterLabels.find(item => item[0] === statementPreviewFilter)?.[1] || "All";
+  const filters = '<div class="statement-preview-filters" role="toolbar" aria-label="Statement preview filters">' +
+    filterLabels.map(([key,label,count]) => '<button type="button" class="statement-preview-filter' + (statementPreviewFilter === key ? ' is-active' : '') + '" data-statement-preview-filter="' + key + '">' + escapeHtml(label) + ' <span>' + count + '</span></button>').join("") +
+    '</div>';
+  const batchActions = '<div class="statement-batch-analysis"><div class="statement-batch-analysis-head"><div><span class="eyebrow">BATCH ANALYSIS</span><strong>Review before importing</strong><span class="muted">Imported rows stay in the review queue until you record them.</span></div><span class="statement-batch-count">' + filterRows.length + ' shown</span></div>' +
+    '<div class="statement-batch-metrics">' +
+      '<button type="button" data-statement-preview-filter="transfer"><strong>' + stats.likelyTransfers + '</strong><span>likely transfers</span></button>' +
+      '<button type="button" data-statement-preview-filter="ambiguous"><strong>' + stats.ambiguousTransfers + '</strong><span>ambiguous</span></button>' +
+      '<button type="button" data-statement-preview-filter="duplicate"><strong>' + stats.duplicates + '</strong><span>probable duplicates</span></button>' +
+      '<button type="button" data-statement-preview-filter="invalid"><strong>' + stats.invalid + '</strong><span>invalid rows</span></button>' +
+    '</div><div class="statement-batch-action-row">' +
+      (stats.ambiguousTransfers ? '<button type="button" class="secondary" data-statement-preview-filter="ambiguous">Review ambiguous transfers</button>' : '') +
+      (stats.duplicates ? '<button type="button" class="secondary" data-statement-preview-filter="duplicate">Review duplicates</button>' : '') +
+      (stats.invalid ? '<button type="button" class="secondary" data-statement-preview-filter="invalid">Show invalid rows</button>' : '') +
+      (statementPreviewFilter !== "all" ? '<button type="button" class="text-button" data-statement-preview-filter="all">Show all rows</button>' : '') +
+    '</div></div>';
+
   $("statementImportSummary").innerHTML = '<strong>' + stats.valid + ' valid</strong> · ' + stats.duplicates + ' duplicate' + (stats.duplicates === 1 ? "" : "s") + ' · ' + stats.invalid + ' invalid' +
     (stats.likelyTransfers ? ' · <strong>' + stats.likelyTransfers + ' likely transfer' + (stats.likelyTransfers === 1 ? "" : "s") + '</strong>' : '') +
     (stats.ambiguousTransfers ? ' · <strong>' + stats.ambiguousTransfers + ' need transfer review</strong>' : '');
-  $("statementImportPreview").innerHTML = '<div class="statement-import-preview">' +
-    rows.slice(0,12).map(row => '<div class="statement-import-row ' + (row.invalid ? 'statement-import-invalid' : '') + '"><span><strong>' + escapeHtml(row.date || ("Row " + row.rowNumber)) + '</strong><small>' + escapeHtml(row.description || row.reason || "No description") + '</small>' + (row.suggestedCategory ? '<small>Category: ' + escapeHtml(row.suggestedCategory) + ' · ' + Math.round((Number(row.categoryConfidence) || 0) * 100) + '%</small>' : '') + (row.suggestedType === 'transfer' ? '<small>Handling: likely transfer' + (row.suggestedDestinationAccountId ? ' · matched account' : ' · destination needs review') + ' · ' + Math.round((Number(row.handlingConfidence) || 0) * 100) + '%</small>' : '') + '</span><strong>' + (row.invalid ? escapeHtml(row.reason) : escapeHtml((row.signedAmount > 0 ? "+" : "−") + money(Math.abs(row.signedAmount), row.currency))) + '</strong></div>').join("") +
-    '</div>' + (rows.length > 12 ? '<div class="muted">Showing first 12 of ' + rows.length + ' rows.</div>' : "");
-  const transferRows = rows.filter(row => !row.invalid && row.suggestedType === "transfer");
-  const ambiguous = rows.filter(row => !row.invalid && row.suggestedType === "transfer" && !row.suggestedDestinationAccountId);
+
+  const visibleRows = filterRows.slice(0,12);
+  $("statementImportPreview").innerHTML = batchActions + filters +
+    '<div class="statement-preview-filter-label">' + escapeHtml(filteredLabel) + ' · ' + filterRows.length + ' row' + (filterRows.length === 1 ? "" : "s") + '</div>' +
+    '<div class="statement-import-preview">' +
+    (visibleRows.length ? visibleRows.map(row => {
+      const candidateIds = row.suggestedPairCandidates || [];
+      const candidateHtml = row.suggestedType === "transfer" && candidateIds.length ? '<div class="statement-transfer-candidates"><span class="eyebrow">TRANSFER MATCHES</span>' +
+        candidateIds.slice(0,4).map(id => {
+          const candidate = state.transactions.find(t => t.id === id);
+          const confidence = Number(row.suggestedPairCandidateMeta?.[id]?.confidence ?? (id === row.suggestedPairTransactionId ? row.suggestedPairConfidence : 0)) || 0;
+          const reason = row.suggestedPairCandidateMeta?.[id]?.reason || "Possible transfer match";
+          const candidateAccount = candidate ? account(candidate.sourceAccountId)?.name || "Unknown account" : "Possible match";
+          const candidateMeta = candidate ? candidate.date + " · " + money(candidate.amount,candidate.currency) : "Candidate no longer available";
+          return '<button type="button" class="statement-transfer-candidate' + (id === row.suggestedPairTransactionId ? ' is-selected' : '') + '" data-transaction-from-statement="' + escapeHtml(id) + '"><span><strong>' + escapeHtml(candidateAccount) + '</strong><small>' + escapeHtml(candidateMeta) + '</small><small>' + escapeHtml(reason) + '</small></span><strong>' + Math.round(confidence * 100) + '%</strong></button>';
+        }).join("") + (candidateIds.length > 4 ? '<small class="muted">+' + (candidateIds.length - 4) + ' more candidates</small>' : '') + '</div>' : "";
+      const bits = [];
+      if (row.suggestedCategory) bits.push('Category: ' + escapeHtml(row.suggestedCategory) + ' · ' + Math.round((Number(row.categoryConfidence) || 0) * 100) + '%');
+      if (row.suggestedType === "transfer") bits.push('Handling: likely transfer' + (row.suggestedDestinationAccountId ? ' · matched account' : ' · destination needs review') + ' · ' + Math.round((Number(row.handlingConfidence) || 0) * 100) + '%');
+      if (row.isDuplicate) bits.push('Probable duplicate — already imported');
+      return '<div class="statement-import-row ' + (row.invalid ? 'statement-import-invalid ' : '') + (row.isDuplicate ? 'statement-import-duplicate' : '') + '"><span><strong>' + escapeHtml(row.date || ("Row " + row.rowNumber)) + '</strong><small>' + escapeHtml(row.description || row.reason || "No description") + '</small>' + bits.map(bit => '<small>' + bit + '</small>').join("") + candidateHtml + '</span><strong>' + (row.invalid ? escapeHtml(row.reason) : escapeHtml((row.signedAmount > 0 ? "+" : "−") + money(Math.abs(row.signedAmount),row.currency))) + '</strong></div>';
+    }).join("") : '<div class="empty-state">No rows match this filter.</div>') +
+    '</div>' + (filterRows.length > 12 ? '<div class="muted">Showing first 12 of ' + filterRows.length + ' rows.</div>' : '');
   $("statementImportConfirm").disabled = !valid.length;
 }
+
+
+$("statementImportPreview")?.addEventListener("click", event => {
+  const filterButton = event.target.closest("[data-statement-preview-filter]");
+  if (filterButton) {
+    statementPreviewFilter = filterButton.dataset.statementPreviewFilter || "all";
+    renderStatementPreview();
+    return;
+  }
+  const candidateButton = event.target.closest("[data-transaction-from-statement]");
+  if (candidateButton) {
+    const candidateId = candidateButton.dataset.transactionFromStatement;
+    const candidate = state.transactions.find(t => t.id === candidateId);
+    if (candidate) {
+      selectTransactionContext(candidateId);
+      openTransactionDetail(candidateId);
+    }
+  }
+});
 
 $("statementImportButton")?.addEventListener("click", () => {
   const active = state.accounts.filter(a => !a.archived);
   if (!active.length) return alert("Add an account before importing a statement.");
   $("statementImportAccount").innerHTML = active.map(a => '<option value="' + escapeHtml(a.id) + '">' + escapeHtml(a.name) + ' · ' + escapeHtml(a.currency) + '</option>').join("");
   pendingStatementImport = null;
+  statementPreviewFilter = "all";
   $("statementMappingPanel").hidden = true;
   $("statementImportSummary").textContent = "Choose an account and statement file.";
   $("statementImportPreview").innerHTML = "";
