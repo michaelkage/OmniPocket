@@ -126,6 +126,10 @@ function migrateState(raw) {
     categoryReason: String(t.categoryReason || ""),
     suggestedType: ["income","expense","transfer","withdrawal","adjustment"].includes(t.suggestedType) ? t.suggestedType : null,
     suggestedSourceAccountId: t.suggestedSourceAccountId || null,
+    suggestedPairTransactionId: t.suggestedPairTransactionId || null,
+    suggestedPairConfidence: Number.isFinite(Number(t.suggestedPairConfidence)) ? Number(t.suggestedPairConfidence) : null,
+    suggestedPairReason: String(t.suggestedPairReason || ""),
+    pairedTransactionId: t.pairedTransactionId || null,
     suggestedDestinationAccountId: t.suggestedDestinationAccountId || null,
     handlingConfidence: Number.isFinite(Number(t.handlingConfidence)) ? Number(t.handlingConfidence) : null,
     handlingReason: String(t.handlingReason || ""),
@@ -368,6 +372,28 @@ function openTransactionDetail(id) {
     } else {
       handlingWrap.hidden = true;
       handlingBox.textContent = "";
+    }
+  }
+  const pair = account(t.sourceAccountId) && t.suggestedPairTransactionId
+    ? state.transactions.find(x => x.id === t.suggestedPairTransactionId)
+    : null;
+  const pairWrap = $("transactionPairSection");
+  const pairBox = $("transactionPair");
+  const pairButton = $("transactionAcceptPair");
+  if (pairWrap && pairBox && pairButton) {
+    if (pair) {
+      const pairAccount = account(pair.sourceAccountId);
+      pairWrap.hidden = false;
+      pairBox.innerHTML = "<strong>Possible matching transfer leg</strong> · " +
+        Math.round((Number(t.suggestedPairConfidence) || 0) * 100) + "% confidence" +
+        "<div style=\"margin-top:4px\">" + escapeHtml(pairAccount?.name || "Another account") +
+        " · " + escapeHtml(money(pair.amount, pair.currency)) + " · " + escapeHtml(pair.date) + "</div>" +
+        (t.suggestedPairReason ? "<div class=\"muted\" style=\"margin-top:4px\">" + escapeHtml(t.suggestedPairReason) + "</div>" : "");
+      pairButton.textContent = "Merge as transfer";
+      pairButton.disabled = false;
+    } else {
+      pairWrap.hidden = true;
+      pairBox.textContent = "";
     }
   }
   const linkedGoals = state.goals.filter(g => (t.linkedGoalIds || []).includes(g.id));
@@ -1253,6 +1279,38 @@ function findImportedTransaction(external) {
   return state.transactions.find(t => transactionExternalKey(t.external) === key) || null;
 }
 
+function findTransferCounterpart(input) {
+  const amount = Math.abs(Number(input.amount) || 0);
+  if (!amount || !input.sourceAccountId) return null;
+  const source = account(input.sourceAccountId);
+  if (!source) return null;
+  const targetDate = new Date(String(input.date || today()) + "T00:00:00");
+  let best = null;
+  for (const tx of state.transactions) {
+    if (tx.status !== "needs_review" || tx.id === input.id || tx.pairedTransactionId) continue;
+    if (tx.type !== "income" && tx.type !== "expense") continue;
+    const other = account(tx.sourceAccountId);
+    if (!other || other.id === source.id) continue;
+    if (Math.abs(Math.abs(Number(tx.amount) || 0) - amount) > Math.max(0.01, amount * 0.005)) continue;
+    const txDate = new Date(String(tx.date || "") + "T00:00:00");
+    const dayGap = Math.abs(targetDate - txDate) / 86400000;
+    if (dayGap > 2) continue;
+    const text = String([input.description, input.reference, tx.description, tx.reference].filter(Boolean).join(" ")).toLowerCase();
+    let score = 0.72 - dayGap * 0.08;
+    if (input.type === "income" && tx.type === "expense") score += 0.1;
+    if (input.type === "expense" && tx.type === "income") score += 0.1;
+    if (source.currency === tx.currency) score += 0.05;
+    if (/transfer|trf|nip/.test(text)) score += 0.05;
+    if (score > (best?.score || 0)) best = { transaction: tx, score };
+  }
+  if (!best || best.score < 0.8) return null;
+  return {
+    transactionId: best.transaction.id,
+    confidence: Math.min(0.98, best.score),
+    reason: "Matched opposite money movement by amount, date, and transfer language"
+  };
+}
+
 function importTransaction(input, options = {}) {
   const handling = input.suggestedType ? { type: input.suggestedType, suggestedSourceAccountId: input.suggestedSourceAccountId || null, destinationAccountId: input.suggestedDestinationAccountId || null, confidence: input.handlingConfidence, reason: input.handlingReason } : suggestTransactionHandling(input);
   const suggestion = input.suggestedCategory
@@ -1279,6 +1337,11 @@ function importTransaction(input, options = {}) {
     if (options.updateExisting && input.note) existing.note = input.note;
     return { transaction: existing, duplicate: true };
   }
+  const pair = input.suggestedPairTransactionId ? {
+    transactionId: input.suggestedPairTransactionId,
+    confidence: input.suggestedPairConfidence,
+    reason: input.suggestedPairReason
+  } : findTransferCounterpart(input);
   const transaction = addTransaction({
     ...input,
     category,
@@ -1287,6 +1350,9 @@ function importTransaction(input, options = {}) {
     categoryReason: suggestion?.reason || "",
     suggestedType: handling?.type || null,
     suggestedDestinationAccountId: handling?.destinationAccountId || null,
+    suggestedPairTransactionId: pair?.transactionId || null,
+    suggestedPairConfidence: pair?.confidence ?? null,
+    suggestedPairReason: pair?.reason || "",
     handlingConfidence: handling?.confidence ?? null,
     handlingReason: handling?.reason || "",
     status: input.status || 'needs_review',
@@ -1315,6 +1381,10 @@ function addTransaction(input) {
     categoryReason: input.categoryReason || "",
     suggestedType: ["income","expense","transfer","withdrawal","adjustment"].includes(input.suggestedType) ? input.suggestedType : null,
     suggestedSourceAccountId: input.suggestedSourceAccountId || null,
+    suggestedPairTransactionId: input.suggestedPairTransactionId || null,
+    suggestedPairConfidence: Number.isFinite(Number(input.suggestedPairConfidence)) ? Number(input.suggestedPairConfidence) : null,
+    suggestedPairReason: input.suggestedPairReason || "",
+    pairedTransactionId: input.pairedTransactionId || null,
     suggestedDestinationAccountId: input.suggestedDestinationAccountId || null,
     handlingConfidence: Number.isFinite(Number(input.handlingConfidence)) ? Number(input.handlingConfidence) : null,
     handlingReason: input.handlingReason || "",
@@ -1586,6 +1656,40 @@ $("transactionAcceptSuggestion")?.addEventListener("click", () => {
   t.suggestedCategory = null;
   t.categoryConfidence = null;
   t.categoryReason = "";
+  saveState();
+  openTransactionDetail(t.id);
+});
+
+$("transactionAcceptPair")?.addEventListener("click", () => {
+  const t = state.transactions.find(x => x.id === $("transactionDialog").dataset.transactionId);
+  const pair = state.transactions.find(x => x.id === t?.suggestedPairTransactionId);
+  if (!t || !pair) return;
+  const sourceTx = t.type === "expense" ? t : pair;
+  const destinationTx = t.type === "income" ? t : pair;
+  const source = account(sourceTx.sourceAccountId);
+  const destination = account(destinationTx.sourceAccountId);
+  if (!source || !destination || source.id === destination.id) return;
+  t.type = "transfer";
+  t.sourceAccountId = source.id;
+  t.destinationAccountId = destination.id;
+  t.amount = Math.abs(Number(sourceTx.amount) || 0);
+  t.currency = sourceTx.currency;
+  t.category = "Bank transfer";
+  t.status = "recorded";
+  t.suggestedPairTransactionId = null;
+  t.suggestedPairConfidence = null;
+  t.suggestedPairReason = "";
+  t.pairedTransactionId = pair.id;
+  t.suggestedType = null;
+  t.suggestedSourceAccountId = null;
+  t.suggestedDestinationAccountId = null;
+  pair.status = "superseded";
+  pair.pairedTransactionId = t.id;
+  pair.suggestedPairTransactionId = null;
+  pair.suggestedType = null;
+  pair.suggestedSourceAccountId = null;
+  pair.suggestedDestinationAccountId = null;
+  rebuildBalances();
   saveState();
   openTransactionDetail(t.id);
 });
