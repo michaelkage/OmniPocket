@@ -617,7 +617,12 @@ function previewStatementImportObjects(parsed, accountId, mapping = {}) {
     const handling = suggestTransactionHandling({ accountId: accountTarget.id, description, reference, signedAmount: signed });
     return {rowNumber:index+2,date,description,reference,signedAmount:signed,type:signed>0?"income":"expense",currency:accountTarget.currency,accountId:accountTarget.id,suggestedCategory:suggestion?.category||null,categoryConfidence:suggestion?.confidence??null,categoryReason:suggestion?.reason||"",suggestedType:handling?.type||null,suggestedSourceAccountId:handling?.suggestedSourceAccountId||null,suggestedDestinationAccountId:handling?.destinationAccountId||null,handlingConfidence:handling?.confidence??null,handlingReason:handling?.reason||""};
   });
-  return {headers,rows,account:accountTarget,mapping:{date:dateCol,description:descCol,reference:refCol,amount:amountCol,debit:debitCol,credit:creditCol}};
+  const analyzedRows = rows.filter(row => !row.invalid);
+  const previewFingerprint = row => [row.accountId,row.date,row.signedAmount.toFixed(2),row.description.toLowerCase().replace(/\s+/g," ").trim(),row.reference.toLowerCase().trim()].join("|");
+  const duplicateRows = analyzedRows.filter(row => state.transactions.some(t => (t.external?.provider === "statement_import" || t.external?.provider === "statement_csv") && t.external.providerTransactionId === previewFingerprint(row)));
+  const transferRows = analyzedRows.filter(row => row.suggestedType === "transfer");
+  const ambiguousTransferRows = transferRows.filter(row => !row.suggestedDestinationAccountId || !row.suggestedSourceAccountId || (row.suggestedPairCandidates?.length > 1));
+  return {headers,rows,account:accountTarget,mapping:{date:dateCol,description:descCol,reference:refCol,amount:amountCol,debit:debitCol,credit:creditCol},stats:{valid:analyzedRows.length,invalid:rows.length-analyzedRows.length,duplicates:duplicateRows.length,likelyTransfers:transferRows.length,ambiguousTransfers:ambiguousTransferRows.length}};
 }
 
 function importStatementRows(rows) {
@@ -819,7 +824,7 @@ function renderDashboard() {
 function integrationSettings() {
   const settings = state.settings.integrations || {};
   return {
-    supabaseUrl: String(settings.supabaseUrl || localStorage.getItem("omnipocket.supabaseUrl") || "").replace(/\\/$/, ""),
+    supabaseUrl: String(settings.supabaseUrl || localStorage.getItem("omnipocket.supabaseUrl") || "").replace(/\/$/, ""),
     monoPublicKey: String(settings.monoPublicKey || localStorage.getItem("omnipocket.monoPublicKey") || "")
   };
 }
@@ -830,7 +835,7 @@ function configureBankIntegration() {
   if (!supabaseUrl) return null;
   const monoPublicKey = prompt("Mono public key (test_pk_... for sandbox or live_pk_... for production):", current.monoPublicKey);
   if (!monoPublicKey) return null;
-  state.settings.integrations = { supabaseUrl: supabaseUrl.trim().replace(/\\/$/, ""), monoPublicKey: monoPublicKey.trim() };
+  state.settings.integrations = { supabaseUrl: supabaseUrl.trim().replace(/\/$/, ""), monoPublicKey: monoPublicKey.trim() };
   localStorage.setItem("omnipocket.supabaseUrl", state.settings.integrations.supabaseUrl);
   localStorage.setItem("omnipocket.monoPublicKey", state.settings.integrations.monoPublicKey);
   saveState();
@@ -2287,10 +2292,15 @@ function renderStatementPreview() {
     const fingerprint = [row.accountId,row.date,row.signedAmount.toFixed(2),row.description.toLowerCase().replace(/\s+/g," ").trim(),row.reference.toLowerCase().trim()].join("|");
     return state.transactions.some(t => (t.external?.provider === "statement_import" || t.external?.provider === "statement_csv") && t.external.providerTransactionId === fingerprint);
   }).length;
-  $("statementImportSummary").innerHTML = '<strong>' + valid.length + ' valid</strong> · ' + duplicateCount + ' duplicate' + (duplicateCount === 1 ? "" : "s") + ' · ' + invalid.length + ' invalid';
+  const stats = preview.stats || { valid: valid.length, invalid: invalid.length, duplicates: duplicateCount, likelyTransfers: valid.filter(row => row.suggestedType === "transfer").length, ambiguousTransfers: 0 };
+  $("statementImportSummary").innerHTML = '<strong>' + stats.valid + ' valid</strong> · ' + stats.duplicates + ' duplicate' + (stats.duplicates === 1 ? "" : "s") + ' · ' + stats.invalid + ' invalid' +
+    (stats.likelyTransfers ? ' · <strong>' + stats.likelyTransfers + ' likely transfer' + (stats.likelyTransfers === 1 ? "" : "s") + '</strong>' : '') +
+    (stats.ambiguousTransfers ? ' · <strong>' + stats.ambiguousTransfers + ' need transfer review</strong>' : '');
   $("statementImportPreview").innerHTML = '<div class="statement-import-preview">' +
     rows.slice(0,12).map(row => '<div class="statement-import-row ' + (row.invalid ? 'statement-import-invalid' : '') + '"><span><strong>' + escapeHtml(row.date || ("Row " + row.rowNumber)) + '</strong><small>' + escapeHtml(row.description || row.reason || "No description") + '</small>' + (row.suggestedCategory ? '<small>Category: ' + escapeHtml(row.suggestedCategory) + ' · ' + Math.round((Number(row.categoryConfidence) || 0) * 100) + '%</small>' : '') + (row.suggestedType === 'transfer' ? '<small>Handling: likely transfer' + (row.suggestedDestinationAccountId ? ' · matched account' : ' · destination needs review') + ' · ' + Math.round((Number(row.handlingConfidence) || 0) * 100) + '%</small>' : '') + '</span><strong>' + (row.invalid ? escapeHtml(row.reason) : escapeHtml((row.signedAmount > 0 ? "+" : "−") + money(Math.abs(row.signedAmount), row.currency))) + '</strong></div>').join("") +
     '</div>' + (rows.length > 12 ? '<div class="muted">Showing first 12 of ' + rows.length + ' rows.</div>' : "");
+  const transferRows = rows.filter(row => !row.invalid && row.suggestedType === "transfer");
+  const ambiguous = rows.filter(row => !row.invalid && row.suggestedType === "transfer" && !row.suggestedDestinationAccountId);
   $("statementImportConfirm").disabled = !valid.length;
 }
 
