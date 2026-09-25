@@ -108,7 +108,7 @@ function migrateState(raw) {
   next.transactions = Array.isArray(raw.transactions) ? raw.transactions.map(t => ({
     id: t.id || uid(),
     type: TX_TYPES.includes(t.type) ? t.type : "adjustment",
-    status: t.status === "needs_review" ? "needs_review" : "recorded",
+    status: t.status === "needs_review" ? "needs_review" : (t.status === "superseded" ? "superseded" : "recorded"),
     adjustmentSign: t.adjustmentSign === -1 ? -1 : (t.adjustmentSign === 1 ? 1 : (String(t.category || "").toLowerCase().includes("decrease") ? -1 : 1)),
     date: t.date || today(),
     createdAt: Number(t.createdAt) || Date.now(),
@@ -1279,36 +1279,159 @@ function findImportedTransaction(external) {
   return state.transactions.find(t => transactionExternalKey(t.external) === key) || null;
 }
 
+function normalizeTransferText(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\\b(?:transfer|trf|nip|inward|outward|credit|debit|from|to|payment|transaction|txn|ref|reference)\\b/g, " ")
+    .replace(/\\s+/g, " ")
+    .trim();
+}
+
+function normalizedReference(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "")
+    .trim();
+}
+
+function accountAliases(a) {
+  if (!a) return [];
+  const values = [a.name, a.institution];
+  return [...new Set(values.flatMap(value => {
+    const normalized = normalizeTransferText(value);
+    return normalized ? [normalized, ...normalized.split(" ").filter(part => part.length >= 4)] : [];
+  }))];
+}
+
 function findTransferCounterpart(input) {
   const amount = Math.abs(Number(input.amount) || 0);
   if (!amount || !input.sourceAccountId) return null;
   const source = account(input.sourceAccountId);
   if (!source) return null;
+
   const targetDate = new Date(String(input.date || today()) + "T00:00:00");
-  let best = null;
+  const inputReference = normalizedReference(input.reference);
+  const inputText = normalizeTransferText([input.description, input.note, input.reference].filter(Boolean).join(" "));
+  const sourceAliases = accountAliases(source);
+  const candidates = [];
+
   for (const tx of state.transactions) {
     if (tx.status !== "needs_review" || tx.id === input.id || tx.pairedTransactionId) continue;
     if (tx.type !== "income" && tx.type !== "expense") continue;
+    if (input.type !== "income" && input.type !== "expense") continue;
+    if (tx.type === input.type) continue;
+
     const other = account(tx.sourceAccountId);
-    if (!other || other.id === source.id) continue;
-    if (Math.abs(Math.abs(Number(tx.amount) || 0) - amount) > Math.max(0.01, amount * 0.005)) continue;
+    if (!other || other.id === source.id || other.archived) continue;
+
+    const otherAmount = Math.abs(Number(tx.amount) || 0);
+    if (!otherAmount) continue;
+
+    const amountDelta = Math.abs(otherAmount - amount);
+    const amountTolerance = Math.max(0.01, amount * 0.005);
+    if (amountDelta > amountTolerance) continue;
+
     const txDate = new Date(String(tx.date || "") + "T00:00:00");
     const dayGap = Math.abs(targetDate - txDate) / 86400000;
-    if (dayGap > 2) continue;
-    const text = String([input.description, input.reference, tx.description, tx.reference].filter(Boolean).join(" ")).toLowerCase();
-    let score = 0.72 - dayGap * 0.08;
-    if (input.type === "income" && tx.type === "expense") score += 0.1;
-    if (input.type === "expense" && tx.type === "income") score += 0.1;
-    if (source.currency === tx.currency) score += 0.05;
-    if (/transfer|trf|nip/.test(text)) score += 0.05;
-    if (score > (best?.score || 0)) best = { transaction: tx, score };
+    if (!Number.isFinite(dayGap) || dayGap > 2) continue;
+
+    const otherReference = normalizedReference(tx.reference);
+    const otherText = normalizeTransferText([tx.description, tx.note, tx.reference].filter(Boolean).join(" "));
+    const combinedText = inputText + " " + otherText;
+
+    let score = 0;
+    const reasons = [];
+
+    if (amountDelta < 0.000001) {
+      score += 0.28;
+      reasons.push("exact amount");
+    } else {
+      score += 0.18;
+      reasons.push("near amount");
+    }
+
+    if (dayGap === 0) {
+      score += 0.15;
+      reasons.push("same date");
+    } else if (dayGap <= 1) {
+      score += 0.10;
+      reasons.push("within 1 day");
+    } else {
+      score += 0.05;
+      reasons.push("within 2 days");
+    }
+
+    if (source.currency === tx.currency) {
+      score += 0.06;
+      reasons.push("same currency");
+    }
+
+    const exactReference = inputReference && otherReference && inputReference === otherReference;
+    if (exactReference) {
+      score += 0.42;
+      reasons.push("exact reference match");
+    } else if (inputReference && otherReference) {
+      const inputTokens = new Set(normalizeTransferText(input.reference).split(" ").filter(Boolean));
+      const otherTokens = new Set(normalizeTransferText(tx.reference).split(" ").filter(Boolean));
+      const overlap = [...inputTokens].filter(token => otherTokens.has(token) && token.length >= 4);
+      if (overlap.length) {
+        score += 0.16;
+        reasons.push("reference tokens overlap");
+      }
+    }
+
+    if (/\\b(?:transfer|trf|nip)\\b/i.test(combinedText)) {
+      score += 0.08;
+      reasons.push("transfer language");
+    }
+
+    const otherAliases = accountAliases(other);
+    const matchedAlias = [...new Set([...sourceAliases, ...otherAliases])]
+      .find(alias => alias.length >= 4 && combinedText.includes(alias));
+    if (matchedAlias) {
+      score += 0.08;
+      reasons.push("account name appears in narration");
+    }
+
+    if (input.external?.provider && tx.external?.provider && input.external.provider === tx.external.provider) {
+      score += 0.03;
+      reasons.push("same import source");
+    }
+
+    candidates.push({
+      transaction: tx,
+      score: Math.min(0.99, score),
+      exactReference,
+      reasons
+    });
   }
-  if (!best || best.score < 0.8) return null;
+
+  candidates.sort((a, b) => b.score - a.score);
+  const best = candidates[0];
+  const runnerUp = candidates[1];
+
+  if (!best || best.score < 0.78) return null;
+
+  // Never choose arbitrarily between two near-identical candidates unless a
+  // strong exact-reference match uniquely identifies the counterpart.
+  if (
+    runnerUp &&
+    !best.exactReference &&
+    Math.abs(best.score - runnerUp.score) < 0.08
+  ) {
+    return null;
+  }
+
   return {
     transactionId: best.transaction.id,
-    confidence: Math.min(0.98, best.score),
-    reason: "Matched opposite money movement by amount, date, and transfer language"
+    confidence: best.score,
+    reason: "Matched " + reasonsForTransferPair(best)
   };
+}
+
+function reasonsForTransferPair(candidate) {
+  return candidate.reasons.join(", ");
 }
 
 function importTransaction(input, options = {}) {
@@ -1664,16 +1787,34 @@ $("transactionAcceptPair")?.addEventListener("click", () => {
   const t = state.transactions.find(x => x.id === $("transactionDialog").dataset.transactionId);
   const pair = state.transactions.find(x => x.id === t?.suggestedPairTransactionId);
   if (!t || !pair) return;
+
+  // A transfer pair must be one outgoing leg and one incoming leg.
+  if (!["income", "expense"].includes(t.type) || !["income", "expense"].includes(pair.type) || t.type === pair.type) {
+    t.suggestedPairTransactionId = null;
+    t.suggestedPairConfidence = null;
+    t.suggestedPairReason = "";
+    saveState();
+    openTransactionDetail(t.id);
+    return;
+  }
+
   const sourceTx = t.type === "expense" ? t : pair;
   const destinationTx = t.type === "income" ? t : pair;
   const source = account(sourceTx.sourceAccountId);
   const destination = account(destinationTx.sourceAccountId);
   if (!source || !destination || source.id === destination.id) return;
+
   t.type = "transfer";
   t.sourceAccountId = source.id;
   t.destinationAccountId = destination.id;
   t.amount = Math.abs(Number(sourceTx.amount) || 0);
   t.currency = sourceTx.currency;
+  t.receivedAmount = Math.abs(Number(destinationTx.amount) || 0);
+  t.receivedCurrency = destinationTx.currency;
+  t.fxRate = t.currency === t.receivedCurrency
+    ? 1
+    : (t.receivedAmount && t.amount ? t.receivedAmount / t.amount : null);
+  t.fxSource = t.currency === t.receivedCurrency ? "matched_statement" : "matched_statement";
   t.category = "Bank transfer";
   t.status = "recorded";
   t.suggestedPairTransactionId = null;
@@ -1683,12 +1824,20 @@ $("transactionAcceptPair")?.addEventListener("click", () => {
   t.suggestedType = null;
   t.suggestedSourceAccountId = null;
   t.suggestedDestinationAccountId = null;
+  t.handlingConfidence = null;
+  t.handlingReason = "";
+
   pair.status = "superseded";
   pair.pairedTransactionId = t.id;
   pair.suggestedPairTransactionId = null;
+  pair.suggestedPairConfidence = null;
+  pair.suggestedPairReason = "";
   pair.suggestedType = null;
   pair.suggestedSourceAccountId = null;
   pair.suggestedDestinationAccountId = null;
+  pair.handlingConfidence = null;
+  pair.handlingReason = "";
+
   rebuildBalances();
   saveState();
   openTransactionDetail(t.id);
@@ -1732,6 +1881,16 @@ $("editTransactionForm")?.addEventListener("submit", event => {
   if (!(amount > 0) || !source) return alert("Enter a valid amount and account.");
   if ((type === "transfer" || type === "withdrawal") && (!destination || destination.id === source.id)) return alert("Choose a different destination.");
   if (type === "withdrawal" && destination.type !== "cash") return alert("Cash out must land in a Cash account.");
+  // Editing a paired transfer re-opens its superseded counterpart so the
+  // user does not leave the ledger with a permanently hidden orphan leg.
+  if (t.pairedTransactionId) {
+    const paired = state.transactions.find(x => x.id === t.pairedTransactionId);
+    if (paired) {
+      paired.status = "needs_review";
+      paired.pairedTransactionId = null;
+    }
+    t.pairedTransactionId = null;
+  }
   t.type = type;
   t.sourceAccountId = source.id;
   t.destinationAccountId = type === "transfer" || type === "withdrawal" ? destination.id : null;
