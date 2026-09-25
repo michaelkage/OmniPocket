@@ -125,6 +125,7 @@ function migrateState(raw) {
     categoryConfidence: Number.isFinite(Number(t.categoryConfidence)) ? Number(t.categoryConfidence) : null,
     categoryReason: String(t.categoryReason || ""),
     suggestedType: ["income","expense","transfer","withdrawal","adjustment"].includes(t.suggestedType) ? t.suggestedType : null,
+    suggestedSourceAccountId: t.suggestedSourceAccountId || null,
     suggestedDestinationAccountId: t.suggestedDestinationAccountId || null,
     handlingConfidence: Number.isFinite(Number(t.handlingConfidence)) ? Number(t.handlingConfidence) : null,
     handlingReason: String(t.handlingReason || ""),
@@ -350,13 +351,20 @@ function openTransactionDetail(id) {
   const handlingButton = $("transactionAcceptHandling");
   if (handlingWrap && handlingBox && handlingButton) {
     if (t.suggestedType === "transfer") {
-      const destination = account(t.suggestedDestinationAccountId);
+      const suggestedSource = account(t.suggestedSourceAccountId);
+      const suggestedDestination = account(t.suggestedDestinationAccountId);
+      const label = suggestedSource && suggestedDestination
+        ? suggestedSource.name + " → " + suggestedDestination.name
+        : suggestedDestination
+          ? "Matched destination: " + suggestedDestination.name
+          : "Transfer detected, destination not matched locally";
       handlingWrap.hidden = false;
-      handlingBox.innerHTML = "<strong>Likely transfer</strong> · " + Math.round((Number(t.handlingConfidence) || 0) * 100) + "% confidence" +
-        (destination ? "<div style="margin-top:4px">Matched destination: <strong>" + escapeHtml(destination.name) + "</strong></div>" : "<div class="muted" style="margin-top:4px">Destination not matched locally. Choose it before recording.</div>") +
-        (t.handlingReason ? "<div class="muted" style="margin-top:4px">" + escapeHtml(t.handlingReason) + "</div>" : "");
-      handlingButton.disabled = !destination;
-      handlingButton.textContent = destination ? "Accept transfer" : "Choose destination in Edit";
+      handlingBox.innerHTML = "<strong>Likely transfer</strong> · " +
+        Math.round((Number(t.handlingConfidence) || 0) * 100) + "% confidence" +
+        "<div style=\"margin-top:4px\">" + escapeHtml(label) + "</div>" +
+        (t.handlingReason ? "<div class=\"muted\" style=\"margin-top:4px\">" + escapeHtml(t.handlingReason) + "</div>" : "");
+      handlingButton.disabled = !(suggestedSource && suggestedDestination && suggestedSource.id !== suggestedDestination.id);
+      handlingButton.textContent = handlingButton.disabled ? "Choose destination in Edit" : "Accept transfer";
     } else {
       handlingWrap.hidden = true;
       handlingBox.textContent = "";
@@ -556,7 +564,7 @@ function previewStatementImportObjects(parsed, accountId, mapping = {}) {
     if (!signed) return {rowNumber:index+2, invalid:true, reason:"Missing or zero amount", description};
     const suggestion = suggestTransactionCategory({ description, reference });
     const handling = suggestTransactionHandling({ accountId: accountTarget.id, description, reference, signedAmount: signed });
-    return {rowNumber:index+2,date,description,reference,signedAmount:signed,type:signed>0?"income":"expense",currency:accountTarget.currency,accountId:accountTarget.id,suggestedCategory:suggestion?.category||null,categoryConfidence:suggestion?.confidence??null,categoryReason:suggestion?.reason||"",suggestedType:handling?.type||null,suggestedDestinationAccountId:handling?.destinationAccountId||null,handlingConfidence:handling?.confidence??null,handlingReason:handling?.reason||""};
+    return {rowNumber:index+2,date,description,reference,signedAmount:signed,type:signed>0?"income":"expense",currency:accountTarget.currency,accountId:accountTarget.id,suggestedCategory:suggestion?.category||null,categoryConfidence:suggestion?.confidence??null,categoryReason:suggestion?.reason||"",suggestedType:handling?.type||null,suggestedSourceAccountId:handling?.suggestedSourceAccountId||null,suggestedDestinationAccountId:handling?.destinationAccountId||null,handlingConfidence:handling?.confidence??null,handlingReason:handling?.reason||""};
   });
   return {headers,rows,account:accountTarget,mapping:{date:dateCol,description:descCol,reference:refCol,amount:amountCol,debit:debitCol,credit:creditCol}};
 }
@@ -1300,6 +1308,7 @@ function addTransaction(input) {
     categoryConfidence: Number.isFinite(Number(input.categoryConfidence)) ? Number(input.categoryConfidence) : null,
     categoryReason: input.categoryReason || "",
     suggestedType: ["income","expense","transfer","withdrawal","adjustment"].includes(input.suggestedType) ? input.suggestedType : null,
+    suggestedSourceAccountId: input.suggestedSourceAccountId || null,
     suggestedDestinationAccountId: input.suggestedDestinationAccountId || null,
     handlingConfidence: Number.isFinite(Number(input.handlingConfidence)) ? Number(input.handlingConfidence) : null,
     handlingReason: input.handlingReason || "",
@@ -1578,12 +1587,15 @@ $("transactionAcceptSuggestion")?.addEventListener("click", () => {
 $("transactionAcceptHandling")?.addEventListener("click", () => {
   const t = state.transactions.find(x => x.id === $("transactionDialog").dataset.transactionId);
   const source = account(t?.sourceAccountId);
+  const suggestedSource = account(t?.suggestedSourceAccountId) || source;
   const destination = account(t?.suggestedDestinationAccountId);
-  if (!t || t.suggestedType !== "transfer" || !source || !destination || source.id === destination.id) return;
+  if (!t || t.suggestedType !== "transfer" || !source || !suggestedSource || !destination || suggestedSource.id === destination.id) return;
   t.type = "transfer";
+  t.sourceAccountId = suggestedSource.id;
   t.destinationAccountId = destination.id;
   t.category = "Bank transfer";
   t.suggestedType = null;
+  t.suggestedSourceAccountId = null;
   t.suggestedDestinationAccountId = null;
   t.handlingConfidence = null;
   t.handlingReason = "";
