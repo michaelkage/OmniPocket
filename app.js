@@ -584,7 +584,13 @@ function importStatementRows(rows) {
       type: row.type,
       sourceAccountId: row.accountId,
       amount: Math.abs(row.signedAmount),
+      signedAmount: row.signedAmount,
       currency: row.currency,
+      suggestedType: row.suggestedType,
+      suggestedSourceAccountId: row.suggestedSourceAccountId,
+      suggestedDestinationAccountId: row.suggestedDestinationAccountId,
+      handlingConfidence: row.handlingConfidence,
+      handlingReason: row.handlingReason,
       category: row.type === "income" ? "Imported income" : "Other",
       description: row.description,
       reference: row.reference,
@@ -1248,7 +1254,7 @@ function findImportedTransaction(external) {
 }
 
 function importTransaction(input, options = {}) {
-  const handling = input.suggestedType ? { type: input.suggestedType, destinationAccountId: input.suggestedDestinationAccountId || null, confidence: input.handlingConfidence, reason: input.handlingReason } : suggestTransactionHandling(input);
+  const handling = input.suggestedType ? { type: input.suggestedType, suggestedSourceAccountId: input.suggestedSourceAccountId || null, destinationAccountId: input.suggestedDestinationAccountId || null, confidence: input.handlingConfidence, reason: input.handlingReason } : suggestTransactionHandling(input);
   const suggestion = input.suggestedCategory
     ? { category: input.suggestedCategory, confidence: input.categoryConfidence, reason: input.categoryReason }
     : suggestTransactionCategory({
