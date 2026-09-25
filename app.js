@@ -407,6 +407,33 @@ function previewStatementImport(text, accountId, mapping = {}) {
   return { headers, rows, account: accountTarget, mapping: { date:dateCol, description:descCol, reference:refCol, amount:amountCol, debit:debitCol, credit:creditCol } };
 }
 
+function previewStatementImportObjects(parsed, accountId, mapping = {}) {
+  const headers = parsed.headers;
+  const dateCol = mapping.date || statementColumn(headers, [/^date$/i, /transaction.*date/i, /posting.*date/i, /value.*date/i]);
+  const descCol = mapping.description || statementColumn(headers, [/description/i, /narration/i, /details/i, /memo/i, /particular/i]);
+  const refCol = mapping.reference || statementColumn(headers, [/reference/i, /ref\\.?\\s*(no|number)?$/i, /transaction.*id/i]);
+  const amountCol = mapping.amount || statementColumn(headers, [/^amount$/i, /transaction.*amount/i, /value/i]);
+  const debitCol = mapping.debit || statementColumn(headers, [/debit/i, /withdrawal/i, /paid.*out/i]);
+  const creditCol = mapping.credit || statementColumn(headers, [/credit/i, /deposit/i, /paid.*in/i]);
+  if (!dateCol || (!amountCol && !debitCol && !creditCol)) throw new Error("Map a Date and either Amount or Debit/Credit before previewing.");
+  const accountTarget = account(accountId);
+  if (!accountTarget) throw new Error("Choose an account for this statement first.");
+  const rows = parsed.rows.map((row, index) => {
+    const rawAmount = amountCol ? parseStatementAmount(row[amountCol]) : null;
+    const debit = debitCol ? parseStatementAmount(row[debitCol]) : null;
+    const credit = creditCol ? parseStatementAmount(row[creditCol]) : null;
+    let signed = rawAmount;
+    if (signed == null) signed = (credit == null ? 0 : Math.abs(credit)) - (debit == null ? 0 : Math.abs(debit));
+    const date = normalizeStatementDate(row[dateCol]);
+    const description = descCol ? String(row[descCol] || "").trim() : "";
+    const reference = refCol ? String(row[refCol] || "").trim() : "";
+    if (!date) return {rowNumber:index+2, invalid:true, reason:"Invalid date", description};
+    if (!signed) return {rowNumber:index+2, invalid:true, reason:"Missing or zero amount", description};
+    return {rowNumber:index+2,date,description,reference,signedAmount:signed,type:signed>0?"income":"expense",currency:accountTarget.currency,accountId:accountTarget.id};
+  });
+  return {headers,rows,account:accountTarget,mapping:{date:dateCol,description:descCol,reference:refCol,amount:amountCol,debit:debitCol,credit:creditCol}};
+}
+
 function importStatementRows(rows) {
   let imported = 0, duplicates = 0, invalid = 0;
   for (const row of rows) {
@@ -1722,10 +1749,26 @@ $("statementImportFilePicker")?.addEventListener("change", async event => {
   const file = event.target.files?.[0];
   if (!file) return;
   try {
-    const text = await file.text();
-    const parsed = parseStatementCsv(text);
-    if (!parsed.headers.length) throw new Error("That CSV does not contain a usable header row.");
-    pendingStatementImport = { text, fileName:file.name, preview:null };
+    const extension = file.name.toLowerCase().split(".").pop();
+    let text = "";
+    let parsed;
+    if (extension === "csv") {
+      text = await file.text();
+      parsed = parseStatementCsv(text);
+    } else {
+      if (!window.XLSX) throw new Error("Excel support is still loading. Please try again in a moment.");
+      const workbook = XLSX.read(await file.arrayBuffer(), { type: "array", cellDates: true });
+      if (!workbook.SheetNames.length) throw new Error("That workbook has no sheets.");
+      const sheetName = workbook.SheetNames[0];
+      const sheet = workbook.Sheets[sheetName];
+      const matrix = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "", raw: false });
+      if (matrix.length < 2) throw new Error("That spreadsheet needs a header row and at least one transaction.");
+      const headers = matrix[0].map((h, idx) => String(h || "Column " + (idx + 1)).trim());
+      parsed = { headers, rows: matrix.slice(1).map(values => Object.fromEntries(headers.map((h, idx) => [h, values[idx] ?? ""]))) };
+    }
+    if (!parsed.headers.length) throw new Error("That statement does not contain a usable header row.");
+    pendingStatementImport = { text, fileName:file.name, workbookSheet: parsed, preview:null };
+    if (extension !== "csv") pendingStatementImport.spreadsheetRows = parsed;
     renderStatementMapping(parsed.headers);
     $("statementImportSummary").textContent = parsed.rows.length + " data row" + (parsed.rows.length === 1 ? "" : "s") + " loaded. Check the mapping, then preview.";
   } catch (error) {
@@ -1740,7 +1783,9 @@ $("statementImportFilePicker")?.addEventListener("change", async event => {
 $("statementPreviewButton")?.addEventListener("click", () => {
   if (!pendingStatementImport?.text) return;
   try {
-    pendingStatementImport.preview = previewStatementImport(pendingStatementImport.text, $("statementImportAccount").value, statementMapping());
+    pendingStatementImport.preview = pendingStatementImport.spreadsheetRows
+      ? previewStatementImportObjects(pendingStatementImport.spreadsheetRows, $("statementImportAccount").value, statementMapping())
+      : previewStatementImport(pendingStatementImport.text, $("statementImportAccount").value, statementMapping());
     renderStatementPreview();
   } catch (error) {
     $("statementImportSummary").textContent = error.message || "Could not preview the statement.";
