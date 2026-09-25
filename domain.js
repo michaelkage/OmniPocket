@@ -47,7 +47,7 @@
     }));
     const map = accountMap({ accounts });
     for (const tx of sortedTransactions(state, until)) {
-      if (tx.status === "needs_review") continue;
+      if (tx.status === "needs_review" || tx.status === "superseded") continue;
       const source = map.get(tx.sourceAccountId);
       const destination = map.get(tx.destinationAccountId);
       if (tx.type === "income" && source) source.balance += Math.abs(Number(tx.amount) || 0);
