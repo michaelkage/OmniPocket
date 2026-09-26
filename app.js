@@ -2691,7 +2691,6 @@ document.addEventListener("click", event => {
   const widgetQuick=event.target.closest("[data-dashboard-quick]");
   if(widgetQuick) openQuick(widgetQuick.dataset.dashboardQuick);
 });
-setupDynamicFields();
 document.querySelectorAll(".nav-item[data-page]").forEach(button => {
   button.addEventListener("click", () => navigate(button.dataset.page));
 });
