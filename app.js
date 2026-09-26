@@ -656,7 +656,8 @@ function previewStatementImportObjects(parsed, accountId, mapping = {}) {
   const ambiguousTransferRows = transferRows.filter(row => (row.suggestedPairCandidates?.length > 1) || (!row.suggestedPairTransactionId && row.suggestedType === "transfer"));
   return {headers,rows,account:accountTarget,mapping:{date:dateCol,description:descCol,reference:refCol,amount:amountCol,debit:debitCol,credit:creditCol},stats:{valid:analyzedRows.length,invalid:rows.length-analyzedRows.length,duplicates:duplicateRows.length,likelyTransfers:transferRows.length,ambiguousTransfers:ambiguousTransferRows.length}};
 }
-\nfunction refreshTransferPairSuggestions() {
+
+function refreshTransferPairSuggestions() {
   const reviewRows = state.transactions.filter(tx =>
     tx.status === "needs_review" &&
     (tx.type === "income" || tx.type === "expense") &&
