@@ -18,6 +18,9 @@ jobs:
           node --check storage.js
           node --check bus.js
           node --check v1-completion.js
+          node --check production-hardening.js
+      - name: Domain smoke tests
+        run: node tests/domain.smoke.mjs
       - name: Required assets
         run: |
           test -f index.html
