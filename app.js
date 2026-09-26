@@ -1042,57 +1042,18 @@ function loadMonoConnectScript() {
   return window.__monoConnectPromise;
 }
 
-async function connectBankAccount() {
-  let config = integrationSettings();
-  if (!config.supabaseUrl || !config.monoPublicKey) {
-    config = configureBankIntegration();
-    if (!config) return;
-  }
-  try {
-    await loadMonoConnectScript();
-  } catch (error) {
-    console.error(error);
-    alert(error.message || "Mono Connect could not be loaded.");
-    return;
-  }
-  if (typeof window.Connect !== "function") {
-    alert("Mono Connect loaded, but the Connect API is unavailable.");
-    return;
-  }
-
-  const accountName = ($("accountName")?.value || "Connected bank").trim();
-  const email = localStorage.getItem("omnipocket.monoEmail") || prompt("Email to associate with this bank connection:", "")?.trim();
-  if (!email) return;
-  localStorage.setItem("omnipocket.monoEmail", email);
-
-  const connect = new window.Connect({
-    key: config.monoPublicKey,
-    scope: "auth",
-    data: { customer: { name: accountName || "OmniPocket user", email } },
-    reference: "omnipocket_" + uid(),
-    onSuccess: async ({ code }) => {
-      try {
-        $("accountDialog")?.close();
-        const button = $("connectBankButton");
-        if (button) button.disabled = true;
-        const linked=await exchangeMonoCode(code,accountName,window.__omnipocketReconnectAccountId||null); await syncMonoAccount(linked.monoAccountId,accountName,window.__omnipocketReconnectAccountId||null);
-        alert("Bank connected. Balance and transactions have been imported.");
-        render();
-      } catch (error) {
-        console.error(error);
-        alert(error.message || "Bank connection completed, but OmniPocket could not import the account.");
-      } finally {
-        const button = $("connectBankButton");
-        if (button) button.disabled = false;
-      }
-    },
-    onClose: () => {}
+async function connectBankAccount(){
+  let config=integrationSettings();
+  if(!config.supabaseUrl||!config.monoPublicKey){config=configureBankIntegration();if(!config)return false;}
+  try{await loadMonoConnectScript();}catch(error){console.error(error);alert(error.message||"Mono Connect could not be loaded.");return false;}
+  if(typeof window.Connect!=="function"){alert("Mono Connect loaded, but the Connect API is unavailable.");return false;}
+  const accountName=($("accountName")?.value||"Connected bank").trim();
+  const email=localStorage.getItem("omnipocket.monoEmail")||prompt("Email to associate with this bank connection:","")?.trim();if(!email)return false;localStorage.setItem("omnipocket.monoEmail",email);
+  return await new Promise(resolve=>{
+    const connect=new window.Connect({key:config.monoPublicKey,scope:"auth",data:{customer:{name:accountName||"OmniPocket user",email}},reference:"omnipocket_"+uid(),onSuccess:async({code})=>{try{$("accountDialog")?.close();const button=$("connectBankButton");if(button)button.disabled=true;const linked=await exchangeMonoCode(code,accountName,window.__omnipocketReconnectAccountId||null);await syncMonoAccount(linked.monoAccountId,accountName,window.__omnipocketReconnectAccountId||null);alert("Bank connected. Balance and transactions have been imported.");render();resolve(true);}catch(error){console.error(error);alert(error.message||"Bank connection completed, but OmniPocket could not import the account.");resolve(false);}finally{const button=$("connectBankButton");if(button)button.disabled=false;}},onClose:()=>resolve(false)});connect.setup();connect.open();
   });
-  connect.setup();
-  connect.open();
 }
 
-async function createOmniPaymentFromForm(){const source=account($("paymentSourceAccount").value);if(!source)throw new Error("Choose a source account.");const amount=Number($("paymentAmount").value);if(!Number.isFinite(amount)||amount<=0)throw new Error("Enter a valid amount.");if(amount>Number(source.balance||0))throw new Error("That account does not have enough available balance.");const n=$("paymentRecipientAccount").value.trim();if(!/^\d{8,12}$/.test(n))throw new Error("Enter a valid bank account number.");const r=await supabaseFunction("omnipocket-payment-initiate",{provider:$("paymentProvider").value,sourceAccountId:source.id,monoAccountId:source.connection?.providerAccountId||null,amountMinor:Math.round(amount*100),currency:source.currency,recipientName:$("paymentRecipientName").value.trim(),recipientBankName:$("paymentRecipientBank").value.trim(),recipientBankCode:$("paymentRecipientBankCode").value.trim(),recipientAccountNumber:n,narration:$("paymentNarration").value.trim()||"OmniPocket transfer"});return r.payment;}async function recordLocalPaymentCompletion(p){if(!p)return;const s=account(p.source_account_id);if(!s||state.transactions.some(t=>t.external?.provider==="omnipocket_payment"&&t.external.providerTransactionId===p.id))return;const amount=Number(p.amount_minor||0)/100;state.transactions.push({id:uid(),type:"expense",status:"recorded",date:today(),createdAt:Date.now(),sourceAccountId:s.id,destinationAccountId:null,amount,currency:p.currency||s.currency,receivedAmount:null,receivedCurrency:null,fxRate:null,fxSource:"payment",category:"Transfer",note:p.narration||("Payment to "+(p.recipient_name||"recipient")),linkedGoalIds:[],external:{provider:"omnipocket_payment",providerTransactionId:p.id,importedAt:new Date().toISOString(),lastSeenAt:new Date().toISOString()}});rebuildBalances();saveState();}async function openPaymentFlow(){const banks=state.accounts.filter(a=>!a.archived&&a.balance>0&&(a.type==="bank"||a.type==="wallet")&&(!a.connection||a.connection.status==="connected"));if(!banks.length)return alert("Add a bank or wallet account before sending money.");$("paymentSourceAccount").innerHTML=banks.map(a=>'<option value="'+escapeHtml(a.id)+'">'+escapeHtml(a.name)+' · '+escapeHtml(money(a.balance,a.currency))+'</option>').join("");$("paymentProvider").value="demo";$("paymentAmount").value="";$("paymentRecipientName").value="";$("paymentRecipientBank").value="";$("paymentRecipientBankCode").value="";$("paymentRecipientAccount").value="";$("paymentNarration").value="";$("paymentDialog")?.showModal();}async function submitOmniPayment(){const b=$("paymentSubmit");if(b)b.disabled=true;try{const p=await createOmniPaymentFromForm();if(p.provider==="demo"){const completed=await supabaseFunction("omnipocket-payment-initiate",{action:"complete_demo",paymentId:p.id});await recordLocalPaymentCompletion(completed.payment);$("paymentDialog")?.close();render();alert("Demo transfer completed. The debit is now recorded in Activity.");}else{$("paymentDialog")?.close();if(p.external_url)window.open(p.external_url,"_blank","noopener,noreferrer");alert("Payment initiated. OmniPocket will keep it pending until the provider confirms the result.");}}catch(e){alert(e?.message||"Payment could not be initiated.");}finally{if(b)b.disabled=false;}}function scheduleAutomaticBankSync(){if(window.__omnipocketSyncTimer)clearInterval(window.__omnipocketSyncTimer);const run=async()=>{if(document.hidden||state.settings.mode==="offline")return;try{await syncConnectedBankAccounts();render();}catch(e){console.warn("Periodic bank sync failed.",e);}};window.__omnipocketSyncTimer=setInterval(run,900000);window.addEventListener("visibilitychange",()=>{if(!document.hidden)run();});}
 async function refreshFxRates() {
   if (state.settings.mode === "offline") return alert("Offline mode keeps the last cached FX matrix.");
   const base=state.settings.baseCurrency;
