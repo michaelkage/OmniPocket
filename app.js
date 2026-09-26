@@ -424,7 +424,7 @@ function openTransactionDetail(id) {
       pairBox.innerHTML = "<strong>" + (pair ? "Selected transfer match" : "Possible transfer matches") + "</strong>" +
         (pair ? " · " + Math.round((Number(t.suggestedPairConfidence) || 0) * 100) + "% confidence" : "") +
         reconciliationSummary +
-        '<div class="transfer-candidate-list">'
+        '<div class="transfer-candidate-list">' +
         pairCandidates.map(candidate => {
           const candidateAccount = account(candidate.sourceAccountId);
           const isSelected = candidate.id === selected;
