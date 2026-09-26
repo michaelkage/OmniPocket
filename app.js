@@ -976,7 +976,7 @@ async function syncMonoAccount(monoAccountId, accountName = "Connected bank") {
   const payload = await supabaseFunction("mono-account-sync", { accountId: monoAccountId, realtime: true });
 
   const rawAccount = payload?.account?.data?.account || payload?.account?.data || payload?.account?.account || payload?.account;
-  const rawTransactions = payload?.transactions?.data || [];
+  const rawTransactions = Array.isArray(payload?.transactions) ? payload.transactions : (payload?.transactions?.data || []);
   if (!rawAccount) throw new Error("Mono returned no account details.");
 
   const currency = CURRENCIES.includes(rawAccount.currency) ? rawAccount.currency : "NGN";
