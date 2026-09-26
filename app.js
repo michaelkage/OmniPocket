@@ -1035,7 +1035,7 @@ async function syncConnectedBankAccounts() {
   }
 }
 
-async function connectDemoBankAccount() {
+async async function connectDemoBankAccount() {
   const account = await syncMockBankAccount();
   $("accountDialog")?.close();
   alert("Demo bank connected. A realistic balance and sample transactions are now flowing through the same account pipeline.");
@@ -1075,7 +1075,7 @@ async function connectBankAccount(){
   });
 }
 
-async function refreshFxRates() {
+async async function refreshFxRates() {
   if (state.settings.mode === "offline") return alert("Offline mode keeps the last cached FX matrix.");
   const base=state.settings.baseCurrency;
   try {
