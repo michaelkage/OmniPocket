@@ -1366,10 +1366,6 @@ function findTransferCounterpart(input) {
     const otherAmount = Math.abs(Number(tx.amount) || 0);
     if (!otherAmount) continue;
 
-    const amountDelta = Math.abs(otherAmount - amount);
-    const amountTolerance = Math.max(0.01, amount * 0.005);
-    if (amountDelta > amountTolerance) continue;
-
     const txDate = new Date(String(tx.date || "") + "T00:00:00");
     const dayGap = Math.abs(targetDate - txDate) / 86400000;
     if (!Number.isFinite(dayGap) || dayGap > 2) continue;
@@ -1377,16 +1373,38 @@ function findTransferCounterpart(input) {
     const otherReference = normalizedReference(tx.reference);
     const otherText = normalizeTransferText([tx.description, tx.note, tx.reference].filter(Boolean).join(" "));
     const combinedText = inputText + " " + otherText;
+    const inputIsSource = input.type === "expense";
+    const sourceCurrency = inputIsSource ? source.currency : other.currency;
+    const destinationCurrency = inputIsSource ? other.currency : source.currency;
+    const comparableRate = rate(sourceCurrency, destinationCurrency);
+    const expectedOtherAmount = amount * comparableRate;
+    const crossCurrency = source.currency !== tx.currency;
+    const fxDelta = expectedOtherAmount > 0 ? Math.abs(otherAmount - expectedOtherAmount) / expectedOtherAmount : Infinity;
+    const sameCurrencyDelta = Math.abs(otherAmount - amount) / Math.max(amount, 0.01);
+    const fxPlausible = crossCurrency && comparableRate > 0 && Number.isFinite(fxDelta) && fxDelta <= 0.15;
+
+    // Same-currency legs retain the strict 0.5% guard. Cross-currency legs use
+    // the cached/manual FX rate with a 15% tolerance so fees, spread and stale
+    // rates do not prevent an otherwise obvious internal transfer from matching.
+    if (!crossCurrency && sameCurrencyDelta > 0.005) continue;
+    if (crossCurrency && !fxPlausible) continue;
 
     let score = 0;
     const reasons = [];
 
-    if (amountDelta < 0.000001) {
-      score += 0.28;
-      reasons.push("exact amount");
+    if (!crossCurrency) {
+      if (Math.abs(otherAmount - amount) < 0.000001) {
+        score += 0.28;
+        reasons.push("exact amount");
+      } else {
+        score += 0.18;
+        reasons.push("near amount");
+      }
     } else {
-      score += 0.18;
-      reasons.push("near amount");
+      const fxQuality = Math.max(0, 1 - fxDelta / 0.15);
+      score += 0.18 + fxQuality * 0.12;
+      reasons.push("FX-plausible amount");
+      reasons.push("implied rate " + (otherAmount / amount).toFixed(6));
     }
 
     if (dayGap === 0) {
@@ -1403,6 +1421,9 @@ function findTransferCounterpart(input) {
     if (source.currency === tx.currency) {
       score += 0.06;
       reasons.push("same currency");
+    } else {
+      score += 0.05;
+      reasons.push(source.currency + " → " + tx.currency);
     }
 
     const exactReference = inputReference && otherReference && inputReference === otherReference;
