@@ -1017,7 +1017,7 @@ async function syncMockBankAccount(preferredAccountId=null) {
     saveState(); emitStateEvent("account:updated",{accountId:local.id,provider:"mock",importedCount}); return local;
   }catch(error){const completedAt=Date.now();local.connection.syncStatus="error";local.connection.lastSyncError=error?.message||"Sync failed";local.connection.lastSyncCompletedAt=new Date(completedAt).toISOString();local.connection.lastSyncDurationMs=completedAt-startedAt;local.connection.syncHistory=[{startedAt:local.connection.lastSyncStartedAt,completedAt:local.connection.lastSyncCompletedAt,status:"error",durationMs:local.connection.lastSyncDurationMs,importedCount,error:local.connection.lastSyncError},...(local.connection.syncHistory||[])].slice(0,20);saveState();throw error;}
 }
-async function syncConnectedBankAccounts() {
+async async function syncConnectedBankAccounts() {
   const connected = state.accounts.filter(a => !a.archived && a.connection?.status === "connected" && a.connection.provider);
   for (const a of connected) {
     try {
@@ -1035,7 +1035,7 @@ async function syncConnectedBankAccounts() {
   }
 }
 
-async async function connectDemoBankAccount() {
+async function connectDemoBankAccount() {
   const account = await syncMockBankAccount();
   $("accountDialog")?.close();
   alert("Demo bank connected. A realistic balance and sample transactions are now flowing through the same account pipeline.");
@@ -1075,7 +1075,7 @@ async function connectBankAccount(){
   });
 }
 
-async async function refreshFxRates() {
+async function refreshFxRates() {
   if (state.settings.mode === "offline") return alert("Offline mode keeps the last cached FX matrix.");
   const base=state.settings.baseCurrency;
   try {
