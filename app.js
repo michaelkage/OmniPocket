@@ -408,13 +408,18 @@ function openTransactionDetail(id) {
         ? Number(selectedDestinationTx.amount) / Number(selectedSourceTx.amount)
         : null;
       const selectedDateGap = pair ? Math.abs(new Date(String(t.date) + "T00:00:00") - new Date(String(pair.date) + "T00:00:00")) / 86400000 : null;
+      const selectedCandidateMeta = pair ? (t.suggestedPairCandidateMeta?.[pair.id] || null) : null;
+      const reconciliation = selectedCandidateMeta?.reconciliation || null;
+      const differenceNote = reconciliation?.feeLikeDifference && Math.abs(Number(reconciliation.differenceAmount) || 0) > 0.000001
+        ? '<div class="transfer-reconciliation-difference">' + escapeHtml((Number(reconciliation.differenceAmount) < 0 ? "Possible fee / spread: " : "FX difference: ") + money(Math.abs(Number(reconciliation.differenceAmount)), reconciliation.destinationCurrency) + " (" + Math.abs(Number(reconciliation.differencePercent || 0) * 100).toFixed(2) + "%)") + '</div>'
+        : "";
       const reconciliationSummary = pair && selectedSource && selectedDestination
         ? '<div class="transfer-reconciliation-summary">' +
           '<div><span>FROM</span><strong>' + escapeHtml(selectedSource.name) + '</strong><b>' + escapeHtml(money(selectedSourceTx.amount, selectedSourceTx.currency)) + '</b></div>' +
           '<div class="transfer-reconciliation-arrow">→</div>' +
           '<div><span>TO</span><strong>' + escapeHtml(selectedDestination.name) + '</strong><b>' + escapeHtml(money(selectedDestinationTx.amount, selectedDestinationTx.currency)) + '</b></div>' +
           '<div class="transfer-reconciliation-meta"><span>' + escapeHtml(selectedSource.currency === selectedDestination.currency ? "Same-currency transfer" : "Implied FX rate: " + (selectedRate || 0).toFixed(6) + " " + selectedDestination.currency + "/" + selectedSource.currency) + '</span><span>' + escapeHtml((selectedDateGap === 0 ? "Same-day legs" : (selectedDateGap.toFixed(1) + " day gap")) + " · Review before merging") + '</span></div>' +
-          '</div>'
+          '</div>' + differenceNote
         : "";
       pairBox.innerHTML = "<strong>" + (pair ? "Selected transfer match" : "Possible transfer matches") + "</strong>" +
         (pair ? " · " + Math.round((Number(t.suggestedPairConfidence) || 0) * 100) + "% confidence" : "") +
