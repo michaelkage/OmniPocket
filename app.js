@@ -979,7 +979,7 @@ async function syncMockBankAccount() {
   const dataset=createMockBankDataset(), providerAccountId=dataset.account.id;
   let local=state.accounts.find(a=>a.connection?.provider==="mock"&&a.connection.providerAccountId===providerAccountId);
   if(!local){local={id:uid(),name:dataset.account.name,institution:dataset.account.institution.name,type:"bank",currency:dataset.account.currency,openingBalance:dataset.account.balance,balance:dataset.account.balance,archived:false,createdAt:Date.now(),connection:{provider:"mock",providerAccountId,status:"connected",lastSyncedAt:null,syncStatus:"syncing",lastSyncError:"",lastSyncStartedAt:null,lastSyncCompletedAt:null,lastSyncDurationMs:null,importedTransactionCount:0,totalImportedTransactionCount:0,syncHistory:[]}};state.accounts.push(local);}
-  const startedAt=Date.now(); local.connection={...(local.connection||{}),provider:"mock",providerAccountId,status:"connected",syncStatus:"syncing",lastSyncStartedAt:new Date(startedAt).toISOString(),lastSyncError:""}; saveState();
+  const startedAt=Date.now(); local.connection={...(local.connection||{}),provider:"mock",providerAccountId,status:"connected",syncStatus:"syncing",lastSyncStartedAt:new Date(startedAt).toISOString(),lastSyncError:""}; saveState(); try { const remote=await supabaseFunction("omnipocket-demo-bank-sync",{clientAccountId:local.id}); local.connection.serverConnectionId=remote?.connection?.id||local.connection.serverConnectionId||null; } catch(remoteError) { console.warn("Demo bank remote persistence unavailable; continuing with local adapter.",remoteError); }
   let importedCount=0;
   try{
     const importedAt=Date.now(); let importedNet=0;
