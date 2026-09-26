@@ -2939,13 +2939,8 @@ $("clearReviewButton")?.addEventListener("click", () => {
   renderFullViews();
 });
 window.addEventListener("load", async () => {
-  // Restore the local state first, then refresh any already-connected bank adapters.
-  // Real providers are optional; the mock adapter keeps the pipeline testable without credentials.
+  // Restore local state first, then refresh connected provider adapters.
   if ("serviceWorker" in navigator && location.protocol !== "file:") navigator.serviceWorker.register("sw.js");
   await bootstrapStorage();
   syncConnectedBankAccounts().catch(error => console.warn("Automatic bank sync failed.", error));
-});
-/*__REPLACED_LOAD__*/
-  if ("serviceWorker" in navigator && location.protocol !== "file:") navigator.serviceWorker.register("sw.js");
-  await bootstrapStorage();
 });
