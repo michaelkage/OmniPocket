@@ -1061,6 +1061,121 @@ async function syncMonoAccount(monoAccountId, accountName = "Connected bank") {
   return local;
 }
 
+function createMockBankDataset() {
+  const now = new Date();
+  const day = offset => new Date(now.getTime() - offset * 86400000).toISOString().slice(0, 10);
+  return {
+    account: {
+      id: "mock_gtbank_demo_001",
+      name: "Michael's Demo Savings",
+      institution: { name: "GTBank Demo" },
+      type: "savings",
+      currency: "NGN",
+      balance: 247500
+    },
+    transactions: [
+      { id: "mock_tx_salary_001", type: "credit", amount: 350000, currency: "NGN", narration: "SALARY / PAYROLL", date: day(2), category: "Salary / income" },
+      { id: "mock_tx_food_001", type: "debit", amount: 18500, currency: "NGN", narration: "KFC Lagos", date: day(1), category: "Food & dining" },
+      { id: "mock_tx_data_001", type: "debit", amount: 12000, currency: "NGN", narration: "MTN DATA BUNDLE", date: day(3), category: "Mobile & telecom" },
+      { id: "mock_tx_transfer_001", type: "debit", amount: 72000, currency: "NGN", narration: "NIP TRANSFER TO SAVINGS", date: day(5), category: "Bank transfer" }
+    ]
+  };
+}
+
+async function syncMockBankAccount() {
+  const dataset = createMockBankDataset();
+  const providerAccountId = dataset.account.id;
+  let local = state.accounts.find(a => a.connection?.provider === "mock" && a.connection.providerAccountId === providerAccountId);
+  if (!local) {
+    local = {
+      id: uid(),
+      name: dataset.account.name,
+      institution: dataset.account.institution.name,
+      type: "bank",
+      currency: dataset.account.currency,
+      openingBalance: dataset.account.balance,
+      balance: dataset.account.balance,
+      archived: false,
+      createdAt: Date.now(),
+      connection: { provider: "mock", providerAccountId, status: "connected", lastSyncedAt: null, syncStatus: "syncing" }
+    };
+    state.accounts.push(local);
+  }
+
+  const importedAt = Date.now();
+  let importedNet = 0;
+  for (const tx of dataset.transactions) {
+    const amount = minorUnitAmount(tx.amount);
+    const isCredit = tx.type === "credit";
+    importedNet += isCredit ? amount : -amount;
+    const exists = state.transactions.some(t => t.external?.provider === "mock" && t.external.providerTransactionId === tx.id);
+    if (exists) continue;
+    const suggestion = suggestTransactionCategory({ description: tx.narration, providerCategory: tx.category });
+    state.transactions.push({
+      id: uid(),
+      type: isCredit ? "income" : "expense",
+      status: "recorded",
+      date: tx.date,
+      createdAt: importedAt,
+      sourceAccountId: local.id,
+      destinationAccountId: null,
+      amount,
+      currency: tx.currency,
+      receivedAmount: null,
+      receivedCurrency: null,
+      fxRate: null,
+      fxSource: "bank_import",
+      category: tx.category || "Other",
+      suggestedCategory: suggestion?.category || null,
+      categoryConfidence: suggestion?.confidence || null,
+      categoryReason: suggestion?.reason || "",
+      note: tx.narration,
+      linkedGoalIds: [],
+      external: { provider: "mock", providerTransactionId: tx.id, importedAt: new Date(importedAt).toISOString(), lastSeenAt: new Date(importedAt).toISOString() }
+    });
+  }
+
+  local.openingBalance = dataset.account.balance - importedNet;
+  local.balance = dataset.account.balance;
+  local.institution = dataset.account.institution.name;
+  local.currency = dataset.account.currency;
+  local.connection = {
+    provider: "mock",
+    providerAccountId,
+    status: "connected",
+    lastSyncedAt: new Date().toISOString(),
+    syncStatus: "healthy"
+  };
+  saveState();
+  emitStateEvent("account:updated", { accountId: local.id, provider: "mock" });
+  return local;
+}
+
+async function syncConnectedBankAccounts() {
+  const connected = state.accounts.filter(a => a.connection?.status === "connected" && a.connection.provider);
+  for (const a of connected) {
+    try {
+      if (a.connection.provider === "mock") {
+        await syncMockBankAccount();
+      } else if (a.connection.provider === "mono" && a.connection.providerAccountId) {
+        await syncMonoAccount(a.connection.providerAccountId, a.name);
+      }
+    } catch (error) {
+      console.warn("Bank sync failed for " + a.name, error);
+      a.connection.syncStatus = "error";
+      a.connection.lastSyncError = error.message || "Sync failed";
+      saveState();
+    }
+  }
+}
+
+async function connectDemoBankAccount() {
+  const account = await syncMockBankAccount();
+  $("accountDialog")?.close();
+  alert("Demo bank connected. A realistic balance and sample transactions are now flowing through the same account pipeline.");
+  openAccountDetail(account.id);
+}
+
 function loadMonoConnectScript() {
   if (typeof window.Connect === "function") return Promise.resolve();
   if (window.__monoConnectPromise) return window.__monoConnectPromise;
@@ -2647,6 +2762,8 @@ $("importFile")?.addEventListener("change", async event => {
   }
 });
 
+$("demoBankButton")?.addEventListener("click", connectDemoBankAccount);
+
 $("accountForm").addEventListener("submit", event => {
   event.preventDefault();
   const accountData = {
@@ -2822,6 +2939,13 @@ $("clearReviewButton")?.addEventListener("click", () => {
   renderFullViews();
 });
 window.addEventListener("load", async () => {
+  // Restore the local state first, then refresh any already-connected bank adapters.
+  // Real providers are optional; the mock adapter keeps the pipeline testable without credentials.
+  if ("serviceWorker" in navigator && location.protocol !== "file:") navigator.serviceWorker.register("sw.js");
+  await bootstrapStorage();
+  syncConnectedBankAccounts().catch(error => console.warn("Automatic bank sync failed.", error));
+});
+/*__REPLACED_LOAD__*/
   if ("serviceWorker" in navigator && location.protocol !== "file:") navigator.serviceWorker.register("sw.js");
   await bootstrapStorage();
 });
