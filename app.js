@@ -115,6 +115,7 @@ function migrateState(raw) {
     id: t.id || uid(),
     type: TX_TYPES.includes(t.type) ? t.type : "adjustment",
     status: t.status === "needs_review" ? "needs_review" : (t.status === "superseded" ? "superseded" : "recorded"),
+    bankStatus: ["pending","posted","reversed","failed"].includes(t.bankStatus) ? t.bankStatus : null,
     adjustmentSign: t.adjustmentSign === -1 ? -1 : (t.adjustmentSign === 1 ? 1 : (String(t.category || "").toLowerCase().includes("decrease") ? -1 : 1)),
     date: t.date || today(),
     createdAt: Number(t.createdAt) || Date.now(),
@@ -975,9 +976,29 @@ function minorUnitAmount(value) {
 async function exchangeMonoCode(code, accountName, preferredAccountId = null) { const data=await supabaseFunction("mono-exchange-token",{code,accountName,clientAccountId:preferredAccountId||null}); if(!data?.connection?.id||!data?.monoAccountId)throw new Error("Mono linked the account but OmniPocket did not save the connection."); const local=preferredAccountId?account(preferredAccountId):null; if(local){local.connection={...(local.connection||{}),provider:"mono",providerAccountId:data.monoAccountId,serverConnectionId:data.connection.id,status:"connected",syncStatus:"syncing",lastSyncError:""};saveState();} return data; }
 
 async function syncMonoAccount(monoAccountId,accountName="Connected bank",preferredAccountId=null){const startedAt=Date.now(),preferred=preferredAccountId?account(preferredAccountId):null,payload=await supabaseFunction("mono-account-sync",{accountId:monoAccountId,connectionId:preferred?.connection?.serverConnectionId||null,clientAccountId:preferred?.id||null});const rawAccount=payload?.account?.data?.account||payload?.account?.data||payload?.account?.account||payload?.account,rawTransactions=Array.isArray(payload?.transactions)?payload.transactions:(payload?.transactions?.data||[]);if(!rawAccount)throw new Error("Mono returned no account details.");const currency=CURRENCIES.includes(rawAccount.currency)?rawAccount.currency:"NGN",currentBalance=minorUnitAmount(rawAccount.balance);let local=preferred||state.accounts.find(x=>x.connection?.provider==="mono"&&x.connection.providerAccountId===monoAccountId);if(!local){local={id:uid(),name:accountName||rawAccount.name||"Connected bank",institution:rawAccount.institution?.name||"",type:"bank",currency,openingBalance:currentBalance,balance:currentBalance,archived:false,createdAt:Date.now(),connection:{provider:"mono",providerAccountId:monoAccountId,status:"connected",lastSyncedAt:null,syncStatus:"syncing",lastSyncError:"",lastSyncStartedAt:null,lastSyncCompletedAt:null,lastSyncDurationMs:null,importedTransactionCount:0,totalImportedTransactionCount:0,syncHistory:[],serverConnectionId:payload?.connection?.id||null}};state.accounts.push(local);}const importedAt=Date.now();let importedNet=0,importedCount=0;for(const tx of rawTransactions){const pid=tx.mono_transaction_id||tx.id||tx._id;if(!pid)continue;const amount=tx.amount_minor!=null?minorUnitAmount(tx.amount_minor):minorUnitAmount(tx.amount),credit=String(tx.type||"").toLowerCase()==="credit";importedNet+=credit?amount:-amount;const existing=state.transactions.find(t=>t.external?.provider==="mono"&&t.external.providerTransactionId===String(pid));if(existing){existing.external.lastSeenAt=new Date().toISOString();continue;}const suggestion=suggestTransactionCategory({description:tx.narration,providerCategory:tx.category});state.transactions.push({id:uid(),type:credit?"income":"expense",status:"recorded",date:String(tx.transaction_at||tx.date||today()).slice(0,10),createdAt:importedAt,sourceAccountId:local.id,destinationAccountId:null,amount,currency:tx.currency||currency,receivedAmount:null,receivedCurrency:null,fxRate:null,fxSource:"bank_import",category:tx.category||"Other",suggestedCategory:suggestion?.category||null,categoryConfidence:suggestion?.confidence||null,categoryReason:suggestion?.reason||"",note:tx.narration||"Imported from Mono",linkedGoalIds:[],external:{provider:"mono",providerTransactionId:String(pid),importedAt:new Date(importedAt).toISOString(),lastSeenAt:new Date(importedAt).toISOString()}});importedCount++;}local.openingBalance=currentBalance-importedNet;local.balance=currentBalance;local.institution=rawAccount.institution?.name||local.institution;local.currency=currency;const completedAt=Date.now(),durationMs=completedAt-startedAt,total=Number(local.connection?.totalImportedTransactionCount)||0;local.connection={...(local.connection||{}),provider:"mono",providerAccountId:monoAccountId,serverConnectionId:payload?.connection?.id||local.connection?.serverConnectionId||null,status:"connected",lastSyncedAt:new Date(completedAt).toISOString(),lastSyncStartedAt:new Date(startedAt).toISOString(),lastSyncCompletedAt:new Date(completedAt).toISOString(),lastSyncDurationMs:durationMs,importedTransactionCount:importedCount,totalImportedTransactionCount:total+importedCount,syncStatus:"healthy",lastSyncError:"",syncHistory:[{startedAt:new Date(startedAt).toISOString(),completedAt:new Date(completedAt).toISOString(),status:"success",durationMs,importedCount},...(local.connection?.syncHistory||[])].slice(0,20)};saveState();emitStateEvent("account:updated",{accountId:local.id,provider:"mono",importedCount});return local;}
-async function syncMockBankAccount() {
-  const dataset=createMockBankDataset(), providerAccountId=dataset.account.id;
-  let local=state.accounts.find(a=>a.connection?.provider==="mock"&&a.connection.providerAccountId===providerAccountId);
+function createMockBankDataset(connection=null){
+  const day=offset=>new Date(Date.now()-offset*86400000).toISOString();
+  const scenario=connection?.demoScenario||"normal";
+  const tx=[
+    {id:"mock_tx_salary_001",type:"credit",amount:350000,currency:"NGN",narration:"Salary credit",category:"Income",date:day(12),bankStatus:"posted"},
+    {id:"mock_tx_kfc_001",type:"debit",amount:18500,currency:"NGN",narration:"KFC Lagos",category:"Food",date:day(10),bankStatus:"posted"},
+    {id:"mock_tx_mtn_001",type:"debit",amount:12000,currency:"NGN",narration:"MTN data",category:"Utilities",date:day(8),bankStatus:"posted"},
+    {id:"mock_tx_nip_001",type:"debit",amount:72000,currency:"NGN",narration:"NIP transfer to savings",category:"Transfer",date:day(6),bankStatus:"posted"}
+  ];
+  if(scenario==="new_credit"||scenario==="pending"||scenario==="duplicate_event")tx.push({id:"mock_tx_bonus_001",type:"credit",amount:25000,currency:"NGN",narration:"Demo bonus credit",category:"Income",date:day(1),bankStatus:scenario==="pending"?"pending":"posted"});
+  if(scenario==="pending_posted")tx.push({id:"mock_tx_pending_001",type:"debit",amount:7500,currency:"NGN",narration:"Demo pending card payment",category:"Shopping",date:day(1),bankStatus:"posted"});
+  if(scenario==="failed")tx.push({id:"mock_tx_failed_001",type:"debit",amount:5000,currency:"NGN",narration:"Demo failed card payment",category:"Other",date:day(1),bankStatus:"failed"});
+  return {account:{id:"mock_gtbank_demo_001",name:"Michael's Demo Savings",institution:{name:"GTBank Demo"},currency:"NGN",type:"savings",balance:scenario==="new_credit"?272500:scenario==="pending"?272500:247500},transactions:tx};
+}
+function getDemoAccount(){return state.accounts.find(a=>a.connection?.provider==="mock")||null;}
+async function simulateDemoBankScenario(scenario){
+  const a=getDemoAccount();if(!a)return alert("Connect the demo bank first.");
+  a.connection.demoScenario=scenario;a.connection.syncStatus="syncing";a.connection.lastSyncError="";saveState();
+  try{await syncMockBankAccount(a.id);openAccountDetail(a.id);render();}catch(e){a.connection.syncStatus="error";a.connection.lastSyncError=e.message||"Demo scenario failed";saveState();alert(a.connection.lastSyncError);}
+}
+async function syncMockBankAccount(preferredAccountId=null) {
+  const existingPreferred=preferredAccountId?account(preferredAccountId):null; const dataset=createMockBankDataset(existingPreferred?.connection), providerAccountId=dataset.account.id;
+  let local=existingPreferred||state.accounts.find(a=>a.connection?.provider==="mock"&&a.connection.providerAccountId===providerAccountId);
   if(!local){local={id:uid(),name:dataset.account.name,institution:dataset.account.institution.name,type:"bank",currency:dataset.account.currency,openingBalance:dataset.account.balance,balance:dataset.account.balance,archived:false,createdAt:Date.now(),connection:{provider:"mock",providerAccountId,status:"connected",lastSyncedAt:null,syncStatus:"syncing",lastSyncError:"",lastSyncStartedAt:null,lastSyncCompletedAt:null,lastSyncDurationMs:null,importedTransactionCount:0,totalImportedTransactionCount:0,syncHistory:[]}};state.accounts.push(local);}
   const startedAt=Date.now(); local.connection={...(local.connection||{}),provider:"mock",providerAccountId,status:"connected",syncStatus:"syncing",lastSyncStartedAt:new Date(startedAt).toISOString(),lastSyncError:""}; saveState(); try { const remote=await supabaseFunction("omnipocket-demo-bank-sync",{clientAccountId:local.id}); local.connection.serverConnectionId=remote?.connection?.id||local.connection.serverConnectionId||null; } catch(remoteError) { console.warn("Demo bank remote persistence unavailable; continuing with local adapter.",remoteError); }
   let importedCount=0;
@@ -986,9 +1007,9 @@ async function syncMockBankAccount() {
     for(const tx of dataset.transactions){
       const amount=Number(tx.amount)||0,isCredit=tx.type==="credit"; importedNet+=isCredit?amount:-amount;
       const exists=state.transactions.find(t=>t.external?.provider==="mock"&&t.external.providerTransactionId===tx.id);
-      if(exists){exists.external.lastSeenAt=new Date(importedAt).toISOString();continue;}
+      if(exists){exists.external.lastSeenAt=new Date(importedAt).toISOString();if(tx.bankStatus&&exists.bankStatus!==tx.bankStatus){exists.bankStatus=tx.bankStatus;}continue;}
       const suggestion=suggestTransactionCategory({description:tx.narration,providerCategory:tx.category});
-      state.transactions.push({id:uid(),type:isCredit?"income":"expense",status:"recorded",date:tx.date,createdAt:importedAt,sourceAccountId:local.id,destinationAccountId:null,amount,currency:tx.currency,receivedAmount:null,receivedCurrency:null,fxRate:null,fxSource:"bank_import",category:tx.category||"Other",suggestedCategory:suggestion?.category||null,categoryConfidence:suggestion?.confidence||null,categoryReason:suggestion?.reason||"",note:tx.narration,linkedGoalIds:[],external:{provider:"mock",providerTransactionId:tx.id,importedAt:new Date(importedAt).toISOString(),lastSeenAt:new Date(importedAt).toISOString()}}); importedCount++;
+      state.transactions.push({id:uid(),type:isCredit?"income":"expense",status:"recorded",bankStatus:tx.bankStatus||"posted",date:tx.date,createdAt:importedAt,sourceAccountId:local.id,destinationAccountId:null,amount,currency:tx.currency,receivedAmount:null,receivedCurrency:null,fxRate:null,fxSource:"bank_import",category:tx.category||"Other",suggestedCategory:suggestion?.category||null,categoryConfidence:suggestion?.confidence||null,categoryReason:suggestion?.reason||"",note:tx.narration,linkedGoalIds:[],external:{provider:"mock",providerTransactionId:tx.id,importedAt:new Date(importedAt).toISOString(),lastSeenAt:new Date(importedAt).toISOString()}}); importedCount++;
     }
     local.openingBalance=dataset.account.balance-importedNet; local.balance=dataset.account.balance; local.institution=dataset.account.institution.name; local.currency=dataset.account.currency;
     const completedAt=Date.now(),durationMs=Math.max(0,completedAt-startedAt),total=(Number(local.connection.totalImportedTransactionCount)||0)+importedCount;
@@ -1001,9 +1022,9 @@ async function syncConnectedBankAccounts() {
   for (const a of connected) {
     try {
       if (a.connection.provider === "mock") {
-        await syncMockBankAccount();
+        await syncMockBankAccount(a.id);
       } else if (a.connection.provider === "mono" && a.connection.providerAccountId) {
-        await syncMonoAccount(a.connection.providerAccountId, a.name);
+        await syncMonoAccount(a.connection.providerAccountId, a.name, a.id);
       }
     } catch (error) {
       console.warn("Bank sync failed for " + a.name, error);
