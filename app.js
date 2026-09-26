@@ -1033,14 +1033,42 @@ async function syncMonoAccount(monoAccountId, accountName = "Connected bank") {
   return local;
 }
 
+function loadMonoConnectScript() {
+  if (typeof window.Connect === "function") return Promise.resolve();
+  if (window.__monoConnectPromise) return window.__monoConnectPromise;
+  window.__monoConnectPromise = new Promise((resolve, reject) => {
+    const existing = document.querySelector('script[data-omnipocket-mono]');
+    if (existing) {
+      existing.addEventListener("load", () => resolve(), { once: true });
+      existing.addEventListener("error", () => reject(new Error("Mono Connect could not be loaded. Check your network connection or content blocker.")), { once: true });
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = "https://connect.withmono.com/connect.js";
+    script.async = true;
+    script.dataset.omnipocketMono = "true";
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error("Mono Connect could not be loaded. Check your network connection or content blocker."));
+    document.head.appendChild(script);
+  });
+  return window.__monoConnectPromise;
+}
+
 async function connectBankAccount() {
   let config = integrationSettings();
   if (!config.supabaseUrl || !config.monoPublicKey) {
     config = configureBankIntegration();
     if (!config) return;
   }
+  try {
+    await loadMonoConnectScript();
+  } catch (error) {
+    console.error(error);
+    alert(error.message || "Mono Connect could not be loaded.");
+    return;
+  }
   if (typeof window.Connect !== "function") {
-    alert("Mono Connect is still loading. Please try again in a moment.");
+    alert("Mono Connect loaded, but the Connect API is unavailable.");
     return;
   }
 
