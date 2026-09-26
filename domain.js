@@ -19,6 +19,47 @@
     return direct > 0 ? direct : 1;
   }
 
+
+
+  function rateFromTable(table, from, to) {
+    if (from === to) return 1;
+    const direct = Number(table?.[from]?.[to]);
+    if (direct > 0) return direct;
+    return 1;
+  }
+
+  function convertAtRates(value, from, to, rates, fallbackState) {
+    const amount = Number(value) || 0;
+    if (from === to) return amount;
+    const direct = rateFromTable(rates, from, to);
+    if (direct !== 1 || (rates?.[from]?.[to] === 1)) return amount * direct;
+    return convert(fallbackState, amount, from, to);
+  }
+
+  function fxHistory(state, limit = 180) {
+    const rows = Array.isArray(state.settings?.fx?.history) ? state.settings.fx.history.slice() : [];
+    return rows.sort((a,b)=>Number(a.updatedAt)-Number(b.updatedAt)).slice(-limit);
+  }
+
+  function recordFxSnapshot(state, matrix, meta = {}) {
+    state.settings.fx = state.settings.fx || {};
+    state.settings.fx.history = Array.isArray(state.settings.fx.history) ? state.settings.fx.history : [];
+    const base = state.settings.baseCurrency;
+    const entry = { updatedAt: Number(meta.updatedAt) || Date.now(), base, source: meta.source || "unknown", rates: clone(matrix) };
+    state.settings.fx.history = state.settings.fx.history.filter(x => !(x.base === base && Math.abs(Number(x.updatedAt)-entry.updatedAt) < 60000));
+    state.settings.fx.history.push(entry);
+    state.settings.fx.history = state.settings.fx.history.slice(-180);
+    return entry;
+  }
+
+  function wealthChange(state, days = 30) {
+    const rows = historicalNetWorth(state, Math.max(days, 2));
+    if (rows.length < 2) return { current: netWorth(state), previous: null, change: null, pct: null };
+    const previous = Number(rows[0].value) || 0;
+    const current = Number(rows[rows.length-1].value) || 0;
+    return { current, previous, change: current - previous, pct: previous ? (current - previous) / Math.abs(previous) * 100 : null };
+  }
+
   function convert(state, value, from, to, overrideRate = null) {
     const amount = Number(value) || 0;
     return amount * rate(state, from, to, overrideRate);
@@ -400,7 +441,7 @@
   window.OmniPocketEngine = {
     DAY, rate, convert, balancesAt, netWorth, goalProgress,
     spendingSummary, flowSummary, goalProjection, snapshot,
-    recordDailySnapshot, historicalNetWorth,
+    recordDailySnapshot, historicalNetWorth, fxHistory, recordFxSnapshot, wealthChange,
     relatedAccounts, relatedGoals, relatedTransactions, accountExposure,
     goalNetwork, transactionNetwork, goalIntelligence, goalTrajectory, goalHealth
   };
