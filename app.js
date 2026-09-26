@@ -2123,13 +2123,6 @@ function readTransactionGoals(containerId) {
 
 function accountConnectionStatus(a){const c=a?.connection;if(!c||!c.provider)return{label:"Local account",tone:"local",detail:"Managed entirely on this device."};if(a.archived)return{label:"Archived",tone:"warning",detail:"Account is archived. History is preserved and syncing is paused."};if(c.status!=="connected")return{label:"Disconnected",tone:"warning",detail:"Bank connection is disconnected. Imported history remains available."};if(c.syncStatus==="healthy")return{label:"Connected",tone:"connected",detail:c.lastSyncedAt?"Last synced "+new Date(c.lastSyncedAt).toLocaleString():"Bank connection active."};if(c.syncStatus==="syncing")return{label:"Syncing",tone:"syncing",detail:"Bank data is being refreshed."};if(c.syncStatus==="error")return{label:"Sync failed",tone:"error",detail:c.lastSyncError||"The latest bank refresh failed."};return{label:"Connection needs attention",tone:"warning",detail:"The bank connection is not currently healthy."};}
 function refreshLocalAccount(id){const a=account(id);if(!a)return;rebuildBalances();saveState();openAccountDetail(id);}
-function refreshLocalAccount(id) {
-  const a = account(id);
-  if (!a) return;
-  rebuildBalances();
-  saveState();
-  openAccountDetail(id);
-}
 async function requestBankSync(id){const a=account(id);if(!a?.connection?.providerAccountId)return alert("This account is local. Use Reconcile to match it with your actual balance.");if(a.archived)return alert("Restore this archived account before syncing.");const button=$("accountDetailSync");if(button)button.disabled=true;const startedAt=Date.now();a.connection.syncStatus="syncing";a.connection.lastSyncStartedAt=new Date(startedAt).toISOString();a.connection.lastSyncError="";saveState();openAccountDetail(id);try{if(a.connection.provider==="mock")await syncMockBankAccount();else if(a.connection.provider==="mono")await syncMonoAccount(a.connection.providerAccountId,a.name,a.id);else throw new Error("Unsupported bank provider: "+a.connection.provider);openAccountDetail(id);render();}catch(error){a.connection.syncStatus="error";a.connection.lastSyncError=error?.message||"Sync failed";a.connection.lastSyncCompletedAt=new Date().toISOString();a.connection.lastSyncDurationMs=Date.now()-startedAt;saveState();openAccountDetail(id);alert(a.connection.lastSyncError);}finally{if(button)button.disabled=false;}}
 
 function openAccountDetail(id) {
@@ -2304,7 +2297,7 @@ function setupDynamicFields() {
 
 $("dashboardAddGoal")?.addEventListener("click", createGoal);
 $("dashboardAddAccount")?.addEventListener("click", () => $("accountDialog").showModal());
-$("fab")?.addEventListener("click", () => openQuick("expense"));$("paymentButton")?.addEventListener("click",openPaymentFlow);$("paymentSubmit")?.addEventListener("click",submitOmniPayment);
+$("fab")?.addEventListener("click", () => openQuick("expense"));$("paymentButton")?.addEventListener("click",openPaymentFlow);document.addEventListener("click",e=>{const b=e.target.closest("[data-demo-scenario]");if(b)simulateDemoBankScenario(b.dataset.demoScenario);});$("paymentSubmit")?.addEventListener("click",submitOmniPayment);
 document.querySelectorAll("[data-dashboard-quick]").forEach(button => {
   button.addEventListener("click", () => openQuick(button.dataset.dashboardQuick));
 });
