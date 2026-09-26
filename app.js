@@ -400,9 +400,26 @@ function openTransactionDetail(id) {
     if (pairCandidates.length) {
       pairWrap.hidden = false;
       const selected = pair ? pair.id : "";
+      const selectedSourceTx = pair ? (t.type === "expense" ? t : pair) : null;
+      const selectedDestinationTx = pair ? (t.type === "income" ? t : pair) : null;
+      const selectedSource = selectedSourceTx ? account(selectedSourceTx.sourceAccountId) : null;
+      const selectedDestination = selectedDestinationTx ? account(selectedDestinationTx.sourceAccountId) : null;
+      const selectedRate = selectedSourceTx && selectedDestinationTx && Number(selectedSourceTx.amount) > 0
+        ? Number(selectedDestinationTx.amount) / Number(selectedSourceTx.amount)
+        : null;
+      const selectedDateGap = pair ? Math.abs(new Date(String(t.date) + "T00:00:00") - new Date(String(pair.date) + "T00:00:00")) / 86400000 : null;
+      const reconciliationSummary = pair && selectedSource && selectedDestination
+        ? '<div class="transfer-reconciliation-summary">' +
+          '<div><span>FROM</span><strong>' + escapeHtml(selectedSource.name) + '</strong><b>' + escapeHtml(money(selectedSourceTx.amount, selectedSourceTx.currency)) + '</b></div>' +
+          '<div class="transfer-reconciliation-arrow">→</div>' +
+          '<div><span>TO</span><strong>' + escapeHtml(selectedDestination.name) + '</strong><b>' + escapeHtml(money(selectedDestinationTx.amount, selectedDestinationTx.currency)) + '</b></div>' +
+          '<div class="transfer-reconciliation-meta"><span>' + escapeHtml(selectedSource.currency === selectedDestination.currency ? "Same-currency transfer" : "Implied FX rate: " + (selectedRate || 0).toFixed(6) + " " + selectedDestination.currency + "/" + selectedSource.currency) + '</span><span>' + escapeHtml((selectedDateGap === 0 ? "Same-day legs" : (selectedDateGap.toFixed(1) + " day gap")) + " · Review before merging") + '</span></div>' +
+          '</div>'
+        : "";
       pairBox.innerHTML = "<strong>" + (pair ? "Selected transfer match" : "Possible transfer matches") + "</strong>" +
         (pair ? " · " + Math.round((Number(t.suggestedPairConfidence) || 0) * 100) + "% confidence" : "") +
-        '<div class="transfer-candidate-list">' +
+        reconciliationSummary +
+        '<div class="transfer-candidate-list">'
         pairCandidates.map(candidate => {
           const candidateAccount = account(candidate.sourceAccountId);
           const isSelected = candidate.id === selected;
