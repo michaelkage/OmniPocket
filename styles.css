@@ -137,3 +137,8 @@ textarea{width:100%;resize:vertical;border:1px solid #4a4650;background:#151419;
 #opOnboarding{max-width:560px}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.001ms!important;transition-duration:.001ms!important}}
 button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+
+/* Production hardening status + offline state */
+#offlineQueueStatus{margin-left:auto;white-space:nowrap}
+html[data-network="offline"] .online-only{opacity:.55;pointer-events:none}
+#offlineSyncNotice{margin-top:12px}
