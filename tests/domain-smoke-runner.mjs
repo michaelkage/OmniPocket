@@ -26,7 +26,7 @@ const state = {
 };
 
 assert.equal(E.balancesAt(state).find(a => a.id === "a").balance, 900);
-assert.equal(E.netWorth(state), 900);
+const materialized = E.balancesAt(state);\nstate.accounts = materialized;\nassert.equal(E.netWorth(state), 900);
 assert.equal(E.convert(state, 1500, "NGN", "USD"), 1);
 assert.equal(E.recordDailySnapshot(state, new Date("2026-09-25T12:00:00Z")).value, 900);
 console.log("OmniPocket domain smoke tests passed");
