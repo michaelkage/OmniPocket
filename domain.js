@@ -47,7 +47,7 @@
     }));
     const map = accountMap({ accounts });
     for (const tx of sortedTransactions(state, until)) {
-      if (tx.status === "needs_review" || tx.status === "superseded") continue;
+      if (tx.status === "needs_review" || tx.status === "superseded" || ["pending","failed","reversed"].includes(tx.bankStatus)) continue;
       const source = map.get(tx.sourceAccountId);
       const destination = map.get(tx.destinationAccountId);
       if (tx.type === "income" && source) source.balance += Math.abs(Number(tx.amount) || 0);
@@ -90,7 +90,7 @@
     let total = 0;
     let income = 0;
     for (const tx of state.transactions || []) {
-      if (String(tx.date) < cutoffDate || tx.status === "needs_review") continue;
+      if (String(tx.date) < cutoffDate || tx.status === "needs_review" || ["pending","failed","reversed"].includes(tx.bankStatus)) continue;
       if (tx.type === "expense") {
         const value = convert(state, tx.amount, tx.currency, state.settings.baseCurrency, tx.fxRate);
         const key = tx.category || "Other";
