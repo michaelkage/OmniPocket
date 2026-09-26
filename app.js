@@ -101,7 +101,13 @@ function migrateState(raw) {
       providerAccountId: a.connection.providerAccountId || null,
       status: a.connection.status || "disconnected",
       lastSyncedAt: a.connection.lastSyncedAt || null,
-      syncStatus: a.connection.syncStatus || null
+      syncStatus: a.connection.syncStatus || null,
+      lastSyncError: a.connection.lastSyncError || "", lastSyncStartedAt: a.connection.lastSyncStartedAt || null,
+      lastSyncCompletedAt: a.connection.lastSyncCompletedAt || a.connection.lastSyncedAt || null,
+      lastSyncDurationMs: Number.isFinite(Number(a.connection.lastSyncDurationMs)) ? Number(a.connection.lastSyncDurationMs) : null,
+      importedTransactionCount: Number.isFinite(Number(a.connection.importedTransactionCount)) ? Number(a.connection.importedTransactionCount) : 0,
+      totalImportedTransactionCount: Number.isFinite(Number(a.connection.totalImportedTransactionCount)) ? Number(a.connection.totalImportedTransactionCount) : 0,
+      syncHistory: Array.isArray(a.connection.syncHistory) ? a.connection.syncHistory.slice(0,20) : []
     } : null
   })) : [];
 
@@ -1083,74 +1089,26 @@ function createMockBankDataset() {
 }
 
 async function syncMockBankAccount() {
-  const dataset = createMockBankDataset();
-  const providerAccountId = dataset.account.id;
-  let local = state.accounts.find(a => a.connection?.provider === "mock" && a.connection.providerAccountId === providerAccountId);
-  if (!local) {
-    local = {
-      id: uid(),
-      name: dataset.account.name,
-      institution: dataset.account.institution.name,
-      type: "bank",
-      currency: dataset.account.currency,
-      openingBalance: dataset.account.balance,
-      balance: dataset.account.balance,
-      archived: false,
-      createdAt: Date.now(),
-      connection: { provider: "mock", providerAccountId, status: "connected", lastSyncedAt: null, syncStatus: "syncing" }
-    };
-    state.accounts.push(local);
-  }
-
-  const importedAt = Date.now();
-  let importedNet = 0;
-  for (const tx of dataset.transactions) {
-    const amount = Number(tx.amount) || 0;
-    const isCredit = tx.type === "credit";
-    importedNet += isCredit ? amount : -amount;
-    const exists = state.transactions.some(t => t.external?.provider === "mock" && t.external.providerTransactionId === tx.id);
-    if (exists) continue;
-    const suggestion = suggestTransactionCategory({ description: tx.narration, providerCategory: tx.category });
-    state.transactions.push({
-      id: uid(),
-      type: isCredit ? "income" : "expense",
-      status: "recorded",
-      date: tx.date,
-      createdAt: importedAt,
-      sourceAccountId: local.id,
-      destinationAccountId: null,
-      amount,
-      currency: tx.currency,
-      receivedAmount: null,
-      receivedCurrency: null,
-      fxRate: null,
-      fxSource: "bank_import",
-      category: tx.category || "Other",
-      suggestedCategory: suggestion?.category || null,
-      categoryConfidence: suggestion?.confidence || null,
-      categoryReason: suggestion?.reason || "",
-      note: tx.narration,
-      linkedGoalIds: [],
-      external: { provider: "mock", providerTransactionId: tx.id, importedAt: new Date(importedAt).toISOString(), lastSeenAt: new Date(importedAt).toISOString() }
-    });
-  }
-
-  local.openingBalance = dataset.account.balance - importedNet;
-  local.balance = dataset.account.balance;
-  local.institution = dataset.account.institution.name;
-  local.currency = dataset.account.currency;
-  local.connection = {
-    provider: "mock",
-    providerAccountId,
-    status: "connected",
-    lastSyncedAt: new Date().toISOString(),
-    syncStatus: "healthy"
-  };
-  saveState();
-  emitStateEvent("account:updated", { accountId: local.id, provider: "mock" });
-  return local;
+  const dataset=createMockBankDataset(), providerAccountId=dataset.account.id;
+  let local=state.accounts.find(a=>a.connection?.provider==="mock"&&a.connection.providerAccountId===providerAccountId);
+  if(!local){local={id:uid(),name:dataset.account.name,institution:dataset.account.institution.name,type:"bank",currency:dataset.account.currency,openingBalance:dataset.account.balance,balance:dataset.account.balance,archived:false,createdAt:Date.now(),connection:{provider:"mock",providerAccountId,status:"connected",lastSyncedAt:null,syncStatus:"syncing",lastSyncError:"",lastSyncStartedAt:null,lastSyncCompletedAt:null,lastSyncDurationMs:null,importedTransactionCount:0,totalImportedTransactionCount:0,syncHistory:[]}};state.accounts.push(local);}
+  const startedAt=Date.now(); local.connection={...(local.connection||{}),provider:"mock",providerAccountId,status:"connected",syncStatus:"syncing",lastSyncStartedAt:new Date(startedAt).toISOString(),lastSyncError:""}; saveState();
+  let importedCount=0;
+  try{
+    const importedAt=Date.now(); let importedNet=0;
+    for(const tx of dataset.transactions){
+      const amount=Number(tx.amount)||0,isCredit=tx.type==="credit"; importedNet+=isCredit?amount:-amount;
+      const exists=state.transactions.find(t=>t.external?.provider==="mock"&&t.external.providerTransactionId===tx.id);
+      if(exists){exists.external.lastSeenAt=new Date(importedAt).toISOString();continue;}
+      const suggestion=suggestTransactionCategory({description:tx.narration,providerCategory:tx.category});
+      state.transactions.push({id:uid(),type:isCredit?"income":"expense",status:"recorded",date:tx.date,createdAt:importedAt,sourceAccountId:local.id,destinationAccountId:null,amount,currency:tx.currency,receivedAmount:null,receivedCurrency:null,fxRate:null,fxSource:"bank_import",category:tx.category||"Other",suggestedCategory:suggestion?.category||null,categoryConfidence:suggestion?.confidence||null,categoryReason:suggestion?.reason||"",note:tx.narration,linkedGoalIds:[],external:{provider:"mock",providerTransactionId:tx.id,importedAt:new Date(importedAt).toISOString(),lastSeenAt:new Date(importedAt).toISOString()}}); importedCount++;
+    }
+    local.openingBalance=dataset.account.balance-importedNet; local.balance=dataset.account.balance; local.institution=dataset.account.institution.name; local.currency=dataset.account.currency;
+    const completedAt=Date.now(),durationMs=Math.max(0,completedAt-startedAt),total=(Number(local.connection.totalImportedTransactionCount)||0)+importedCount;
+    local.connection={...local.connection,lastSyncedAt:new Date(completedAt).toISOString(),lastSyncCompletedAt:new Date(completedAt).toISOString(),syncStatus:"healthy",lastSyncError:"",lastSyncDurationMs:durationMs,importedTransactionCount:importedCount,totalImportedTransactionCount:total,syncHistory:[{startedAt:new Date(startedAt).toISOString(),completedAt:new Date(completedAt).toISOString(),status:"success",durationMs,importedCount},...(local.connection.syncHistory||[])].slice(0,20)};
+    saveState(); emitStateEvent("account:updated",{accountId:local.id,provider:"mock",importedCount}); return local;
+  }catch(error){const completedAt=Date.now();local.connection.syncStatus="error";local.connection.lastSyncError=error?.message||"Sync failed";local.connection.lastSyncCompletedAt=new Date(completedAt).toISOString();local.connection.lastSyncDurationMs=completedAt-startedAt;local.connection.syncHistory=[{startedAt:local.connection.lastSyncStartedAt,completedAt:local.connection.lastSyncCompletedAt,status:"error",durationMs:local.connection.lastSyncDurationMs,importedCount,error:local.connection.lastSyncError},...(local.connection.syncHistory||[])].slice(0,20);saveState();throw error;}
 }
-
 async function syncConnectedBankAccounts() {
   const connected = state.accounts.filter(a => a.connection?.status === "connected" && a.connection.provider);
   for (const a of connected) {
@@ -1432,11 +1390,12 @@ function render() {
 }
 
 function providerLabel(a){const p=String(a?.connection?.provider||"").toLowerCase();return p==="mono"?"MONO":p==="mock"?"DEMO BANK":"LOCAL";}
-function connectionTone(a){const c=a?.connection;if(!c?.provider)return"local";if(c.status!=="connected")return"warning";if(c.syncStatus==="syncing")return"syncing";if(c.syncStatus==="error")return"error";return"connected";}
+function connectionTone(a){const c=a?.connection;if(!c?.provider)return"local";if(a.archived)return"warning";if(c.status!=="connected")return"warning";if(c.syncStatus==="syncing")return"syncing";if(c.syncStatus==="error")return"error";return"connected";}
 function relativeSyncTime(v){if(!v)return"Never synced";const t=new Date(v).getTime();if(!Number.isFinite(t))return"Unknown";const m=Math.max(0,Math.round((Date.now()-t)/60000));if(m<1)return"Just now";if(m<60)return m+"m ago";const h=Math.round(m/60);if(h<24)return h+"h ago";return Math.round(h/24)+"d ago";}
-function renderAccountCard(a){const c=accountConnectionStatus(a),tone=connectionTone(a),sync=a.connection?.providerAccountId?'<button type="button" class="text-button account-inline-sync" data-sync-account="'+escapeHtml(a.id)+'">'+(tone==="syncing"?"Syncing…":"Sync now")+"</button>":"";const err=a.connection?.lastSyncError?'<div class="account-sync-error">'+escapeHtml(a.connection.lastSyncError)+"</div>":"";return'<div class="account-control-card"><div class="account-control-main"><div class="account-main"><span class="node">◉</span><div class="truncate"><strong>'+escapeHtml(a.name)+'</strong><div class="muted">'+escapeHtml(a.institution||"Personal")+" · "+escapeHtml(a.currency)+" · "+escapeHtml(a.type)+'</div></div></div><span class="amount">'+(state.settings.privacyHidden?"••••":escapeHtml(money(a.balance,a.currency)))+'</span></div><div class="account-control-meta"><span class="provider-badge">'+providerLabel(a)+'</span><span class="account-status-chip" data-tone="'+tone+'">'+escapeHtml(c.label)+'</span><span class="muted">Last sync · '+relativeSyncTime(a.connection?.lastSyncedAt)+"</span>"+sync+'<button type="button" class="text-button account-open-action" data-open-account="'+escapeHtml(a.id)+'">Manage</button></div>'+err+"</div>";}
+function formatSyncDuration(ms){if(!Number.isFinite(Number(ms)))return"—";const s=Math.max(0,Math.round(Number(ms)/1000));return s<1?"<1s":s+"s";}
+function renderAccountCard(a){const c=accountConnectionStatus(a),tone=connectionTone(a),x=a.connection||{},sync=x.providerAccountId&&!a.archived?'<button type="button" class="text-button account-inline-sync" data-sync-account="'+escapeHtml(a.id)+'">'+(tone==="syncing"?"Syncing…":"Sync now")+"</button>":"",action=a.archived?'<button type="button" class="text-button" data-restore-account="'+escapeHtml(a.id)+'">Restore</button>':'<button type="button" class="text-button account-open-action" data-open-account="'+escapeHtml(a.id)+'">Manage</button>',imported=Number(x.importedTransactionCount)||0,totalImported=Number(x.totalImportedTransactionCount)||0,err=x.lastSyncError?'<div class="account-sync-error">'+escapeHtml(x.lastSyncError)+"</div>":"";return'<div class="account-control-card '+(a.archived?"is-archived":"")+'"><div class="account-control-main"><div class="account-main"><span class="node">◉</span><div class="truncate"><strong>'+escapeHtml(a.name)+'</strong><div class="muted">'+escapeHtml(a.institution||"Personal")+" · "+escapeHtml(a.currency)+" · "+escapeHtml(a.type)+'</div></div></div><span class="amount">'+(state.settings.privacyHidden?"••••":escapeHtml(money(a.balance,a.currency)))+'</span></div><div class="account-control-meta"><span class="provider-badge">'+providerLabel(a)+'</span><span class="account-status-chip" data-tone="'+tone+'">'+escapeHtml(c.label)+'</span><span class="muted">Last sync · '+relativeSyncTime(x.lastSyncedAt)+'</span><span class="muted">'+(x.provider?"Imported "+imported+" last sync · "+totalImported+" total":"Local only")+'</span>'+sync+action+'</div>'+(x.provider?'<div class="account-health-row"><span>Last run '+relativeSyncTime(x.lastSyncCompletedAt||x.lastSyncedAt)+'</span><span>Duration '+formatSyncDuration(x.lastSyncDurationMs)+'</span><span>'+((x.syncHistory||[]).length)+' recorded runs</span></div>':"")+err+"</div>";}
 function renderAccounts(){const el=$("accountList"),allowed=new Set(contextAccountIds()),accounts=state.accounts.filter(a=>!a.archived&&allowed.has(a.id)).slice(0,5);if(!accounts.length){el.innerHTML='<div class="empty-state">No money nodes yet. Add your first account.</div>';return;}el.innerHTML=accounts.map(renderAccountCard).join("");}
-function renderAccountsControlCenter(){const overview=$("accountsOverview"),connections=$("bankConnectionsList"),full=$("accountsFullList");if(!overview||!connections||!full)return;const active=state.accounts.filter(a=>!a.archived),connected=active.filter(a=>a.connection?.provider&&a.connection.status==="connected"),attention=active.filter(a=>a.connection?.syncStatus==="error"||a.connection?.lastSyncError),total=active.reduce((sum,a)=>sum+convert(a.balance,a.currency,state.settings.baseCurrency),0);overview.innerHTML='<div class="account-overview-card"><span class="eyebrow">ACTIVE NODES</span><strong>'+active.length+'</strong><small>accounts</small></div><div class="account-overview-card"><span class="eyebrow">CONNECTED BANKS</span><strong>'+connected.length+'</strong><small>live sources</small></div><div class="account-overview-card"><span class="eyebrow">CONTROLLED WEALTH</span><strong>'+(state.settings.privacyHidden?"••••••":money(total,state.settings.baseCurrency))+'</strong><small>active balances</small></div><div class="account-overview-card '+(attention.length?"has-attention":"")+'"><span class="eyebrow">SYNC ATTENTION</span><strong>'+attention.length+'</strong><small>'+(attention.length===1?"account needs review":"accounts need review")+'</small></div>';const banks=active.filter(a=>a.connection?.provider);connections.innerHTML=banks.length?banks.map(renderAccountCard).join(""):'<div class="empty-state bank-empty"><strong>No bank connections yet.</strong><span>Use Demo Bank to test the full sync pipeline, or connect a real provider when credentials are available.</span></div>';full.innerHTML=active.length?active.map(renderAccountCard).join(""):'<div class="empty-state"><strong>No money nodes yet.</strong><span>Add an account or connect a bank to start tracking your wealth.</span></div>';}
+function renderAccountsControlCenter(){const overview=$("accountsOverview"),connections=$("bankConnectionsList"),full=$("accountsFullList"),archivedEl=$("accountsArchivedList");if(!overview||!connections||!full)return;const active=state.accounts.filter(a=>!a.archived),archived=state.accounts.filter(a=>a.archived),connected=active.filter(a=>a.connection?.provider&&a.connection.status==="connected"),attention=active.filter(a=>a.connection?.syncStatus==="error"||a.connection?.lastSyncError),imported=active.reduce((sum,a)=>sum+(Number(a.connection?.importedTransactionCount)||0),0),total=active.reduce((sum,a)=>sum+convert(a.balance,a.currency,state.settings.baseCurrency),0);overview.innerHTML='<div class="account-overview-card"><span class="eyebrow">ACTIVE NODES</span><strong>'+active.length+'</strong><small>accounts</small></div><div class="account-overview-card"><span class="eyebrow">CONNECTED BANKS</span><strong>'+connected.length+'</strong><small>live sources</small></div><div class="account-overview-card"><span class="eyebrow">IMPORTED</span><strong>'+imported+'</strong><small>new rows on latest sync</small></div><div class="account-overview-card '+(attention.length?"has-attention":"")+'"><span class="eyebrow">SYNC ATTENTION</span><strong>'+attention.length+'</strong><small>accounts needing review</small></div><div class="account-overview-card"><span class="eyebrow">CONTROLLED WEALTH</span><strong>'+(state.settings.privacyHidden?"••••••":money(total,state.settings.baseCurrency))+'</strong><small>active balances</small></div>';const banks=active.filter(a=>a.connection?.provider);connections.innerHTML=banks.length?banks.map(renderAccountCard).join(""):'<div class="empty-state bank-empty"><strong>No bank connections yet.</strong><span>Use Demo Bank to test the full sync pipeline, or connect a real provider when credentials are available.</span></div>';full.innerHTML=active.length?active.map(renderAccountCard).join(""):'<div class="empty-state"><strong>No money nodes yet.</strong><span>Add an account or connect a bank to start tracking your wealth.</span></div>';if(archivedEl)archivedEl.innerHTML=archived.length?archived.map(renderAccountCard).join(""):'<div class="empty-state">Archived accounts will appear here.</div>';}
 
 function renderActivity() {
   const el = $("activityList");
@@ -2048,7 +2007,7 @@ document.addEventListener("click", event => {
 });
 
 $("accountDetailRefresh")?.addEventListener("click", () => refreshLocalAccount($("accountDetailDialog").dataset.accountId));
-$("accountDetailDisconnect")?.addEventListener("click", () => disconnectBankAccount($("accountDetailDialog").dataset.accountId));
+$("accountDetailDisconnect")?.addEventListener("click", () => disconnectBankAccount($("accountDetailDialog").dataset.accountId));$("accountDetailArchive")?.addEventListener("click",()=>archiveAccount($("accountDetailDialog").dataset.accountId));document.addEventListener("click",event=>{const restore=event.target.closest("[data-restore-account]");if(restore){event.preventDefault();archiveAccount(restore.dataset.restoreAccount);}});
 $("syncAllBanksButton")?.addEventListener("click",async()=>{const b=$("syncAllBanksButton");if(b)b.disabled=true;try{await syncConnectedBankAccounts();render();}finally{if(b)b.disabled=false;}});
 $("connectBankPageButton")?.addEventListener("click",()=>$("accountDialog")?.showModal());
 $("bankConnectionsList")?.addEventListener("click",event=>{const sync=event.target.closest("[data-sync-account]");if(sync){requestBankSync(sync.dataset.syncAccount);return;}const manage=event.target.closest("[data-open-account]");if(manage)openAccountDetail(manage.dataset.openAccount);});
@@ -2292,14 +2251,8 @@ function readTransactionGoals(containerId) {
 }
 
 
-function accountConnectionStatus(a) {
-  const c = a?.connection;
-  if (!c || !c.provider) return { label: "Local account", tone: "local", detail: "Managed entirely on this device." };
-  if (c.status !== "connected") return { label: "Disconnected", tone: "warning", detail: "Bank connection is disconnected. Account history remains on this device." };
-  if (c.status === "connected" && c.syncStatus === "healthy") return { label: "Connected", tone: "connected", detail: c.lastSyncedAt ? "Last synced " + new Date(c.lastSyncedAt).toLocaleString() : "Bank connection active." };
-  if (c.syncStatus === "syncing") return { label: "Syncing", tone: "syncing", detail: "Bank data is being refreshed." };
-  return { label: "Connection needs attention", tone: "warning", detail: "The bank connection is not currently healthy." };
-}
+function accountConnectionStatus(a){const c=a?.connection;if(!c||!c.provider)return{label:"Local account",tone:"local",detail:"Managed entirely on this device."};if(a.archived)return{label:"Archived",tone:"warning",detail:"Account is archived. History is preserved and syncing is paused."};if(c.status!=="connected")return{label:"Disconnected",tone:"warning",detail:"Bank connection is disconnected. Imported history remains available."};if(c.syncStatus==="healthy")return{label:"Connected",tone:"connected",detail:c.lastSyncedAt?"Last synced "+new Date(c.lastSyncedAt).toLocaleString():"Bank connection active."};if(c.syncStatus==="syncing")return{label:"Syncing",tone:"syncing",detail:"Bank data is being refreshed."};if(c.syncStatus==="error")return{label:"Sync failed",tone:"error",detail:c.lastSyncError||"The latest bank refresh failed."};return{label:"Connection needs attention",tone:"warning",detail:"The bank connection is not currently healthy."};}
+function refreshLocalAccount(id){const a=account(id);if(!a)return;rebuildBalances();saveState();openAccountDetail(id);}
 function refreshLocalAccount(id) {
   const a = account(id);
   if (!a) return;
@@ -2307,32 +2260,7 @@ function refreshLocalAccount(id) {
   saveState();
   openAccountDetail(id);
 }
-async function requestBankSync(id) {
-  const a = account(id);
-  if (!a?.connection?.providerAccountId) return alert("This account is local. Use Reconcile to match it with your actual balance.");
-  const button = $("accountDetailSync");
-  if (button) button.disabled = true;
-  a.connection.syncStatus = "syncing";
-  a.connection.lastSyncError = "";
-  saveState();
-  openAccountDetail(id);
-  try {
-    if (a.connection.provider === "mock") await syncMockBankAccount();
-    else if (a.connection.provider === "mono") await syncMonoAccount(a.connection.providerAccountId, a.name);
-    else throw new Error("Unsupported bank provider: " + a.connection.provider);
-    openAccountDetail(id);
-    render();
-  } catch (error) {
-    a.connection.syncStatus = "error";
-    a.connection.lastSyncError = error?.message || "Sync failed";
-    saveState();
-    openAccountDetail(id);
-    alert(a.connection.lastSyncError);
-  } finally {
-    if (button) button.disabled = false;
-  }
-}
-
+async function requestBankSync(id){const a=account(id);if(!a?.connection?.providerAccountId)return alert("This account is local. Use Reconcile to match it with your actual balance.");if(a.archived)return alert("Restore this archived account before syncing.");const button=$("accountDetailSync");if(button)button.disabled=true;const startedAt=Date.now();a.connection.syncStatus="syncing";a.connection.lastSyncStartedAt=new Date(startedAt).toISOString();a.connection.lastSyncError="";saveState();openAccountDetail(id);try{if(a.connection.provider==="mock")await syncMockBankAccount();else if(a.connection.provider==="mono")await syncMonoAccount(a.connection.providerAccountId,a.name);else throw new Error("Unsupported bank provider: "+a.connection.provider);openAccountDetail(id);render();}catch(error){a.connection.syncStatus="error";a.connection.lastSyncError=error?.message||"Sync failed";a.connection.lastSyncCompletedAt=new Date().toISOString();a.connection.lastSyncDurationMs=Date.now()-startedAt;a.connection.syncHistory=[{startedAt:a.connection.lastSyncStartedAt,completedAt:a.connection.lastSyncCompletedAt,status:"error",durationMs:a.connection.lastSyncDurationMs,importedCount:0,error:a.connection.lastSyncError},...(a.connection.syncHistory||[])].slice(0,20);saveState();openAccountDetail(id);alert(a.connection.lastSyncError);}finally{if(button)button.disabled=false;}}
 function openAccountDetail(id) {
   const a = account(id);
   if (!a) return;
@@ -2375,8 +2303,7 @@ function editAccount(id) {
 }
 
 function archiveAccount(id){const a=account(id);if(!a)return;if(a.archived){a.archived=false;saveState();openAccountDetail(id);return;}if(!confirm("Archive "+a.name+"? Its history and bank connection data will be kept."))return;a.archived=true;saveState();$("accountDetailDialog")?.close();}
-function disconnectBankAccount(id){const a=account(id);if(!a?.connection?.provider)return;if(a.connection.status==="connected"){if(!confirm("Disconnect "+a.name+"? Imported history will stay in OmniPocket, but automatic bank syncing will stop."))return;a.connection.status="disconnected";a.connection.syncStatus="paused";a.connection.lastSyncError="";}else{a.connection.status="connected";a.connection.syncStatus="healthy";}saveState();openAccountDetail(id);}
-
+async function disconnectBankAccount(id){const a=account(id);if(!a?.connection?.provider)return;if(a.connection.status==="connected"){if(!confirm("Disconnect "+a.name+"? Imported history will stay in OmniPocket, but automatic bank syncing will stop."))return;a.connection.status="disconnected";a.connection.syncStatus="paused";a.connection.lastSyncError="";saveState();openAccountDetail(id);render();return;}if(a.archived)return alert("Restore the account before reconnecting it.");if(a.connection.provider==="mock"){a.connection.status="connected";a.connection.syncStatus="syncing";a.connection.lastSyncError="";saveState();openAccountDetail(id);try{await syncMockBankAccount();openAccountDetail(id);render();}catch(error){a.connection.status="disconnected";a.connection.syncStatus="error";a.connection.lastSyncError=error.message||"Reconnect failed";saveState();openAccountDetail(id);}return;}a.connection.status="reconnecting";a.connection.syncStatus="syncing";saveState();render();$("accountDetailDialog")?.close();$("accountName").value=a.name;$("accountInstitution").value=a.institution||"";$("accountDialog")?.showModal();try{await connectBankAccount();}catch(error){a.connection.status="disconnected";a.connection.syncStatus="error";a.connection.lastSyncError=error.message||"Reconnect failed";saveState();render();}}
 function openGoalDetail(id) {
   const g = state.goals.find(x => x.id === id);
   if (!g) return;
