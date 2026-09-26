@@ -1005,7 +1005,7 @@ async function syncMockBankAccount(preferredAccountId=null) {
   try{
     const importedAt=Date.now(); let importedNet=0;
     for(const tx of dataset.transactions){
-      const amount=Number(tx.amount)||0,isCredit=tx.type==="credit"; importedNet+=isCredit?amount:-amount;
+      const amount=Number(tx.amount)||0,isCredit=tx.type==="credit"; if(tx.bankStatus==="posted") importedNet+=isCredit?amount:-amount;
       const exists=state.transactions.find(t=>t.external?.provider==="mock"&&t.external.providerTransactionId===tx.id);
       if(exists){exists.external.lastSeenAt=new Date(importedAt).toISOString();if(tx.bankStatus&&exists.bankStatus!==tx.bankStatus){exists.bankStatus=tx.bankStatus;}continue;}
       const suggestion=suggestTransactionCategory({description:tx.narration,providerCategory:tx.category});
