@@ -1877,6 +1877,14 @@ document.addEventListener("click", event => {
   if (accountLink) { $("goalDetailDialog")?.close(); selectAccountContext(accountLink.dataset.accountFromGoal); openAccountDetail(accountLink.dataset.accountFromGoal); }
 });
 
+document.addEventListener("keydown", event => {
+  if (event.key !== "Enter" && event.key !== " ") return;
+  const row = event.target.closest("[data-account-id], [data-goal-id], [data-transaction-id]");
+  if (!row || event.target.closest("button, a, input, select, textarea")) return;
+  event.preventDefault();
+  row.click();
+});
+
 document.addEventListener("click", event => {
   const txRow = event.target.closest("[data-transaction-id]");
   if (txRow && !event.target.closest("button")) { selectTransactionContext(txRow.dataset.transactionId); openTransactionDetail(txRow.dataset.transactionId); }
