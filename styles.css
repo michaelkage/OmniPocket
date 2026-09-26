@@ -142,3 +142,8 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 #offlineQueueStatus{margin-left:auto;white-space:nowrap}
 html[data-network="offline"] .online-only{opacity:.55;pointer-events:none}
 #offlineSyncNotice{margin-top:12px}
+
+/* Production hardening status */
+#offlineQueueStatus{margin-left:auto;white-space:nowrap}
+html[data-network="offline"] .online-only{opacity:.55;pointer-events:none}
+#offlineSyncNotice{margin-top:12px}
