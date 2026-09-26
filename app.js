@@ -353,7 +353,7 @@ function openTransactionDetail(id) {
   $("transactionDetailContext").textContent = t.type === "transfer" || t.type === "withdrawal"
     ? (source?.name || "Unknown") + " → " + (dest?.name || "Unknown")
     : source?.name || incoming?.name || "Unknown account";
-  $("transactionDetailStatus").textContent = t.status === "needs_review" ? "Needs review — handle later" : t.status === "superseded" ? "Paired transfer leg — excluded from ledger" : "Recorded";
+  $("transactionDetailStatus").textContent = t.bankStatus === "pending" ? "Pending at provider — not included in available balance" : t.bankStatus === "failed" ? "Failed at provider — no balance movement" : t.bankStatus === "reversed" ? "Reversed by provider" : t.status === "needs_review" ? "Needs review — handle later" : t.status === "superseded" ? "Paired transfer leg — excluded from ledger" : "Posted / recorded";
   const suggestionWrap = $("transactionSuggestionSection");
   const suggestionBox = $("transactionSuggestion");
   const suggestionButton = $("transactionAcceptSuggestion");
