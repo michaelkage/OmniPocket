@@ -1105,7 +1105,7 @@ async function syncMockBankAccount() {
   const importedAt = Date.now();
   let importedNet = 0;
   for (const tx of dataset.transactions) {
-    const amount = minorUnitAmount(tx.amount);
+    const amount = Number(tx.amount) || 0;
     const isCredit = tx.type === "credit";
     importedNet += isCredit ? amount : -amount;
     const exists = state.transactions.some(t => t.external?.provider === "mock" && t.external.providerTransactionId === tx.id);
@@ -1424,33 +1424,19 @@ function render() {
   $("accountCount").textContent = `${state.accounts.filter(a => !a.archived).length} account${state.accounts.filter(a => !a.archived).length === 1 ? "" : "s"}`;
   $("syncState").textContent = state.settings.mode === "offline" ? "Offline" : "Local-first";
   renderAccounts();
+  renderAccountsControlCenter();
   renderActivity();
   renderGoal();
   renderFullViews();
   renderDashboard();
 }
 
-function renderAccounts() {
-  const el = $("accountList");
-  const allowed = new Set(contextAccountIds());
-  const accounts = state.accounts.filter(a => !a.archived && allowed.has(a.id)).slice(0, 5);
-  if (!accounts.length) {
-    el.innerHTML = '<div class="empty-state">No money nodes yet. Add your first account.</div>';
-    return;
-  }
-  el.innerHTML = accounts.map(a => `
-    <div class="account-row interactive-row" data-account-id="${escapeHtml(a.id)}" tabindex="0" role="button" aria-label="Open account">
-      <div class="account-main">
-        <span class="node">◉</span>
-        <div class="truncate">
-          <div class="row-title-with-context"><span>${escapeHtml(a.name)}</span>${context.scope==="account"&&context.accountId===a.id?'<span class="context-link-badge">Selected</span>':""}</div>
-          <div class="muted">${escapeHtml(a.currency)} · ${escapeHtml(a.type)}</div>
-        </div>
-      </div>
-      <span class="amount">${state.settings.privacyHidden ? "••••" : escapeHtml(money(a.balance, a.currency))}</span>
-    </div>
-  `).join("");
-}
+function providerLabel(a){const p=String(a?.connection?.provider||"").toLowerCase();return p==="mono"?"MONO":p==="mock"?"DEMO BANK":"LOCAL";}
+function connectionTone(a){const c=a?.connection;if(!c?.provider)return"local";if(c.status!=="connected")return"warning";if(c.syncStatus==="syncing")return"syncing";if(c.syncStatus==="error")return"error";return"connected";}
+function relativeSyncTime(v){if(!v)return"Never synced";const t=new Date(v).getTime();if(!Number.isFinite(t))return"Unknown";const m=Math.max(0,Math.round((Date.now()-t)/60000));if(m<1)return"Just now";if(m<60)return m+"m ago";const h=Math.round(m/60);if(h<24)return h+"h ago";return Math.round(h/24)+"d ago";}
+function renderAccountCard(a){const c=accountConnectionStatus(a),tone=connectionTone(a),sync=a.connection?.providerAccountId?'<button type="button" class="text-button account-inline-sync" data-sync-account="'+escapeHtml(a.id)+'">'+(tone==="syncing"?"Syncing…":"Sync now")+"</button>":"";const err=a.connection?.lastSyncError?'<div class="account-sync-error">'+escapeHtml(a.connection.lastSyncError)+"</div>":"";return'<div class="account-control-card"><div class="account-control-main"><div class="account-main"><span class="node">◉</span><div class="truncate"><strong>'+escapeHtml(a.name)+'</strong><div class="muted">'+escapeHtml(a.institution||"Personal")+" · "+escapeHtml(a.currency)+" · "+escapeHtml(a.type)+'</div></div></div><span class="amount">'+(state.settings.privacyHidden?"••••":escapeHtml(money(a.balance,a.currency)))+'</span></div><div class="account-control-meta"><span class="provider-badge">'+providerLabel(a)+'</span><span class="account-status-chip" data-tone="'+tone+'">'+escapeHtml(c.label)+'</span><span class="muted">Last sync · '+relativeSyncTime(a.connection?.lastSyncedAt)+"</span>"+sync+'<button type="button" class="text-button account-open-action" data-open-account="'+escapeHtml(a.id)+'">Manage</button></div>'+err+"</div>";}
+function renderAccounts(){const el=$("accountList"),allowed=new Set(contextAccountIds()),accounts=state.accounts.filter(a=>!a.archived&&allowed.has(a.id)).slice(0,5);if(!accounts.length){el.innerHTML='<div class="empty-state">No money nodes yet. Add your first account.</div>';return;}el.innerHTML=accounts.map(renderAccountCard).join("");}
+function renderAccountsControlCenter(){const overview=$("accountsOverview"),connections=$("bankConnectionsList"),full=$("accountsFullList");if(!overview||!connections||!full)return;const active=state.accounts.filter(a=>!a.archived),connected=active.filter(a=>a.connection?.provider&&a.connection.status==="connected"),attention=active.filter(a=>a.connection?.syncStatus==="error"||a.connection?.lastSyncError),total=active.reduce((sum,a)=>sum+convert(a.balance,a.currency,state.settings.baseCurrency),0);overview.innerHTML='<div class="account-overview-card"><span class="eyebrow">ACTIVE NODES</span><strong>'+active.length+'</strong><small>accounts</small></div><div class="account-overview-card"><span class="eyebrow">CONNECTED BANKS</span><strong>'+connected.length+'</strong><small>live sources</small></div><div class="account-overview-card"><span class="eyebrow">CONTROLLED WEALTH</span><strong>'+(state.settings.privacyHidden?"••••••":money(total,state.settings.baseCurrency))+'</strong><small>active balances</small></div><div class="account-overview-card '+(attention.length?"has-attention":"")+'"><span class="eyebrow">SYNC ATTENTION</span><strong>'+attention.length+'</strong><small>'+(attention.length===1?"account needs review":"accounts need review")+'</small></div>';const banks=active.filter(a=>a.connection?.provider);connections.innerHTML=banks.length?banks.map(renderAccountCard).join(""):'<div class="empty-state bank-empty"><strong>No bank connections yet.</strong><span>Use Demo Bank to test the full sync pipeline, or connect a real provider when credentials are available.</span></div>';full.innerHTML=active.length?active.map(renderAccountCard).join(""):'<div class="empty-state"><strong>No money nodes yet.</strong><span>Add an account or connect a bank to start tracking your wealth.</span></div>';}
 
 function renderActivity() {
   const el = $("activityList");
@@ -2062,6 +2048,11 @@ document.addEventListener("click", event => {
 });
 
 $("accountDetailRefresh")?.addEventListener("click", () => refreshLocalAccount($("accountDetailDialog").dataset.accountId));
+$("accountDetailDisconnect")?.addEventListener("click", () => disconnectBankAccount($("accountDetailDialog").dataset.accountId));
+$("syncAllBanksButton")?.addEventListener("click",async()=>{const b=$("syncAllBanksButton");if(b)b.disabled=true;try{await syncConnectedBankAccounts();render();}finally{if(b)b.disabled=false;}});
+$("connectBankPageButton")?.addEventListener("click",()=>$("accountDialog")?.showModal());
+$("bankConnectionsList")?.addEventListener("click",event=>{const sync=event.target.closest("[data-sync-account]");if(sync){requestBankSync(sync.dataset.syncAccount);return;}const manage=event.target.closest("[data-open-account]");if(manage)openAccountDetail(manage.dataset.openAccount);});
+$("accountsFullList")?.addEventListener("click",event=>{const sync=event.target.closest("[data-sync-account]");if(sync){requestBankSync(sync.dataset.syncAccount);return;}const manage=event.target.closest("[data-open-account]");if(manage)openAccountDetail(manage.dataset.openAccount);});
 $("accountDetailSync")?.addEventListener("click", () => requestBankSync($("accountDetailDialog").dataset.accountId));
 $("accountDetailReconcile")?.addEventListener("click", () => {
   const id = $("accountDetailDialog").dataset.accountId;
@@ -2303,7 +2294,8 @@ function readTransactionGoals(containerId) {
 
 function accountConnectionStatus(a) {
   const c = a?.connection;
-  if (!c || c.provider !== "mono") return { label: "Local account", tone: "local", detail: "Managed entirely on this device." };
+  if (!c || !c.provider) return { label: "Local account", tone: "local", detail: "Managed entirely on this device." };
+  if (c.status !== "connected") return { label: "Disconnected", tone: "warning", detail: "Bank connection is disconnected. Account history remains on this device." };
   if (c.status === "connected" && c.syncStatus === "healthy") return { label: "Connected", tone: "connected", detail: c.lastSyncedAt ? "Last synced " + new Date(c.lastSyncedAt).toLocaleString() : "Bank connection active." };
   if (c.syncStatus === "syncing") return { label: "Syncing", tone: "syncing", detail: "Bank data is being refreshed." };
   return { label: "Connection needs attention", tone: "warning", detail: "The bank connection is not currently healthy." };
@@ -2353,7 +2345,11 @@ function openAccountDetail(id) {
   const connection = accountConnectionStatus(a);
   $("accountDetailStats").innerHTML = "<span>" + txs.length + " transaction" + (txs.length === 1 ? "" : "s") + "</span><span>" + (a.archived ? "Archived" : "Active") + "</span><span class=\"account-connection-chip\" data-tone=\"" + escapeHtml(connection.tone) + "\">" + escapeHtml(connection.label) + "</span>";
   const syncMeta = $("accountDetailSyncMeta");
-  if (syncMeta) syncMeta.textContent = connection.detail;
+  if (syncMeta) syncMeta.innerHTML = '<strong>' + escapeHtml(connection.detail) + '</strong>' + (a.connection?.lastSyncError ? '<div class="account-sync-error">' + escapeHtml(a.connection.lastSyncError) + '</div>' : "");
+  const syncButton = $("accountDetailSync");
+  if (syncButton) { syncButton.hidden = !a.connection?.providerAccountId; syncButton.disabled = a.connection?.syncStatus === "syncing"; syncButton.textContent = a.connection?.syncStatus === "syncing" ? "Syncing…" : "Sync now"; }
+  const disconnectButton = $("accountDetailDisconnect");
+  if (disconnectButton) { disconnectButton.hidden = !a.connection?.provider; disconnectButton.textContent = a.connection?.status === "connected" ? "Disconnect bank" : "Reconnect bank"; }
   $("accountDetailGoals").innerHTML = goals.length ? goals.map(g => '<button class="link-row" data-goal-from-account="' + escapeHtml(g.id) + '"><strong>' + escapeHtml(g.name) + "</strong><span>" + escapeHtml(money(goalProgress(g).current, g.currency)) + "</span></button>").join("") : '<div class="empty-state">This account is not contributing to a goal.</div>';
   $("accountDetailActivity").innerHTML = txs.slice(0,8).map(t => {
     const incoming = t.destinationAccountId === id && t.sourceAccountId !== id;
@@ -2378,14 +2374,8 @@ function editAccount(id) {
   $("editAccountDialog").showModal();
 }
 
-function archiveAccount(id) {
-  const a = account(id);
-  if (!a) return;
-  if (!confirm("Archive " + a.name + "? Its history will be kept.")) return;
-  a.archived = true;
-  saveState();
-  $("accountDetailDialog")?.close();
-}
+function archiveAccount(id){const a=account(id);if(!a)return;if(a.archived){a.archived=false;saveState();openAccountDetail(id);return;}if(!confirm("Archive "+a.name+"? Its history and bank connection data will be kept."))return;a.archived=true;saveState();$("accountDetailDialog")?.close();}
+function disconnectBankAccount(id){const a=account(id);if(!a?.connection?.provider)return;if(a.connection.status==="connected"){if(!confirm("Disconnect "+a.name+"? Imported history will stay in OmniPocket, but automatic bank syncing will stop."))return;a.connection.status="disconnected";a.connection.syncStatus="paused";a.connection.lastSyncError="";}else{a.connection.status="connected";a.connection.syncStatus="healthy";}saveState();openAccountDetail(id);}
 
 function openGoalDetail(id) {
   const g = state.goals.find(x => x.id === id);
