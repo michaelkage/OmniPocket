@@ -41,6 +41,7 @@
     if(!$("exportCsvButton")){
       const b=document.createElement("button"); b.id="exportCsvButton"; b.textContent="Export transactions CSV"; b.onclick=exportCsv; settings.appendChild(b);
     }
+    if(!$("exportJsonButton")){ const b=document.createElement("button");b.id="exportJsonButton";b.textContent="Export full JSON backup";b.onclick=exportJson;settings.appendChild(b); }
     if(!$("accountSecurityButton")){
       const b=document.createElement("button"); b.id="accountSecurityButton"; b.textContent="Account & session"; b.onclick=openSecuritySettings; settings.appendChild(b);
     }
@@ -56,6 +57,8 @@
     raw.split(/\n|,/).forEach(line=>{const m=line.trim().match(/^([A-Z]{3})\s*=\s*([0-9.]+)$/i);if(m&&Number(m[2])>0)state.settings.fx.rates[base()][m[1].toUpperCase()]=Number(m[2]);});
     state.settings.fx.provider="manual_override";state.settings.fx.manualOverrideAt=Date.now();state.settings.fx.history=state.settings.fx.history||[]; if(window.OmniPocketEngine?.recordFxSnapshot) OmniPocketEngine.recordFxSnapshot(state,state.settings.fx.rates,{source:"manual_override"});persist();render();toast("FX overrides saved locally.");
   }
+
+  function exportJson(){ const payload=structuredClone(state); const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"}),url=URL.createObjectURL(blob),a=document.createElement("a"); a.href=url;a.download="omnipocket-backup-"+new Date().toISOString().slice(0,10)+".json";a.click();URL.revokeObjectURL(url);toast("JSON backup exported."); }
 
   function exportCsv(){
     const rows=[["Date","Type","Account","Amount","Currency","Category","Status","Bank status","Note"]];
@@ -127,7 +130,7 @@
     document.querySelectorAll("button").forEach(b=>{if(!b.getAttribute("aria-label")&&b.textContent.trim()==="✕")b.setAttribute("aria-label","Close");});
   }
 
-  window.OmniPocketV1={toast,openFxSettings,exportCsv,openSecuritySettings};
+  window.OmniPocketV1={toast,openFxSettings,exportCsv,exportJson,openSecuritySettings};
   window.addEventListener("load",()=>{
     installOnboarding();installSettings();improvePaymentDetail();addPaymentReconcileAction();installPwaHealth();installAccessibility();installQuickActions();installReceiptCapture();installStatementShortcuts();
     setTimeout(()=>{installSettings();addPaymentReconcileAction();},500);
