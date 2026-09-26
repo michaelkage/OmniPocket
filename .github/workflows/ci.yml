@@ -20,7 +20,7 @@ jobs:
           node --check v1-completion.js
           node --check production-hardening.js
       - name: Domain smoke tests
-        run: node tests/domain.smoke.mjs
+        run: node tests/domain-smoke-runner.mjs
       - name: Required assets
         run: |
           test -f index.html
