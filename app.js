@@ -2601,6 +2601,58 @@ $("accountForm").addEventListener("submit", event => {
   event.target.reset();
 });
 
+function saveEditedAccount(id, data) {
+  const a = account(id);
+  if (!a) return false;
+  a.name = data.name;
+  a.institution = data.institution;
+  a.type = data.type;
+  a.currency = data.currency;
+  return true;
+}
+
+function saveGoalFromForm(event) {
+  event.preventDefault();
+  const dialog = $("goalDialog");
+  const name = $("goalName").value.trim();
+  const target = Number($("goalTarget").value);
+  const currency = $("goalCurrency").value;
+  const deadline = $("goalDeadline").value || "";
+  const accountIds = [...document.querySelectorAll('#goalAccounts input[name="goalAccount"]:checked')].map(input => input.value);
+  if (!name) return alert("Give this goal a name.");
+  if (!Number.isFinite(target) || target <= 0) return alert("Enter a valid target.");
+  const editingId = dialog.dataset.editingId;
+  if (editingId) {
+    const goal = state.goals.find(g => g.id === editingId);
+    if (!goal) return;
+    Object.assign(goal, { name, target, currency, deadline, accountIds });
+  } else {
+    state.goals.push({ id: uid(), name, target, currency, accountIds, deadline, status: "active", createdAt: Date.now() });
+  }
+  delete dialog.dataset.editingId;
+  saveState();
+  dialog.close();
+  event.target.reset();
+}
+
+$("editAccountForm")?.addEventListener("submit", event => {
+  event.preventDefault();
+  const id = $("editAccountDialog").dataset.accountId;
+  const name = $("editAccountName").value.trim();
+  if (!id || !name) return alert("Give this account a name.");
+  if (!saveEditedAccount(id, {
+    name,
+    institution: $("editAccountInstitution").value.trim(),
+    type: $("editAccountType").value,
+    currency: $("editAccountCurrency").value
+  })) return;
+  saveState();
+  $("editAccountDialog").close();
+  openAccountDetail(id);
+});
+
+$("goalForm")?.addEventListener("submit", saveGoalFromForm);
+
 $("quickForm").addEventListener("submit", handleQuickSubmit);
 
 $("privacyButton")?.addEventListener("click", () => {
