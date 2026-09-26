@@ -25,7 +25,7 @@ async function requireUser(req: Request) {
 }
 
 
-Deno.serve(async (req) => { if (req.method === "OPTIONS") return new Response("ok",{headers:corsHeaders}); try { await requireUser(req); const body=await req.json(); const result=await mono("/connect/session",{method:"POST",body:JSON.stringify({institution:body.institution,auth_method:body.auth_method||"internet_banking",scope:"financial_data",customer:body.customer})}); return json(result); } catch(error){ return json({error:error instanceof Error?error.message:"Unable to create Mono session"},500); }})async function mono(path: string, init: RequestInit = {}) {
+async function mono(path: string, init: RequestInit = {}) {
   const secret = Deno.env.get("MONO_SECRET_KEY");
   if (!secret) throw new Error("MONO_SECRET_KEY is not configured in Supabase.");
   const response = await fetch("https://api.withmono.com/v2" + path, {
@@ -40,4 +40,6 @@ Deno.serve(async (req) => { if (req.method === "OPTIONS") return new Response("o
   const body = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(body?.message || body?.error || `Mono API request failed (${response.status})`);
   return body;
-};
+}
+
+Deno.serve(async (req) => { if (req.method === "OPTIONS") return new Response("ok",{headers:corsHeaders}); try { await requireUser(req); const body=await req.json(); const result=await mono("/connect/session",{method:"POST",body:JSON.stringify({institution:body.institution,auth_method:body.auth_method||"internet_banking",scope:"financial_data",customer:body.customer})}); return json(result); } catch(error){ return json({error:error instanceof Error?error.message:"Unable to create Mono session"},500); }});
