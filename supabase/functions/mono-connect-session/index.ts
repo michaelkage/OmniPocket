@@ -1,4 +1,5 @@
-import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
+import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -6,40 +7,23 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
-  if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
-
-  const secret = Deno.env.get("MONO_SECRET_KEY");
-  if (!secret) return json({ error: "MONO_SECRET_KEY is not configured." }, 500);
-
-  try {
-    const body = await req.json();
-    const response = await fetch("https://api.withmono.com/v2/connect/session", {
-      method: "POST",
-      headers: {
-        accept: "application/json",
-        "content-type": "application/json",
-        "mono-sec-key": secret,
-      },
-      body: JSON.stringify({
-        institution: body.institution,
-        auth_method: body.auth_method || "internet_banking",
-        scope: "financial_data",
-        customer: body.customer,
-      }),
-    });
-
-    const data = await response.json();
-    return json(data, response.status);
-  } catch (error) {
-    return json({ error: error instanceof Error ? error.message : "Unable to create Mono session." }, 500);
-  }
-});
-
-function json(data: unknown, status = 200) {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: { ...corsHeaders, "content-type": "application/json" },
-  });
+function json(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 }
+
+function supabaseForRequest(req: Request) {
+  const auth = req.headers.get("Authorization");
+  if (!auth) throw new Error("Authorization required");
+  return createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, { global: { headers: { Authorization: auth } } });
+}
+
+async function requireUser(req: Request) {
+  const supabase = supabaseForRequest(req);
+  const token = req.headers.get("Authorization")!.replace(/^Bearer\s+/i, "");
+  const { data: { user }, error } = await supabase.auth.getUser(token);
+  if (error || !user) throw new Error("Invalid Supabase session");
+  return { supabase, user };
+}
+
+
+Deno.serve(async (req) => { if (req.method === "OPTIONS") return new Response("ok",{headers:corsHeaders}); try { await requireUser(req); const body=await req.json(); const result=await mono("/connect/session",{method:"POST",body:JSON.stringify({institution:body.institution,auth_method:body.auth_method||"internet_banking",scope:"financial_data",customer:body.customer})}); return json(result); } catch(error){ return json({error:error instanceof Error?error.message:"Unable to create Mono session"},500); }});
