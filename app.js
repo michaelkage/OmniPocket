@@ -1838,6 +1838,7 @@ function openPaymentDetail(paymentId){const p=paymentCenterRows.find(x=>x.id===p
 function bindPaymentCenter(){ $("newPaymentPageButton")?.addEventListener("click",openPaymentFlow); $("refreshPaymentsButton")?.addEventListener("click",refreshPaymentCenter); $("paymentStatusFilters")?.addEventListener("click",e=>{const b=e.target.closest("[data-payment-filter]");if(!b)return;paymentCenterFilter=b.dataset.paymentFilter;document.querySelectorAll("[data-payment-filter]").forEach(x=>x.classList.toggle("is-active",x===b));renderPaymentCenter();}); $("paymentCenterTimeline")?.addEventListener("click",e=>{const b=e.target.closest("[data-payment-id]");if(b)openPaymentDetail(b.dataset.paymentId);});}
 
 bindPaymentCenter();
+refreshPaymentCenter();
 
 async function openPaymentFlow() {
   const d=$("paymentDialog"); if(!d)return;
@@ -1884,6 +1885,7 @@ function navigate(page) {
   });
   document.querySelectorAll(".nav-item[data-page]").forEach(button => button.classList.toggle("active", button.dataset.page === page));
   document.querySelector(".main-content")?.scrollTo({top:0,behavior:"smooth"});
+  if(page === "Payments") refreshPaymentCenter();
 }
 
 document.addEventListener("click", event => {
