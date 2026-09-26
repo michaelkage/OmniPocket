@@ -1783,10 +1783,6 @@ function renderReviewQueue() {
       return '<button class="review-queue-item" data-review-transaction="' + escapeHtml(t.id) + '"><span><strong>' + escapeHtml(transactionLabel(t)) + '</strong><small>' + escapeHtml(t.date) + ' · ' + escapeHtml(source?.name || "Unknown account") + '</small></span><strong>' + escapeHtml(money(t.amount,t.currency)) + '</strong></button>';
     }).join("") + '</div>' +
     (review.length > 3 ? '<div class="muted review-queue-more">+' + (review.length - 3) + ' more waiting</div>' : "");
-  $("reviewQueueOpen")?.addEventListener("click", () => {
-    $("activitySearch").value = "__review__";
-    renderFullViews();
-  });
   host.querySelectorAll("[data-review-transaction]").forEach(button => {
     button.addEventListener("click", () => openTransactionDetail(button.dataset.reviewTransaction));
   });
@@ -1847,6 +1843,13 @@ function navigate(page) {
 }
 
 document.addEventListener("click", event => {
+  const reviewQueueOpen = event.target.closest("#reviewQueueOpen");
+  if (reviewQueueOpen) {
+    event.preventDefault();
+    $("activitySearch").value = "__review__";
+    renderFullViews();
+    return;
+  }
   const contextCrumb = event.target.closest("[data-context-index]");
   if (contextCrumb) {
     event.preventDefault();
