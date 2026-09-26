@@ -1444,6 +1444,9 @@ function findTransferCounterpart(input) {
     const crossCurrency = source.currency !== tx.currency;
     const fxDelta = expectedOtherAmount > 0 ? Math.abs(otherAmount - expectedOtherAmount) / expectedOtherAmount : Infinity;
     const sameCurrencyDelta = Math.abs(otherAmount - amount) / Math.max(amount, 0.01);
+    const fxDifferenceAmount = crossCurrency && expectedOtherAmount > 0 ? otherAmount - expectedOtherAmount : otherAmount - amount;
+    const fxDifferencePercent = crossCurrency && expectedOtherAmount > 0 ? fxDifferenceAmount / expectedOtherAmount : sameCurrencyDelta;
+    const feeLikeDifference = Math.abs(fxDifferencePercent) <= 0.03;
     const fxPlausible = crossCurrency && comparableRate > 0 && Number.isFinite(fxDelta) && fxDelta <= 0.15;
 
     // Same-currency legs retain the strict 0.5% guard. Cross-currency legs use
@@ -1468,6 +1471,7 @@ function findTransferCounterpart(input) {
       score += 0.18 + fxQuality * 0.12;
       reasons.push("FX-plausible amount");
       reasons.push("implied rate " + (otherAmount / amount).toFixed(6));
+      if (feeLikeDifference && Math.abs(fxDifferenceAmount) > 0.000001) reasons.push((fxDifferenceAmount < 0 ? "possible transfer fee/spread" : "small FX gain") + " " + Math.abs(fxDifferencePercent * 100).toFixed(2) + "%");
     }
 
     if (dayGap === 0) {
@@ -1525,7 +1529,8 @@ function findTransferCounterpart(input) {
       transaction: tx,
       score: Math.min(0.99, score),
       exactReference,
-      reasons
+      reasons,
+      reconciliation: { sourceAmount: inputIsSource ? amount : otherAmount, sourceCurrency, destinationAmount: inputIsSource ? otherAmount : amount, destinationCurrency, expectedDestinationAmount: expectedOtherAmount, differenceAmount: fxDifferenceAmount, differencePercent: fxDifferencePercent, feeLikeDifference }
     });
   }
 
@@ -1546,7 +1551,7 @@ function findTransferCounterpart(input) {
     candidates: strong.map(candidate => ({
       transactionId: candidate.transaction.id,
       confidence: candidate.score,
-      reason: reasonsForTransferPair(candidate)
+      reason: reasonsForTransferPair(candidate), reconciliation: candidate.reconciliation
     }))
   };
 }
