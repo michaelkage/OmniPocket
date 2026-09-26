@@ -1794,7 +1794,7 @@ function renderFullViews() {
   if (accountsEl) accountsEl.innerHTML = state.accounts.filter(a => !a.archived).map(a => `
     <div class="account-row account-full interactive-row" data-account-id="${escapeHtml(a.id)}" tabindex="0" role="button" aria-label="Open account">
       <div class="account-main"><span class="node">◉</span><div><div class="row-title-with-context"><strong>${escapeHtml(a.name)}</strong>${a.connection?.provider === "mono" ? '<span class="context-link-badge">Connected</span>' : ""}</div><div class="muted">${escapeHtml(a.institution || "Personal")} · ${escapeHtml(a.type)} · ${escapeHtml(a.currency)}</div></div></div>
-      <div class="account-tools"><strong>${state.settings.privacyHidden ? "••••" : escapeHtml(money(a.balance,a.currency))}</strong><button data-reconcile="${escapeHtml(a.id)}">Reconcile</button></div>
+      <div class="account-tools"><strong>${state.settings.privacyHidden ? "••••" : escapeHtml(money(a.balance,a.currency))}</strong><button type="button" data-reconcile="${escapeHtml(a.id)}">Reconcile</button></div>
     </div>`).join("") || '<div class="empty-state">No accounts yet.</div>';
 
   const goalsEl = $("goalsFullList");
