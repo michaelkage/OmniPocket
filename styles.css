@@ -121,3 +121,5 @@ textarea{width:100%;resize:vertical;border:1px solid #4a4650;background:#151419;
 .transfer-reconciliation-arrow{font-size:18px;color:var(--primary)}
 .transfer-reconciliation-meta{grid-column:1/-1;display:flex!important;justify-content:space-between;gap:10px;padding-top:7px;border-top:1px solid rgba(255,255,255,.06)}
 @media(max-width:520px){.transfer-reconciliation-summary{grid-template-columns:1fr}.transfer-reconciliation-arrow{transform:rotate(90deg);justify-self:center}.transfer-reconciliation-meta{display:grid!important}}
+
+.transfer-reconciliation-difference{grid-column:1/-1;padding:8px 9px;border-radius:11px;background:rgba(255,213,154,.07);border:1px solid rgba(255,213,154,.14);font-size:10px;color:#ffd59a}
