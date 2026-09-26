@@ -2376,7 +2376,6 @@ $("statementImportPreview")?.addEventListener("click", event => {
     const candidateId = candidateButton.dataset.transactionFromStatement;
     const candidate = state.transactions.find(t => t.id === candidateId);
     if (candidate) {
-      selectTransactionContext(candidateId);
       openTransactionDetail(candidateId);
     }
   }
