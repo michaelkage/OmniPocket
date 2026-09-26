@@ -1098,7 +1098,7 @@ async function refreshFxRates() {
         else rates[from][to]=DEFAULT_RATES[from][to];
       }
     }
-    state.settings.fx={provider:"live",updatedAt:Date.now(),rates,source:"open.er-api.com",base};
+    state.settings.fx={...(state.settings.fx||{}),provider:"live",updatedAt:Date.now(),rates,source:"open.er-api.com",base}; if(window.OmniPocketEngine?.recordFxSnapshot) OmniPocketEngine.recordFxSnapshot(state,rates,{source:"open.er-api.com",updatedAt:Date.now()});
     emitStateEvent("fx:updated", { baseCurrency: base });
     saveState();
   } catch(error) {
