@@ -1257,6 +1257,7 @@ function render() {
   renderGoal();
   renderFullViews();
   renderDashboard();
+  renderPaymentCenter();
 }
 
 function providerLabel(a){const p=String(a?.connection?.provider||"").toLowerCase();return p==="mono"?"MONO":p==="mock"?"DEMO BANK":"LOCAL";}
@@ -1818,8 +1819,46 @@ function renderFullViews() {
   });
 }
 
+
+async function openPaymentFlow() {
+  const d=$("paymentDialog"); if(!d)return;
+  const source=$("paymentSourceAccount");
+  if(source) source.innerHTML=state.accounts.filter(a=>!a.archived).map(a=>'<option value="'+escapeHtml(a.id)+'">'+escapeHtml(a.name)+' · '+escapeHtml(money(a.balance,a.currency))+'</option>').join("");
+  if(!state.accounts.some(a=>!a.archived)) { alert("Add an account before creating a payment."); return; }
+  d.showModal();
+}
+function recordDemoPaymentLedger(p) {
+  const source=account(p.source_account_id); if(!source || p.status!=="completed") return;
+  const amount=(Number(p.amount_minor)||0)/100, txId="payment_"+p.id;
+  if(state.transactions.some(t=>t.id===txId)) return;
+  state.transactions.push({id:txId,type:"expense",amount,currency:p.currency||source.currency,narration:p.narration||("Payment to "+(p.recipient_name||"recipient")),category:"Transfer",date:today(),accountId:source.id,note:"Demo payment · "+(p.provider_reference||p.id),external:{provider:"demo",providerTransactionId:txId,paymentId:p.id,importedAt:new Date().toISOString(),lastSeenAt:new Date().toISOString()},bankStatus:"posted"});
+  rebuildBalances();
+}
+async function submitOmniPayment() {
+  const source=account($("paymentSourceAccount")?.value), amount=Number($("paymentAmount")?.value||0), provider=$("paymentProvider")?.value||"demo";
+  if(!source){alert("Choose a source account.");return;} if(!Number.isFinite(amount)||amount<=0){alert("Enter a valid amount.");return;}
+  if(amount>Number(source.balance||0)){alert("That amount is greater than the available balance.");return;}
+  const recipientAccount=String($("paymentRecipientAccount")?.value||"").replace(/\D/g,"");
+  if(recipientAccount.length<8){alert("Enter a valid recipient account number.");return;}
+  const reference="omnipocket_"+Date.now()+"_"+crypto.randomUUID().slice(0,8), submit=$("paymentSubmit");
+  if(submit){submit.disabled=true;submit.textContent="Creating…";}
+  try {
+    let payload=await supabaseFunction("omnipocket-payment-initiate",{provider,method:provider==="external_handoff"?"external_handoff":"bank_transfer",amountMinor:Math.round(amount*100),currency:source.currency,sourceAccountId:source.id,monoAccountId:source.connection?.provider==="mono"?source.connection.providerAccountId:null,recipientName:$("paymentRecipientName")?.value.trim(),recipientBankName:$("paymentRecipientBank")?.value.trim(),recipientBankCode:$("paymentRecipientBankCode")?.value.trim(),recipientAccountNumber:recipientAccount,narration:$("paymentNarration")?.value.trim(),reference,metadata:{ussdCode:$("paymentUssd")?.value.trim()||null}});
+    let p=payload?.payment; if(!p)throw new Error(payload?.error||"Payment intent was not created.");
+    if(provider==="demo"){
+      const done=await supabaseFunction("omnipocket-payment-initiate",{action:"complete_demo",paymentId:p.id}); p=done?.payment||p; recordDemoPaymentLedger(p); saveState(); alert("Demo payment completed and matched to OmniPocket's local ledger.");
+    } else if(provider==="external_handoff"){
+      const ussd=String($("paymentUssd")?.value||"").trim();
+      if(/^\*[^#]+#$/.test(ussd)){ window.location.href="tel:"+ussd; }
+      else { const textValue="OmniPocket payment\nRecipient: "+$("paymentRecipientName").value+"\nBank: "+$("paymentRecipientBank").value+"\nAccount: "+recipientAccount+"\nAmount: "+money(amount,source.currency)+"\nNarration: "+($("paymentNarration").value||"Payment"); if(navigator.share) await navigator.share({title:"OmniPocket payment",text:textValue}).catch(()=>{}); else if(navigator.clipboard) await navigator.clipboard.writeText(textValue).catch(()=>{}); alert("Payment intent saved. Open your bank app and complete the transfer using the recipient details."); }
+    } else alert("Payment intent created. Current provider status: "+paymentStatusLabel(p.status)+".");
+    $("paymentDialog")?.close(); $("paymentForm")?.reset(); await refreshPaymentCenter(); render();
+  } catch(e){ alert(e?.message||"Payment could not be created."); }
+  finally { if(submit){submit.disabled=false;submit.textContent="Continue";} }
+}
+
 function navigate(page) {
-  const names = ["Home","Accounts","Goals","Activity","More"];
+  const names = ["Home","Accounts","Goals","Activity","Payments","More"];
   names.forEach(name => {
     const view = $("page"+name);
     if (view) view.hidden = name !== page;
