@@ -61,14 +61,14 @@
     render();
   }
 
-  async function requestSyncWithOfflineFallback(id) {
+  async function requestSyncWithOfflineFallback(id, originalRequestSync) {
     if (!navigator.onLine) {
       queueBankSync(id);
       toast("Offline — bank refresh queued.");
       return false;
     }
     try {
-      await requestBankSync(id);
+      await originalRequestSync(id);
       return true;
     } catch (error) {
       if (!navigator.onLine) queueBankSync(id);
