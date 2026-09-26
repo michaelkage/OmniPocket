@@ -2312,7 +2312,6 @@ $("fab")?.addEventListener("click", () => openQuick("expense"));
 document.querySelectorAll("[data-dashboard-quick]").forEach(button => {
   button.addEventListener("click", () => openQuick(button.dataset.dashboardQuick));
 });
-$("addAccountButton")?.addEventListener("click", () => $("accountDialog")?.showModal());
 $("addAccountPageButton")?.addEventListener("click", () => $("accountDialog").showModal());
 $("connectBankButton")?.addEventListener("click", connectBankAccount);
 $("addGoalPageButton")?.addEventListener("click", () => createGoal());
@@ -2699,8 +2698,6 @@ $("reconcileForm")?.addEventListener("submit", event => {
   saveState();
   $("reconcileDialog").close();
 });
-
-$("addGoalButton")?.addEventListener("click", () => createGoal());
 
 $("smartParseButton")?.addEventListener("click", parseClipboardText);
 $("smartPasteButton")?.addEventListener("click", async () => {
