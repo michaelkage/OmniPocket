@@ -2315,10 +2315,30 @@ function refreshLocalAccount(id) {
   saveState();
   openAccountDetail(id);
 }
-function requestBankSync(id) {
+async function requestBankSync(id) {
   const a = account(id);
   if (!a?.connection?.providerAccountId) return alert("This account is local. Use Reconcile to match it with your actual balance.");
-  alert("Live bank sync is paused for now. Your linked account and imported history remain stored locally. Reconciliation is still available.");
+  const button = $("accountDetailSync");
+  if (button) button.disabled = true;
+  a.connection.syncStatus = "syncing";
+  a.connection.lastSyncError = "";
+  saveState();
+  openAccountDetail(id);
+  try {
+    if (a.connection.provider === "mock") await syncMockBankAccount();
+    else if (a.connection.provider === "mono") await syncMonoAccount(a.connection.providerAccountId, a.name);
+    else throw new Error("Unsupported bank provider: " + a.connection.provider);
+    openAccountDetail(id);
+    render();
+  } catch (error) {
+    a.connection.syncStatus = "error";
+    a.connection.lastSyncError = error?.message || "Sync failed";
+    saveState();
+    openAccountDetail(id);
+    alert(a.connection.lastSyncError);
+  } finally {
+    if (button) button.disabled = false;
+  }
 }
 
 function openAccountDetail(id) {
