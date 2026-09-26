@@ -88,7 +88,7 @@ async function syncAccount(supabase: any, userId: string, monoAccountId: string,
     const { error } = await supabase.from("bank_transactions").upsert({ user_id: userId, connection_id: connection.id, ...tx }, { onConflict: "connection_id,mono_transaction_id" });
     if (error) throw error;
   }
-  return { connection, account, transactionsImported: transactions.length, dataStatus: row.data_status };
+  return { connection, account, transactionsImported: transactions.length, transactions: transactions.map(normalizeTransaction), dataStatus: row.data_status };
 }
 
 Deno.serve(async (req) => {
