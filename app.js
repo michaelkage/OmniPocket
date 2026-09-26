@@ -627,6 +627,51 @@ function previewStatementImportObjects(parsed, accountId, mapping = {}) {
   const ambiguousTransferRows = transferRows.filter(row => (row.suggestedPairCandidates?.length > 1) || (!row.suggestedPairTransactionId && row.suggestedType === "transfer"));
   return {headers,rows,account:accountTarget,mapping:{date:dateCol,description:descCol,reference:refCol,amount:amountCol,debit:debitCol,credit:creditCol},stats:{valid:analyzedRows.length,invalid:rows.length-analyzedRows.length,duplicates:duplicateRows.length,likelyTransfers:transferRows.length,ambiguousTransfers:ambiguousTransferRows.length}};
 }
+\nfunction refreshTransferPairSuggestions() {
+  const reviewRows = state.transactions.filter(tx =>
+    tx.status === "needs_review" &&
+    (tx.type === "income" || tx.type === "expense") &&
+    !tx.pairedTransactionId
+  );
+  let changed = 0;
+  for (const tx of reviewRows) {
+    const pair = findTransferCounterpart({
+      id: tx.id,
+      type: tx.type,
+      sourceAccountId: tx.sourceAccountId,
+      amount: Math.abs(Number(tx.amount) || 0),
+      currency: tx.currency,
+      date: tx.date,
+      description: tx.description,
+      note: tx.note,
+      reference: tx.reference,
+      external: tx.external
+    });
+    const nextId = pair?.transactionId || null;
+    const nextCandidates = pair?.candidates?.map(candidate => candidate.transactionId) || [];
+    const nextMeta = Object.fromEntries((pair?.candidates || []).map(candidate => [
+      candidate.transactionId,
+      { confidence: candidate.confidence, reason: candidate.reason }
+    ]));
+    const nextConfidence = pair?.confidence ?? null;
+    const nextReason = pair?.reason || "";
+    if (
+      tx.suggestedPairTransactionId !== nextId ||
+      JSON.stringify(tx.suggestedPairCandidates || []) !== JSON.stringify(nextCandidates) ||
+      JSON.stringify(tx.suggestedPairCandidateMeta || {}) !== JSON.stringify(nextMeta) ||
+      tx.suggestedPairConfidence !== nextConfidence ||
+      tx.suggestedPairReason !== nextReason
+    ) {
+      tx.suggestedPairTransactionId = nextId;
+      tx.suggestedPairCandidates = nextCandidates;
+      tx.suggestedPairCandidateMeta = nextMeta;
+      tx.suggestedPairConfidence = nextConfidence;
+      tx.suggestedPairReason = nextReason;
+      changed++;
+    }
+  }
+  return changed;
+}
 
 function importStatementRows(rows) {
   let imported = 0, duplicates = 0, invalid = 0;
@@ -664,6 +709,7 @@ function importStatementRows(rows) {
     });
     imported++;
   }
+  refreshTransferPairSuggestions();
   rebuildBalances();
   saveState();
   return { imported, duplicates, invalid };
