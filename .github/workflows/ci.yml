@@ -36,4 +36,4 @@ jobs:
           grep -q "omnipocket-payment-initiate" app.js
       - name: No obvious secret leakage
         run: |
-          ! grep -RInE 'service_role|sk_live_|sk_test_|MONO_SECRET_KEY=' --exclude-dir=.git .
+          ! grep -RInE 'service_role|sk_live_|sk_test_|MONO_SECRET_KEY=' --exclude-dir=.git --exclude='ci.yml' .
