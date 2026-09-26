@@ -187,7 +187,7 @@
     const original = window.requestBankSync;
     if (typeof original !== "function" || window.__omnipocketQueueWrapped) return;
     window.__omnipocketQueueWrapped = true;
-    window.requestBankSync = async id => requestSyncWithOfflineFallback(id);
+    window.requestBankSync = async id => requestSyncWithOfflineFallback(id, original);
     document.addEventListener("click", event => {
       const button = event.target.closest("[data-sync-account]");
       if (button && !navigator.onLine) {
