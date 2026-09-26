@@ -54,7 +54,7 @@
     state.settings.fx=state.settings.fx||{}; state.settings.fx.rates=state.settings.fx.rates||{};
     state.settings.fx.rates[base()]=state.settings.fx.rates[base()]||{};
     raw.split(/\n|,/).forEach(line=>{const m=line.trim().match(/^([A-Z]{3})\s*=\s*([0-9.]+)$/i);if(m&&Number(m[2])>0)state.settings.fx.rates[base()][m[1].toUpperCase()]=Number(m[2]);});
-    state.settings.fx.provider="manual_override";state.settings.fx.manualOverrideAt=Date.now();persist();render();toast("FX overrides saved locally.");
+    state.settings.fx.provider="manual_override";state.settings.fx.manualOverrideAt=Date.now();state.settings.fx.history=state.settings.fx.history||[]; if(window.OmniPocketEngine?.recordFxSnapshot) OmniPocketEngine.recordFxSnapshot(state,state.settings.fx.rates,{source:"manual_override"});persist();render();toast("FX overrides saved locally.");
   }
 
   function exportCsv(){
@@ -103,6 +103,20 @@
     b.addEventListener("click",async()=>{const id=b.dataset.paymentId;if(!id)return;b.disabled=true;try{const r=await supabaseFunction("omnipocket-payment-initiate",{action:"reconcile",paymentId:id});toast(r?.matchedTransaction?"Payment matched.":"No matching bank transaction yet.");await refreshPaymentCenter();}catch(e){toast(e.message||"Reconciliation failed.");}finally{b.disabled=false;}});
   }
 
+  function installQuickActions(){
+    if(!("setAppBadge" in navigator)) return;
+    try { const count=(state.transactions||[]).filter(t=>t.status==="needs_review").length; if(count) navigator.setAppBadge(count); else navigator.clearAppBadge?.(); } catch {}
+  }
+
+  function installReceiptCapture(){
+    const input=$("smartReceiptInput"), status=$("receiptStatus"); if(!input||!status)return;
+    input.addEventListener("change",()=>{ const file=input.files?.[0]; if(!file)return; if(!file.type.startsWith("image/")){status.textContent="Choose an image file.";return;} const size=(file.size/1024/1024).toFixed(1); status.textContent=`Receipt loaded (${size} MB). Image remains on this device. Review the parsed fields before logging.`; const reader=new FileReader(); reader.onload=()=>{ input.dataset.preview=String(reader.result||""); }; reader.readAsDataURL(file); });
+  }
+
+  function installStatementShortcuts(){
+    document.addEventListener("keydown",e=>{ if(e.target.matches("input,textarea,select"))return; if(e.key.toLowerCase()==="e"){e.preventDefault(); if(typeof openQuick==="function")openQuick("expense");} if(e.key.toLowerCase()==="i"){e.preventDefault(); if(typeof openQuick==="function")openQuick("income");} });
+  }
+
   function installPwaHealth(){
     if("serviceWorker" in navigator) navigator.serviceWorker.register("./sw.js").catch(()=>{});
     window.addEventListener("online",()=>toast("Back online — sync is available."));
@@ -115,7 +129,7 @@
 
   window.OmniPocketV1={toast,openFxSettings,exportCsv,openSecuritySettings};
   window.addEventListener("load",()=>{
-    installOnboarding();installSettings();improvePaymentDetail();addPaymentReconcileAction();installPwaHealth();installAccessibility();
+    installOnboarding();installSettings();improvePaymentDetail();addPaymentReconcileAction();installPwaHealth();installAccessibility();installQuickActions();installReceiptCapture();installStatementShortcuts();
     setTimeout(()=>{installSettings();addPaymentReconcileAction();},500);
   });
 })();
