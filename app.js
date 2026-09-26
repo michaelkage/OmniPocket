@@ -673,7 +673,7 @@ function previewStatementImportObjects(parsed, accountId, mapping = {}) {
     const nextCandidates = pair?.candidates?.map(candidate => candidate.transactionId) || [];
     const nextMeta = Object.fromEntries((pair?.candidates || []).map(candidate => [
       candidate.transactionId,
-      { confidence: candidate.confidence, reason: candidate.reason }
+      { confidence: candidate.confidence, reason: candidate.reason, reconciliation: candidate.reconciliation || null }
     ]));
     const nextConfidence = pair?.confidence ?? null;
     const nextReason = pair?.reason || "";
