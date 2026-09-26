@@ -979,6 +979,7 @@ async function exchangeMonoCode(code, accountName) {
 }
 
 async function syncMonoAccount(monoAccountId, accountName = "Connected bank") {
+  const startedAt = Date.now();
   const payload = await supabaseFunction("mono-account-sync", { accountId: monoAccountId, realtime: true });
 
   const rawAccount = payload?.account?.data?.account || payload?.account?.data || payload?.account?.account || payload?.account;
@@ -999,13 +1000,14 @@ async function syncMonoAccount(monoAccountId, accountName = "Connected bank") {
       balance: currentBalance,
       archived: false,
       createdAt: Date.now(),
-      connection: { provider: "mono", providerAccountId: monoAccountId, status: "connected", lastSyncedAt: null, syncStatus: "syncing" }
+      connection: { provider: "mono", providerAccountId: monoAccountId, status: "connected", lastSyncedAt: null, syncStatus: "syncing", lastSyncError: "", lastSyncStartedAt: null, lastSyncCompletedAt: null, lastSyncDurationMs: null, importedTransactionCount: 0, totalImportedTransactionCount: 0, syncHistory: [] }
     };
     state.accounts.push(local);
   }
 
   const importedAt = Date.now();
   let importedNet = 0;
+  let importedCount = 0;
   for (const tx of rawTransactions) {
     const providerTransactionId = tx.id || tx._id;
     if (!providerTransactionId) continue;
@@ -1048,18 +1050,26 @@ async function syncMonoAccount(monoAccountId, accountName = "Connected bank") {
       linkedGoalIds: [],
       external: { provider: "mono", providerTransactionId, importedAt: new Date(importedAt).toISOString(), lastSeenAt: new Date(importedAt).toISOString() }
     });
+    importedCount++;
   }
 
   local.openingBalance = currentBalance - importedNet;
   local.balance = currentBalance;
   local.institution = rawAccount.institution?.name || local.institution;
   local.currency = currency;
+  const completedAt = Date.now();
+  const previousTotal = Number(local.connection?.totalImportedTransactionCount) || 0;
   local.connection = {
-    provider: "mono",
-    providerAccountId: monoAccountId,
-    status: "connected",
-    lastSyncedAt: new Date().toISOString(),
-    syncStatus: "healthy"
+    ...(local.connection || {}),
+    provider: "mono", providerAccountId: monoAccountId, status: "connected",
+    lastSyncedAt: new Date(completedAt).toISOString(),
+    lastSyncStartedAt: new Date(startedAt).toISOString(),
+    lastSyncCompletedAt: new Date(completedAt).toISOString(),
+    lastSyncDurationMs: Math.max(0, completedAt-startedAt),
+    importedTransactionCount: importedCount,
+    totalImportedTransactionCount: previousTotal + importedCount,
+    syncStatus: "healthy", lastSyncError: "",
+    syncHistory: [{startedAt:new Date(startedAt).toISOString(),completedAt:new Date(completedAt).toISOString(),status:"success",durationMs:Math.max(0,completedAt-startedAt),importedCount},...(local.connection?.syncHistory||[])].slice(0,20)
   };
 
   saveState();
