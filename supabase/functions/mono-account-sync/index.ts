@@ -46,8 +46,12 @@ function unwrapTransactions(payload: any) {
   if (Array.isArray(payload?.transactions)) return payload.transactions;
   return [];
 }
-function amountFromProvider(value: any, unit: string) { const n=Number(value); if(!Number.isFinite(n)) return 0; return unit==="major" ? n : n/100; }
-function normalizeTransaction(tx: any, amountUnit = Deno.env.get("MONO_AMOUNT_UNIT") || "minor") {
+function amountFromProvider(value: any, unit: string) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 0;
+  return unit === "major" ? n : n / 100;
+}
+function normalizeTransaction(tx: any, amountUnit: string) {
   return {
     mono_transaction_id: String(tx?._id || tx?.id || tx?.transaction_id || crypto.randomUUID()),
     type: String(tx?.type || "").toLowerCase() === "credit" ? "credit" : "debit",
@@ -60,42 +64,66 @@ function normalizeTransaction(tx: any, amountUnit = Deno.env.get("MONO_AMOUNT_UN
     raw: tx || {},
   };
 }
+
 async function syncAccount(supabase: any, userId: string, monoAccountId: string, connectionId?: string) {
+  const amountUnit = Deno.env.get("MONO_AMOUNT_UNIT") || "minor";
+  const startedAt = new Date().toISOString();
   const accountPayload = await mono(`/accounts/${encodeURIComponent(monoAccountId)}`, { headers: { "x-real-time": "true" } });
   const txPayload = await mono(`/accounts/${encodeURIComponent(monoAccountId)}/transactions?paginate=false`, { headers: { "x-real-time": "true" } });
-  const account = unwrapAccount(accountPayload), transactions = unwrapTransactions(txPayload);
+  const account = unwrapAccount(accountPayload);
+  const transactions = unwrapTransactions(txPayload);
+  const now = new Date().toISOString();
+  const providerBalanceMinor = account?.balance == null ? null : Math.round(amountFromProvider(account.balance, amountUnit) * 100);
   const row = {
     user_id: userId, provider: "mono", mono_account_id: monoAccountId, status: "active",
     institution_name: account?.institution?.name || null, account_name: account?.name || "Connected bank",
     account_number_last4: account?.account_number ? String(account.account_number).slice(-4) : null,
     currency: String(account?.currency || "NGN").toUpperCase(), account_type: account?.type || null,
-    balance_minor: account?.balance == null ? null : Math.round(amountFromProvider(account.balance, amountUnit) * 100),
-    data_status: accountPayload?.data?.meta?.data_status || accountPayload?.data?.meta?.dataStatus || null,
-    sync_status: "healthy",
-    provider_balance_minor: account?.balance == null ? null : Math.round(amountFromProvider(account.balance, amountUnit) * 100),
-    provider_balance_at: new Date().toISOString(),
-    last_synced_at: new Date().toISOString(), last_sync_error: null,
+    balance_minor: providerBalanceMinor, data_status: accountPayload?.data?.meta?.data_status || accountPayload?.data?.meta?.dataStatus || null,
+    sync_status: "healthy", provider_balance_minor: providerBalanceMinor, provider_balance_at: now,
+    last_synced_at: now, last_sync_error: null,
   };
+
   let connection: any;
   if (connectionId) {
     const { data, error } = await supabase.from("bank_connections").update(row).eq("id", connectionId).eq("user_id", userId).select().single();
-    if (error) throw error; connection = data;
+    if (error) throw error;
+    connection = data;
   } else {
-    const { data: existing } = await supabase.from("bank_connections").select("id").eq("user_id", userId).eq("mono_account_id", monoAccountId).maybeSingle();
+    const { data: existing, error: existingError } = await supabase.from("bank_connections").select("id").eq("user_id", userId).eq("mono_account_id", monoAccountId).maybeSingle();
+    if (existingError) throw existingError;
     if (existing?.id) {
       const { data, error } = await supabase.from("bank_connections").update(row).eq("id", existing.id).eq("user_id", userId).select().single();
-      if (error) throw error; connection = data;
+      if (error) throw error;
+      connection = data;
     } else {
       const { data, error } = await supabase.from("bank_connections").insert(row).select().single();
-      if (error) throw error; connection = data;
+      if (error) throw error;
+      connection = data;
     }
   }
-  for (const tx of transactions.map((tx:any)=>normalizeTransaction(tx, amountUnit))) {
-    const { error } = await supabase.from("bank_transactions").upsert({ user_id: userId, connection_id: connection.id, ...tx }, { onConflict: "connection_id,mono_transaction_id" });
+
+  const normalized = transactions.map((tx: any) => normalizeTransaction(tx, amountUnit));
+  for (const tx of normalized) {
+    const { error } = await supabase.from("bank_transactions").upsert(
+      { user_id: userId, connection_id: connection.id, ...tx, provenance: "bank_sync" },
+      { onConflict: "connection_id,mono_transaction_id" }
+    );
     if (error) throw error;
   }
-  await supabase.from("bank_sync_events").insert({ user_id:userId, connection_id:connection.id, provider:"mono", event_type:"account_sync", status:"success", started_at:row.last_synced_at, completed_at:row.last_synced_at, imported_count:transactions.length, metadata:{data_status:row.data_status,amount_unit:amountUnit} });
-  return { connection, account, transactionsImported: transactions.length, transactions: transactions.map(normalizeTransaction), dataStatus: row.data_status, amountUnit };
+
+  const completedAt = new Date().toISOString();
+  const { error: eventError } = await supabase.from("bank_sync_events").insert({
+    user_id: userId, connection_id: connection.id, provider: "mono",
+    event_type: "account_sync", status: "success", started_at: startedAt, completed_at: completedAt,
+    imported_count: normalized.length, metadata: { data_status: row.data_status, amount_unit: amountUnit }
+  });
+  if (eventError) console.warn("Could not record bank sync event:", eventError.message);
+
+  return {
+    connection, account, transactionsImported: normalized.length,
+    transactions: normalized, dataStatus: row.data_status, amountUnit
+  };
 }
 
 Deno.serve(async (req) => {
