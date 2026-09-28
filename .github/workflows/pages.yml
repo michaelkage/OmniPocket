@@ -18,12 +18,17 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    outputs:
+      page_url: ${{ steps.deployment.outputs.page_url }}
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Write build identity
+        run: echo 'window.OMNIPOCKET_BUILD = "${GITHUB_SHA}";' > _build.js
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
@@ -36,3 +41,18 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+  verify:
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify deployed site
+        env:
+          SITE_URL: ${{ needs.deploy.outputs.page_url }}
+        run: |
+          for i in {1..12}; do
+            if curl -fsSL "$SITE_URL" | grep -q "OmniPocket"; then exit 0; fi
+            sleep 10
+          done
+          echo "GitHub Pages deployment did not become reachable in time"
+          exit 1

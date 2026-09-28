@@ -1,9 +1,11 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 
+const CORS_ORIGIN = Deno.env.get("ALLOWED_ORIGIN") || "https://michaelkage.github.io";
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Origin": CORS_ORIGIN,
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Vary": "Origin",
 };
 
 function json(body: unknown, status = 200) {
@@ -44,15 +46,16 @@ function unwrapTransactions(payload: any) {
   if (Array.isArray(payload?.transactions)) return payload.transactions;
   return [];
 }
-function normalizeTransaction(tx: any) {
+function amountFromProvider(value: any, unit: string) { const n=Number(value); if(!Number.isFinite(n)) return 0; return unit==="major" ? n : n/100; }
+function normalizeTransaction(tx: any, amountUnit = Deno.env.get("MONO_AMOUNT_UNIT") || "minor") {
   return {
     mono_transaction_id: String(tx?._id || tx?.id || tx?.transaction_id || crypto.randomUUID()),
     type: String(tx?.type || "").toLowerCase() === "credit" ? "credit" : "debit",
-    amount_minor: Math.round(Number(tx?.amount) || 0),
+    amount_minor: Math.round(amountFromProvider(tx?.amount, amountUnit) * 100),
     currency: String(tx?.currency || "NGN").toUpperCase(),
     narration: tx?.narration || tx?.description || tx?.remark || null,
     category: tx?.category || null,
-    balance_minor: tx?.balance == null ? null : Math.round(Number(tx.balance) || 0),
+    balance_minor: tx?.balance == null ? null : Math.round(amountFromProvider(tx.balance, amountUnit) * 100),
     transaction_at: tx?.date || tx?.created_at || tx?.createdAt || null,
     raw: tx || {},
   };
@@ -66,8 +69,11 @@ async function syncAccount(supabase: any, userId: string, monoAccountId: string,
     institution_name: account?.institution?.name || null, account_name: account?.name || "Connected bank",
     account_number_last4: account?.account_number ? String(account.account_number).slice(-4) : null,
     currency: String(account?.currency || "NGN").toUpperCase(), account_type: account?.type || null,
-    balance_minor: account?.balance == null ? null : Math.round(Number(account.balance) || 0),
+    balance_minor: account?.balance == null ? null : Math.round(amountFromProvider(account.balance, amountUnit) * 100),
     data_status: accountPayload?.data?.meta?.data_status || accountPayload?.data?.meta?.dataStatus || null,
+    sync_status: "healthy",
+    provider_balance_minor: account?.balance == null ? null : Math.round(amountFromProvider(account.balance, amountUnit) * 100),
+    provider_balance_at: new Date().toISOString(),
     last_synced_at: new Date().toISOString(), last_sync_error: null,
   };
   let connection: any;
@@ -84,11 +90,12 @@ async function syncAccount(supabase: any, userId: string, monoAccountId: string,
       if (error) throw error; connection = data;
     }
   }
-  for (const tx of transactions.map(normalizeTransaction)) {
+  for (const tx of transactions.map((tx:any)=>normalizeTransaction(tx, amountUnit))) {
     const { error } = await supabase.from("bank_transactions").upsert({ user_id: userId, connection_id: connection.id, ...tx }, { onConflict: "connection_id,mono_transaction_id" });
     if (error) throw error;
   }
-  return { connection, account, transactionsImported: transactions.length, transactions: transactions.map(normalizeTransaction), dataStatus: row.data_status };
+  await supabase.from("bank_sync_events").insert({ user_id:userId, connection_id:connection.id, provider:"mono", event_type:"account_sync", status:"success", started_at:row.last_synced_at, completed_at:row.last_synced_at, imported_count:transactions.length, metadata:{data_status:row.data_status,amount_unit:amountUnit} });
+  return { connection, account, transactionsImported: transactions.length, transactions: transactions.map(normalizeTransaction), dataStatus: row.data_status, amountUnit };
 }
 
 Deno.serve(async (req) => {

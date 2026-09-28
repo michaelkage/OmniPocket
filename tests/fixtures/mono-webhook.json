@@ -1,0 +1,4 @@
+{
+  "event": "account.updated",
+  "data": {"account_id":"mono_test_account_001","user_id":"fixture-user","status":"active"}
+}

@@ -1,0 +1,14 @@
+[functions.mono-webhook]
+verify_jwt = false
+
+[functions.mono-connect-session]
+verify_jwt = true
+
+[functions.mono-exchange-token]
+verify_jwt = true
+
+[functions.mono-account-sync]
+verify_jwt = true
+
+[functions.fx-rates]
+verify_jwt = false

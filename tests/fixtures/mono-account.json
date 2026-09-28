@@ -1,0 +1,13 @@
+{
+  "data": {
+    "account": {
+      "id": "mono_test_account_001",
+      "name": "Demo Savings",
+      "currency": "NGN",
+      "balance": 24582000,
+      "institution": {"name": "Demo Bank"},
+      "account_number": "0123456789",
+      "type": "savings"
+    }
+  }
+}

@@ -1,9 +1,11 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 
+const CORS_ORIGIN = Deno.env.get("ALLOWED_ORIGIN") || "https://michaelkage.github.io";
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Origin": CORS_ORIGIN,
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "GET, OPTIONS",
+  "Vary": "Origin",
 };
 
 serve(async (req) => {

@@ -32,3 +32,8 @@ Active V1 development.
 The current build includes historical wealth snapshots, cached/live FX handling, dashboard workspace controls, account connection lifecycle, payment intents and reconciliation, local CSV/XLSX statement import, local receipt OCR, offline bank-sync queueing, anonymous-session email linking, PWA health handling, exports, and static/domain smoke checks.
 
 Production provider credentials remain server-side. OmniPocket does not treat an external bank-app or USSD handoff as successful until provider/bank activity can be reconciled.
+
+
+## Production hardening
+
+The bank pipeline now uses Supabase as the canonical provider-data boundary and the PWA as a local projection. Bank sync has explicit freshness/reconciliation state, transaction provenance, duplicate fingerprints, provider adapters, webhook event persistence and operational diagnostics. See docs/IMPLEMENTATION-40.md for the complete 40-item implementation map.
