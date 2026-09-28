@@ -1,9 +1,11 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 
+const CORS_ORIGIN = Deno.env.get("ALLOWED_ORIGIN") || "https://michaelkage.github.io";
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Origin": CORS_ORIGIN,
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Vary": "Origin",
 };
 
 function json(body: unknown, status = 200) {
@@ -100,7 +102,8 @@ Deno.serve(async (req) => {
     const authPayload = await mono("/accounts/auth", { method: "POST", body: JSON.stringify({ code }) });
     const monoAccountId = authPayload?.data?.id || authPayload?.id;
     if (!monoAccountId) return json({ error: "Mono did not return an account ID" }, 502);
-    return json(await syncAccount(supabase, user.id, String(monoAccountId)));
+    const result = await syncAccount(supabase, user.id, String(monoAccountId));
+    return json({ ...result, monoAccountId: String(monoAccountId) });
   } catch (error) {
     console.error(error);
     return json({ error: error instanceof Error ? error.message : "Bank connection failed" }, 500);
