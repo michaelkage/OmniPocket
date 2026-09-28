@@ -11,6 +11,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
       - name: JavaScript syntax
         run: |
           node --check app.js
@@ -19,8 +22,17 @@ jobs:
           node --check bus.js
           node --check v1-completion.js
           node --check production-hardening.js
-      - name: Domain smoke tests
-        run: node tests/domain-smoke-runner.mjs
+          node --check bank-core.js
+          node --check architecture.js
+          node --check diagnostics.js
+      - name: Install test dependencies
+        run: npm install --no-audit --no-fund
+      - name: Domain and architecture tests
+        run: npm test
+      - name: Browser smoke test
+        run: |
+          npx playwright install --with-deps chromium
+          npm run test:e2e
       - name: Required assets
         run: |
           test -f index.html
