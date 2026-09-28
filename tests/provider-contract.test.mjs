@@ -1,0 +1,10 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import vm from "node:vm";
+const context={console,JSON,Date,Math,Intl,structuredClone,crypto:{randomUUID:()=> "fixture-id"}};
+context.window=context; vm.createContext(context);
+vm.runInContext(fs.readFileSync("bank-core.js","utf8"),context);
+const p=context.OmniPocketBank.getProvider("mono");
+assert(p,"Mono provider adapter must be registered");
+for(const capability of ["connect","exchangeToken","getAccount","getTransactions","sync","disconnect","status"]) assert(p.capabilities.includes(capability),capability);
+console.log("OmniPocket provider contract tests passed");
