@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node tests/domain-smoke-runner.mjs && node tests/bank-core.test.mjs && node tests/provider-contract.test.mjs && node tests/migration-fixtures.test.mjs && node tests/static-smoke.mjs",
+    "test": "node tests/domain-smoke-runner.mjs && node tests/bank-core.test.mjs && node tests/provider-contract.test.mjs && node tests/migration-fixtures.test.mjs && node tests/bank-pipeline.test.mjs && node tests/static-smoke.mjs",
     "test:e2e": "node tests/playwright.smoke.mjs"
   },
   "devDependencies": {
