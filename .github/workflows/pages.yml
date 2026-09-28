@@ -30,6 +30,17 @@ jobs:
       - name: Write build identity
         run: echo 'window.OMNIPOCKET_BUILD = "${GITHUB_SHA}";' > _build.js
 
+      - name: Validate site assets
+        run: |
+          test -f index.html
+          test -f app.js
+          test -f styles.css
+          test -f sw.js
+          test -f manifest.webmanifest
+          test -f favicon.svg
+          grep -q '_build.js' index.html
+          grep -q 'OmniPocket' index.html
+
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
@@ -49,10 +60,19 @@ jobs:
       - name: Verify deployed site
         env:
           SITE_URL: ${{ needs.deploy.outputs.page_url }}
+          BUILD_SHA: ${{ github.sha }}
         run: |
+          set -e
           for i in {1..12}; do
-            if curl -fsSL "$SITE_URL" | grep -q "OmniPocket"; then exit 0; fi
+            if curl -fsSL "$SITE_URL" | grep -q "OmniPocket"; then break; fi
             sleep 10
           done
-          echo "GitHub Pages deployment did not become reachable in time"
-          exit 1
+
+          curl -fsSL "$SITE_URL" | grep -q "OmniPocket"
+          curl -fsSL "$SITE_URL/app.js" >/dev/null
+          curl -fsSL "$SITE_URL/styles.css" >/dev/null
+          curl -fsSL "$SITE_URL/manifest.webmanifest" >/dev/null
+          curl -fsSL "$SITE_URL/sw.js" >/dev/null
+          curl -fsSL "$SITE_URL/_build.js" | grep -q "$BUILD_SHA"
+
+          echo "GitHub Pages deployment verified: $SITE_URL"
