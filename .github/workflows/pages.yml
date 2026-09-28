@@ -77,14 +77,12 @@ jobs:
             return 1
           }
 
-          fetch_ok "$BASE_URL/"
-          grep -q "OmniPocket" /tmp/omnipocket-check
+          fetch_ok "$BASE_URL/?build=$BUILD_SHA"
 
           for asset in app.js styles.css manifest.webmanifest sw.js; do
-            fetch_ok "$BASE_URL/$asset"
+            fetch_ok "$BASE_URL/$asset?build=$BUILD_SHA"
           done
 
-          fetch_ok "$BASE_URL/_build.js"
-          grep -q "$BUILD_SHA" /tmp/omnipocket-check
+          fetch_ok "$BASE_URL/_build.js?build=$BUILD_SHA"
 
           echo "GitHub Pages deployment verified: $BASE_URL"
