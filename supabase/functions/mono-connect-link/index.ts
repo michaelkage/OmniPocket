@@ -58,10 +58,123 @@ Deno.serve(async (req) => {
     if (action === "status") {
       const reference = String(body?.reference || "").trim();
       if (!reference) return json({ error: "Link reference is required" }, 400);
+
       const { data: session, error } = await supabase
-        .from("mono_link_sessions").select("*").eq("reference", reference).eq("user_id", user.id).maybeSingle();
+        .from("mono_link_sessions").select("*")
+        .eq("reference", reference).eq("user_id", user.id).maybeSingle();
       if (error) throw error;
       if (!session) return json({ error: "Link session not found" }, 404);
+
+      // Mono normally delivers account_connected through the webhook. As a
+      // recovery path, also reconcile against Mono's linked-account list so
+      // a delayed/misconfigured webhook cannot leave a successful link stuck.
+      if (!session.mono_account_id) {
+        try {
+          const accountsResult = await mono("/accounts");
+          const rawAccounts = accountsResult?.data || accountsResult?.accounts || [];
+          const accounts = Array.isArray(rawAccounts)
+            ? rawAccounts
+            : Array.isArray(rawAccounts?.data) ? rawAccounts.data : [];
+
+          const match = accounts.find((item: any) => {
+            const account = item?.account || item;
+            const customerId = String(item?.customer || account?.customer || "");
+            const ref = String(
+              item?.meta?.ref ||
+              account?.meta?.ref ||
+              "",
+            );
+            return (session.mono_customer_id && customerId === String(session.mono_customer_id))
+              || ref === reference;
+          });
+
+          if (match) {
+            const account = match?.account || match;
+            const monoAccountId = String(
+              account?.id || account?._id || match?.id || match?._id || "",
+            );
+
+            if (monoAccountId) {
+              const details = {
+                institutionName: account?.institution?.name || null,
+                accountName: account?.name || null,
+                last4: account?.account_number
+                  ? String(account.account_number).slice(-4)
+                  : account?.accountNumber
+                    ? String(account.accountNumber).slice(-4)
+                    : null,
+                currency: String(account?.currency || "NGN").toUpperCase(),
+                accountType: account?.type || null,
+                balance: account?.balance,
+              };
+
+              const { data: existing } = await supabase
+                .from("bank_connections").select("id")
+                .eq("user_id", user.id).eq("mono_account_id", monoAccountId).maybeSingle();
+
+              let connectionId = existing?.id || null;
+
+              if (existing?.id) {
+                const { error: updateError } = await supabase
+                  .from("bank_connections").update({
+                    client_account_id: session.client_account_id,
+                    provider_customer_id: session.mono_customer_id,
+                    status: "active",
+                    sync_status: "syncing",
+                    institution_name: details.institutionName,
+                    account_name: details.accountName || session.customer_name,
+                    account_number_last4: details.last4,
+                    currency: details.currency,
+                    account_type: details.accountType,
+                    provider_balance_minor: details.balance == null ? null : Math.round(Number(details.balance) * 100),
+                    last_sync_error: null,
+                    needs_reauth: false,
+                  }).eq("id", existing.id);
+                if (updateError) throw updateError;
+              } else {
+                const { data: created, error: createError } = await supabase
+                  .from("bank_connections").insert({
+                    user_id: session.user_id,
+                    provider: "mono",
+                    mono_account_id: monoAccountId,
+                    client_account_id: session.client_account_id,
+                    provider_customer_id: session.mono_customer_id,
+                    status: "active",
+                    sync_status: "syncing",
+                    institution_name: details.institutionName,
+                    account_name: details.accountName || session.customer_name,
+                    account_number_last4: details.last4,
+                    currency: details.currency,
+                    account_type: details.accountType,
+                    balance_minor: details.balance == null ? null : Math.round(Number(details.balance) * 100),
+                    provider_balance_minor: details.balance == null ? null : Math.round(Number(details.balance) * 100),
+                    data_status: account?.meta?.data_status || match?.meta?.data_status || "PROCESSING",
+                  }).select().single();
+                if (createError) throw createError;
+                connectionId = created.id;
+              }
+
+              const { error: sessionError } = await supabase
+                .from("mono_link_sessions").update({
+                  status: "linked",
+                  mono_account_id: monoAccountId,
+                  completed_at: new Date().toISOString(),
+                  error_message: null,
+                }).eq("id", session.id);
+              if (sessionError) throw sessionError;
+
+              const { data: connection, error: connectionError } = await supabase
+                .from("bank_connections").select("*").eq("id", connectionId).single();
+              if (connectionError) throw connectionError;
+
+              return json({ session: { ...session, status: "linked", mono_account_id: monoAccountId }, connection });
+            }
+          }
+        } catch (recoveryError) {
+          // Keep the pending session alive. The webhook may still arrive later.
+          console.warn("Mono account-list recovery did not resolve the link:", recoveryError);
+        }
+      }
 
       let connection = null;
       if (session.mono_account_id) {
