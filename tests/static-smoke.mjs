@@ -4,5 +4,7 @@ for(const file of ["index.html","styles.css","sw.js","manifest.webmanifest","fav
   assert(fs.existsSync(file),`Missing required asset: ${file}`);
 }
 const html=fs.readFileSync("index.html","utf8");
-for(const marker of ["supabase-js","mono-exchange-token","mono-account-sync","bank-core.js","architecture.js","diagnostics.js"]) assert(html.includes(marker),`Missing integration marker: ${marker}`);
+const app=fs.readFileSync("app.js","utf8");
+for(const marker of ["supabase-js","bank-core.js","architecture.js","diagnostics.js"]) assert(html.includes(marker),`Missing integration marker: ${marker}`);
+for(const marker of ["mono-exchange-token","mono-account-sync","omnipocket-payment-initiate"]) assert(app.includes(marker),`Missing app integration marker: ${marker}`);
 console.log("OmniPocket static smoke tests passed");
