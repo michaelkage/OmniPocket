@@ -1045,37 +1045,85 @@ async function connectDemoBankAccount() {
   openAccountDetail(account.id);
 }
 
-function loadMonoConnectScript() {
-  if (typeof window.Connect === "function") return Promise.resolve();
-  if (window.__monoConnectPromise) return window.__monoConnectPromise;
-  window.__monoConnectPromise = new Promise((resolve, reject) => {
-    const existing = document.querySelector('script[data-omnipocket-mono]');
-    if (existing) {
-      existing.addEventListener("load", () => resolve(), { once: true });
-      existing.addEventListener("error", () => reject(new Error("Mono Connect could not be loaded. Check your network connection or content blocker.")), { once: true });
-      return;
-    }
-    const script = document.createElement("script");
-    script.src = "https://connect.withmono.com/connect.js";
-    script.async = true;
-    script.dataset.omnipocketMono = "true";
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error("Mono Connect could not be loaded. Check your network connection or content blocker."));
-    document.head.appendChild(script);
-  });
-  return window.__monoConnectPromise;
-}
-
 async function connectBankAccount(){
   let config=integrationSettings();
-  if(!config.supabaseUrl||!config.monoPublicKey){config=configureBankIntegration();if(!config)return false;}
-  try{await loadMonoConnectScript();}catch(error){console.error(error);alert(error.message||"Mono Connect could not be loaded.");return false;}
-  if(typeof window.Connect!=="function"){alert("Mono Connect loaded, but the Connect API is unavailable.");return false;}
+  if(!config.supabaseUrl){
+    config=configureBankIntegration();
+    if(!config)return false;
+  }
+
   const accountName=($("accountName")?.value||"Connected bank").trim();
-  const email=localStorage.getItem("omnipocket.monoEmail")||prompt("Email to associate with this bank connection:","")?.trim();if(!email)return false;localStorage.setItem("omnipocket.monoEmail",email);
-  return await new Promise(resolve=>{
-    const connect=new window.Connect({key:config.monoPublicKey,scope:"auth",data:{customer:{name:accountName||"OmniPocket user",email}},reference:"omnipocket_"+uid(),onSuccess:async({code})=>{try{$("accountDialog")?.close();const button=$("connectBankButton");if(button)button.disabled=true;const linked=await exchangeMonoCode(code,accountName,window.__omnipocketReconnectAccountId||null);await syncMonoAccount(linked.monoAccountId,accountName,window.__omnipocketReconnectAccountId||null);alert("Bank connected. Balance and transactions have been imported.");render();resolve(true);}catch(error){console.error(error);alert(error.message||"Bank connection completed, but OmniPocket could not import the account.");resolve(false);}finally{const button=$("connectBankButton");if(button)button.disabled=false;}},onClose:()=>resolve(false)});connect.setup();connect.open();
-  });
+  const email=localStorage.getItem("omnipocket.monoEmail")||prompt("Email to associate with this bank connection:","")?.trim();
+  if(!email)return false;
+  localStorage.setItem("omnipocket.monoEmail",email);
+
+  try{
+    const result=await supabaseFunction("mono-connect-link",{
+      action:"initiate",
+      accountName:accountName||"OmniPocket user",
+      customer:{name:accountName||"OmniPocket user",email},
+      clientAccountId:window.__omnipocketReconnectAccountId||null
+    });
+    if(!result?.monoUrl||!result?.reference) throw new Error("Mono did not return a bank-link URL.");
+    localStorage.setItem("omnipocket.monoPendingRef",result.reference);
+    localStorage.setItem("omnipocket.monoPendingAccountName",accountName||"Connected bank");
+    $("accountDialog")?.close();
+    const button=$("connectBankButton");
+    if(button)button.disabled=true;
+    window.location.assign(result.monoUrl);
+    return true;
+  }catch(error){
+    console.error(error);
+    alert(error.message||"Could not start the Mono bank connection.");
+    return false;
+  }finally{
+    const button=$("connectBankButton");
+    if(button)button.disabled=false;
+  }
+}
+
+async function handleMonoLinkReturn(){
+  const reference=localStorage.getItem("omnipocket.monoPendingRef");
+  if(!reference)return false;
+
+  const accountName=localStorage.getItem("omnipocket.monoPendingAccountName")||"Connected bank";
+  const maxAttempts=15;
+  let lastSession=null;
+
+  try{
+    for(let attempt=0;attempt<maxAttempts;attempt++){
+      const result=await supabaseFunction("mono-connect-link",{action:"status",reference});
+      lastSession=result?.session||null;
+
+      if(result?.connection?.mono_account_id){
+        const monoAccountId=String(result.connection.mono_account_id);
+        const clientAccountId=result.connection.client_account_id||null;
+        await syncMonoAccount(monoAccountId,accountName,clientAccountId);
+        localStorage.removeItem("omnipocket.monoPendingRef");
+        localStorage.removeItem("omnipocket.monoPendingAccountName");
+        const cleanUrl=location.origin+location.pathname;
+        window.history.replaceState({},document.title,cleanUrl);
+        alert("Bank connected. Balance and transactions have been imported.");
+        return true;
+      }
+
+      if(lastSession?.status==="failed"||lastSession?.status==="expired"){
+        throw new Error(lastSession.error_message||"Mono could not complete the bank connection.");
+      }
+
+      await new Promise(resolve=>setTimeout(resolve,2000));
+    }
+
+    throw new Error("The bank link is still being processed. OmniPocket will finish the connection when Mono sends the account confirmation.");
+  }catch(error){
+    console.error("Mono Connect Link return handling failed",error);
+    if(lastSession?.status==="failed"||lastSession?.status==="expired"){
+      localStorage.removeItem("omnipocket.monoPendingRef");
+      localStorage.removeItem("omnipocket.monoPendingAccountName");
+    }
+    alert(error.message||"Bank connection is still processing.");
+    return false;
+  }
 }
 
 async function refreshFxRates() {
@@ -2820,6 +2868,7 @@ window.addEventListener("load", async () => {
   // Restore local state first, then refresh connected provider adapters.
   if ("serviceWorker" in navigator && location.protocol !== "file:") navigator.serviceWorker.register("sw.js");
   await bootstrapStorage();
+  await handleMonoLinkReturn();
   syncConnectedBankAccounts().catch(error => console.warn("Automatic bank sync failed.", error));
   // Automatic refresh is intentionally opt-in to avoid starting a timer before the bank adapter is ready.\n  if (typeof window.scheduleAutomaticBankSync === "function") window.scheduleAutomaticBankSync();
 });
