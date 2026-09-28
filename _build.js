@@ -1,0 +1,1 @@
+window.OMNIPOCKET_BUILD = window.OMNIPOCKET_BUILD || "dev";
