@@ -26,7 +26,7 @@ const DEFAULT_STATE = {
     mode: "hybrid",
     fx: { provider: "cached", updatedAt: null, rates: clone(DEFAULT_RATES), source: "bundled", base: "NGN" },
     dashboard: { layout: ["networth","trend","goals","accounts","activity","quick","fx","relations"], hidden: [], order: ["networth","trend","goals","accounts","activity","quick","fx","relations"] },
-    integrations: { supabaseUrl: "", monoPublicKey: "" }
+    integrations: { supabaseUrl: "", monoPublicKey: "test_pk_unpiyf03jxftgqgi9386" }
   },
   accounts: [],
   transactions: [],
