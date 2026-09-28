@@ -63,16 +63,28 @@ jobs:
           BUILD_SHA: ${{ github.sha }}
         run: |
           set -e
-          for i in {1..12}; do
-            if curl -fsSL "$SITE_URL" | grep -q "OmniPocket"; then break; fi
-            sleep 10
+          BASE_URL="${SITE_URL%/}"
+
+          fetch_ok() {
+            local url="$1"
+            for i in {1..12}; do
+              if curl -fsS --retry 2 --retry-delay 2 --retry-all-errors "$url" -o /tmp/omnipocket-check; then
+                return 0
+              fi
+              sleep 5
+            done
+            echo "Failed to fetch $url"
+            return 1
+          }
+
+          fetch_ok "$BASE_URL/"
+          grep -q "OmniPocket" /tmp/omnipocket-check
+
+          for asset in app.js styles.css manifest.webmanifest sw.js; do
+            fetch_ok "$BASE_URL/$asset"
           done
 
-          curl -fsSL "$SITE_URL" | grep -q "OmniPocket"
-          curl -fsSL "$SITE_URL/app.js" >/dev/null
-          curl -fsSL "$SITE_URL/styles.css" >/dev/null
-          curl -fsSL "$SITE_URL/manifest.webmanifest" >/dev/null
-          curl -fsSL "$SITE_URL/sw.js" >/dev/null
-          curl -fsSL "$SITE_URL/_build.js" | grep -q "$BUILD_SHA"
+          fetch_ok "$BASE_URL/_build.js"
+          grep -q "$BUILD_SHA" /tmp/omnipocket-check
 
-          echo "GitHub Pages deployment verified: $SITE_URL"
+          echo "GitHub Pages deployment verified: $BASE_URL"
