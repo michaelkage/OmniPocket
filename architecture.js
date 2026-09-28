@@ -2,7 +2,7 @@
  * normalize existing records without changing the public UI contract. */
 (function(){
   const Bank = window.OmniPocketBank;
-  function currentState(){ return window.state || null; }
+  function currentState(){ return window.omnipocketState || null; }
 
   function inferProvenance(t){
     if (t?.provenance?.source) return t.provenance;
