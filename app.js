@@ -35,6 +35,7 @@ const DEFAULT_STATE = {
 };
 
 let state = clone(DEFAULT_STATE);
+Object.defineProperty(window, "omnipocketState", { configurable:true, get:()=>state });
 let persistTimer = null;
 let persistenceReady = false;
 let quickType = "expense";
