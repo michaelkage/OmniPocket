@@ -25,6 +25,7 @@ jobs:
           node --check bank-core.js
           node --check architecture.js
           node --check diagnostics.js
+          node --check financial-services.js
       - name: Install test dependencies
         run: npm install --no-audit --no-fund
       - name: Domain and architecture tests
