@@ -2821,5 +2821,5 @@ window.addEventListener("load", async () => {
   if ("serviceWorker" in navigator && location.protocol !== "file:") navigator.serviceWorker.register("sw.js");
   await bootstrapStorage();
   syncConnectedBankAccounts().catch(error => console.warn("Automatic bank sync failed.", error));
-  scheduleAutomaticBankSync();
+  // Automatic refresh is intentionally opt-in to avoid starting a timer before the bank adapter is ready.\n  if (typeof window.scheduleAutomaticBankSync === "function") window.scheduleAutomaticBankSync();
 });
