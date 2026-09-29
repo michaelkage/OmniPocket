@@ -5,7 +5,7 @@
 .dashboard-toolbar h2{margin:4px 0}
 .dashboard-galaxy{position:relative;z-index:1;display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:14px}
 .dashboard-widget{padding:18px;min-width:0;animation:nodeIn .35s ease both}
-.widget-networth{grid-column:span 5}.widget-trend{grid-column:span 7}.widget-goals{grid-column:span 5}.widget-accounts{grid-column:span 7}.widget-activity{grid-column:span 7}.widget-quick{grid-column:span 5}.widget-fx{grid-column:span 12}.widget-insights{grid-column:span 5}.widget-spending{grid-column:span 7}
+.widget-networth{grid-column:span 5}.widget-trend{grid-column:span 7}.widget-goals{grid-column:span 5}.widget-accounts{grid-column:span 12}.widget-activity{grid-column:span 7}.widget-quick{grid-column:span 5}.widget-fx{grid-column:span 12}.widget-insights{grid-column:span 5}.widget-spending{grid-column:span 7}
 .galaxy-networth{font-size:clamp(34px,7vw,58px);font-weight:850;letter-spacing:-.055em;margin:18px 0 7px}
 .trend-chart{min-height:190px;display:grid;align-content:center}.trend-chart svg{width:100%;height:auto;overflow:visible}.trend-line{fill:none;stroke:var(--primary);stroke-width:4;stroke-linecap:round;stroke-linejoin:round;filter:drop-shadow(0 0 7px rgba(208,188,255,.4))}.trend-dot{fill:var(--primary)}
 .trend-meta{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:11px;color:var(--muted);margin-top:2px}.trend-meta strong{font-size:15px;color:var(--primary)}
@@ -147,3 +147,28 @@ html[data-network="offline"] .online-only{opacity:.55;pointer-events:none}
 #offlineQueueStatus{margin-left:auto;white-space:nowrap}
 html[data-network="offline"] .online-only{opacity:.55;pointer-events:none}
 #offlineSyncNotice{margin-top:12px}
+
+/* Account Galaxy + responsive financial typography */
+.galaxy-networth,.hero-row h1,.detail-balance strong{max-width:100%;overflow-wrap:anywhere;word-break:break-word}
+.amount{min-width:0;max-width:48%;overflow-wrap:anywhere;text-align:right;line-height:1.15}
+.dashboard-widget{min-width:0;overflow:hidden}
+.widget-head>div{min-width:0}
+.widget-head h2{overflow-wrap:anywhere}
+.account-galaxy{position:relative;min-height:360px;margin:2px -4px 0;border-radius:28px;overflow:hidden;background:radial-gradient(circle at 50% 50%,rgba(208,188,255,.14) 0,rgba(208,188,255,.06) 13%,transparent 30%),radial-gradient(circle at 50% 50%,rgba(208,188,255,.08) 0,transparent 56%)}
+.account-galaxy:before,.account-galaxy:after{content:"";position:absolute;left:50%;top:50%;border:1px solid rgba(208,188,255,.10);border-radius:50%;transform:translate(-50%,-50%);pointer-events:none}
+.account-galaxy:before{width:52%;height:52%}.account-galaxy:after{width:76%;height:76%}
+.account-galaxy-center{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(180px,34%);aspect-ratio:1;display:grid;place-items:center;align-content:center;text-align:center;padding:18px;border-radius:50%;background:radial-gradient(circle,rgba(208,188,255,.20),rgba(29,27,32,.96) 67%);border:1px solid rgba(208,188,255,.24);box-shadow:0 0 55px rgba(208,188,255,.12),inset 0 0 30px rgba(208,188,255,.08);z-index:2}
+.account-galaxy-center strong{display:block;max-width:100%;font-size:clamp(17px,3vw,25px);line-height:1.05;letter-spacing:-.035em;overflow-wrap:anywhere}
+.account-galaxy-center small{margin-top:6px;color:var(--muted);font-size:10px}
+.galaxy-core-ring{position:absolute;inset:8%;border:1px solid rgba(208,188,255,.13);border-radius:50%;pointer-events:none}
+.galaxy-account-node{position:absolute;left:var(--gx);top:var(--gy);transform:translate(-50%,-50%);width:120px;min-height:88px;border:0;background:transparent;color:inherit;padding:0;display:grid;justify-items:center;gap:5px;z-index:3}
+.galaxy-account-node:hover .galaxy-account-core,.galaxy-account-node:focus-visible .galaxy-account-core{transform:scale(1.12);box-shadow:0 0 28px rgba(208,188,255,.32);outline:none}
+.galaxy-account-core{width:48px;height:48px;border-radius:50%;display:grid;place-items:center;background:rgba(42,39,48,.96);border:1px solid rgba(208,188,255,.25);color:var(--primary);box-shadow:0 0 20px rgba(208,188,255,.12);transition:transform .16s ease,box-shadow .16s ease}
+.galaxy-account-core[data-tone="syncing"]{box-shadow:0 0 24px rgba(208,188,255,.28);animation:galaxyPulse 1.5s ease-in-out infinite}
+.galaxy-account-core[data-tone="error"]{border-color:rgba(255,213,154,.45);box-shadow:0 0 20px rgba(255,213,154,.16)}
+.galaxy-account-label{display:grid;gap:2px;max-width:120px;text-align:center;min-width:0}
+.galaxy-account-label strong,.galaxy-account-label small,.galaxy-account-label b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.galaxy-account-label strong{font-size:11px}.galaxy-account-label small{font-size:8px;color:var(--muted)}.galaxy-account-label b{font-size:10px;color:var(--primary)}
+@keyframes galaxyPulse{50%{transform:scale(1.07);box-shadow:0 0 32px rgba(208,188,255,.36)}}
+@media(max-width:560px){.account-galaxy{min-height:390px}.account-galaxy-center{width:34%;min-width:118px}.galaxy-account-node{width:92px}.galaxy-account-label{max-width:92px}.galaxy-account-label strong{font-size:10px}.galaxy-account-label small{font-size:7px}.galaxy-account-label b{font-size:9px}}
+@media(max-width:380px){.account-galaxy{min-height:420px}.galaxy-account-node{width:78px}.galaxy-account-label{max-width:78px}.account-galaxy-center{min-width:108px}}
