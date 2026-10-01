@@ -2013,6 +2013,7 @@ $("accountDetailDisconnect")?.addEventListener("click", () => disconnectBankAcco
 $("syncAllBanksButton")?.addEventListener("click",async()=>{const b=$("syncAllBanksButton");if(b)b.disabled=true;try{await syncConnectedBankAccounts();render();}finally{if(b)b.disabled=false;}});
 $("connectBankPageButton")?.addEventListener("click",()=>$("accountDialog")?.showModal());
 $("bankConnectionsList")?.addEventListener("click",event=>{const sync=event.target.closest("[data-sync-account]");if(sync){requestBankSync(sync.dataset.syncAccount);return;}const manage=event.target.closest("[data-open-account]");if(manage)openAccountDetail(manage.dataset.openAccount);});
+$("accountList")?.addEventListener("click",event=>{const manage=event.target.closest("[data-open-account]");if(manage)openAccountDetail(manage.dataset.openAccount);});
 $("accountsFullList")?.addEventListener("click",event=>{const sync=event.target.closest("[data-sync-account]");if(sync){requestBankSync(sync.dataset.syncAccount);return;}const manage=event.target.closest("[data-open-account]");if(manage)openAccountDetail(manage.dataset.openAccount);});
 $("accountDetailSync")?.addEventListener("click", () => requestBankSync($("accountDetailDialog").dataset.accountId));
 $("accountDetailReconcile")?.addEventListener("click", () => {
