@@ -26,6 +26,8 @@ jobs:
           node --check architecture.js
           node --check diagnostics.js
           node --check financial-services.js
+          node --check supabase-client.js
+          node --check _build.js
       - name: Install test dependencies
         run: npm install --no-audit --no-fund
       - name: Domain and architecture tests

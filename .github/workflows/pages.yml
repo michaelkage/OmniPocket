@@ -27,13 +27,31 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Write build identity
-        run: echo 'window.OMNIPOCKET_BUILD = "${GITHUB_SHA}";' > _build.js
+      - name: Write build identity and runtime config
+        run: |
+          set -euo pipefail
+          if [ -z "${SUPABASE_URL:-}" ] || [ -z "${SUPABASE_PUBLISHABLE_KEY:-}" ]; then
+            echo "::error::SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY repo variables must be set" >&2
+            exit 1
+          fi
+          {
+            echo 'window.OMNIPOCKET_BUILD = "'"${GITHUB_SHA}"'";'
+            echo 'window.OMNIPOCKET_CONFIG = {'
+            echo '  supabaseUrl: "'"${SUPABASE_URL}"'",'
+            echo '  supabasePublishableKey: "'"${SUPABASE_PUBLISHABLE_KEY}"'",'
+            echo '  monoPublicKey: "'"${MONO_PUBLIC_KEY:-}"'",'
+            echo '};'
+          } > _build.js
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
+          MONO_PUBLIC_KEY: ${{ vars.MONO_PUBLIC_KEY }}
 
       - name: Validate site assets
         run: |
           test -f index.html
           test -f app.js
+          test -f supabase-client.js
           test -f styles.css
           test -f sw.js
           test -f manifest.webmanifest

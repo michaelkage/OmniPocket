@@ -79,7 +79,7 @@
   }
 
   function selectAccount(accountId) { return setContext({ scope: "account", accountId: accountId || null, goalId: null, transactionId: null }, "account-selected"); }
-  function selectGoal(goalId) { return setContext({ scope: "goal", goalId: goalId || null, transactionId: null }, "goal-selected"); }
+  function selectGoal(goalId) { return setContext({ scope: "goal", goalId: goalId || null, accountId: null, transactionId: null }, "goal-selected"); }
   function selectTransaction(transactionId, accountId = null) { return setContext({ scope: "transaction", transactionId: transactionId || null, accountId: accountId || null, goalId: null }, "transaction-selected"); }
   function clearContext(reason = "context-cleared") {
     const previous = { ...context };

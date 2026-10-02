@@ -37,3 +37,15 @@ Production provider credentials remain server-side. OmniPocket does not treat an
 ## Production hardening
 
 The bank pipeline now uses Supabase as the canonical provider-data boundary and the PWA as a local projection. Bank sync has explicit freshness/reconciliation state, transaction provenance, duplicate fingerprints, provider adapters, webhook event persistence and operational diagnostics. See docs/IMPLEMENTATION-40.md for the complete 40-item implementation map.
+
+## Deployment
+
+`pages.yml` generates `_build.js` at deploy time and **fails the build** if these GitHub repository variables are missing (Settings → Secrets and variables → Actions → Variables):
+
+- `SUPABASE_URL`
+- `SUPABASE_PUBLISHABLE_KEY`
+- `MONO_PUBLIC_KEY` (optional)
+
+Locally, `_build.js` carries committed defaults so the app runs without setup.
+
+Database changes are applied with `supabase db push`; migrations are the only source of truth for the schema, and `npm test` fails if an edge function writes a column no migration creates.

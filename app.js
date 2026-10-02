@@ -26,7 +26,7 @@ const DEFAULT_STATE = {
     mode: "hybrid",
     fx: { provider: "cached", updatedAt: null, rates: clone(DEFAULT_RATES), source: "bundled", base: "NGN" },
     dashboard: { layout: ["networth","trend","goals","accounts","activity","quick","fx","relations"], hidden: [], order: ["networth","trend","goals","accounts","activity","quick","fx","relations"] },
-    integrations: { supabaseUrl: "", monoPublicKey: "test_pk_unpiyf03jxftgqgi9386" }
+    integrations: { supabaseUrl: "", monoPublicKey: (window.OMNIPOCKET_CONFIG || {}).monoPublicKey || "" }
   },
   accounts: [],
   transactions: [],
@@ -907,51 +907,6 @@ function renderDashboard() {
   renderDashboardContextWidgets();
   const count=$("reviewCount"); if(count) count.textContent=state.transactions.filter(t=>t.status==="needs_review").length+" review";
   const fxStatus=$("fxCacheStatus"); if(fxStatus) fxStatus.textContent=state.settings.fx.updatedAt ? "Cached "+new Date(state.settings.fx.updatedAt).toLocaleString() : "Bundled rates";
-}
-
-const OMNIPOCKET_SUPABASE_URL = "https://areyxlydzqzlzmgzavpi.supabase.co";
-const OMNIPOCKET_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_42LrA4xX648SI82QJXiYzw_r1kj2Igl";
-
-let omnipocketSupabase = null;
-let omnipocketAuthPromise = null;
-
-function getSupabaseClient() {
-  if (omnipocketSupabase) return omnipocketSupabase;
-  if (!window.supabase?.createClient) throw new Error("Supabase client failed to load.");
-  omnipocketSupabase = window.supabase.createClient(
-    OMNIPOCKET_SUPABASE_URL,
-    OMNIPOCKET_SUPABASE_PUBLISHABLE_KEY
-  );
-  return omnipocketSupabase;
-}
-
-async function ensureSupabaseSession() {
-  const client = getSupabaseClient();
-  const { data: { session } } = await client.auth.getSession();
-  if (session?.access_token) return session;
-  if (omnipocketAuthPromise) return omnipocketAuthPromise;
-  omnipocketAuthPromise = (async () => {
-    const { data, error } = await client.auth.signInAnonymously();
-    if (error) throw new Error("OmniPocket could not create its secure bank-sync session: " + error.message);
-    return data.session;
-  })().finally(() => { omnipocketAuthPromise = null; });
-  return omnipocketAuthPromise;
-}
-
-async function supabaseFunction(path, body) {
-  const session = await ensureSupabaseSession();
-  const response = await fetch(OMNIPOCKET_SUPABASE_URL + "/functions/v1/" + path, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "apikey": OMNIPOCKET_SUPABASE_PUBLISHABLE_KEY,
-      "Authorization": "Bearer " + session.access_token
-    },
-    body: JSON.stringify(body || {})
-  });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(payload?.error || payload?.message || ("Supabase function failed (" + response.status + ")"));
-  return payload;
 }
 
 function integrationSettings() {
