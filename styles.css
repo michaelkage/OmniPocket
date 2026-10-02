@@ -214,3 +214,22 @@ html[data-network="offline"] .online-only{opacity:.55;pointer-events:none}
   .galaxy-account-node{width:76px}
   .galaxy-account-label{max-width:76px}
 }
+
+
+/* Account Galaxy command-center layer */
+.account-galaxy{isolation:isolate}
+.account-galaxy:after,.account-galaxy:before{z-index:0}
+.galaxy-stars{position:absolute;inset:0;pointer-events:none;opacity:.55;background-image:radial-gradient(circle at 14% 22%,rgba(255,255,255,.7) 0 1px,transparent 1.5px),radial-gradient(circle at 81% 18%,rgba(208,188,255,.8) 0 1px,transparent 1.5px),radial-gradient(circle at 26% 78%,rgba(255,255,255,.5) 0 1px,transparent 1.5px),radial-gradient(circle at 88% 74%,rgba(208,188,255,.7) 0 1px,transparent 1.5px),radial-gradient(circle at 63% 9%,rgba(255,255,255,.45) 0 1px,transparent 1.5px);background-size:100% 100%;animation:galaxyTwinkle 5s ease-in-out infinite alternate}
+.account-galaxy-center{overflow:hidden}
+.galaxy-core-pulse{position:absolute;width:42%;height:42%;border-radius:50%;border:1px solid rgba(208,188,255,.16);box-shadow:0 0 35px rgba(208,188,255,.12);animation:corePulse 3s ease-in-out infinite}
+.galaxy-orbit-link{position:absolute;left:50%;top:50%;width:1px;height:calc(1px + 45%);transform-origin:50% 0;transform:translate(-50%,0) rotate(var(--ga));background:linear-gradient(to bottom,rgba(208,188,255,.22),rgba(208,188,255,.035) 75%,transparent);z-index:-1;pointer-events:none}
+.galaxy-account-node:hover .galaxy-orbit-link,.galaxy-account-node:focus-visible .galaxy-orbit-link{background:linear-gradient(to bottom,rgba(208,188,255,.55),rgba(208,188,255,.08) 75%,transparent)}
+.galaxy-account-node:focus-visible{outline:2px solid var(--primary);outline-offset:5px;border-radius:18px}
+.galaxy-account-core[data-tone="connected"]{border-color:rgba(184,245,207,.22)}
+.galaxy-account-core[data-tone="connected"]::after{content:"";position:absolute;width:7px;height:7px;margin:-33px 0 0 33px;border-radius:50%;background:#b8f5cf;box-shadow:0 0 10px #b8f5cf}
+.galaxy-account-core{position:relative}
+@keyframes galaxyTwinkle{from{opacity:.32;transform:scale(1)}to{opacity:.68;transform:scale(1.015)}}
+@keyframes corePulse{50%{transform:scale(1.14);opacity:.5}}
+@media(prefers-reduced-motion:reduce){
+ .galaxy-stars,.galaxy-core-pulse,.account-galaxy:before,.account-galaxy:after{animation:none!important}
+}
