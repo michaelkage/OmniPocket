@@ -43,9 +43,9 @@ jobs:
             echo '};'
           } > _build.js
         env:
-          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
-          SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
-          MONO_PUBLIC_KEY: ${{ vars.MONO_PUBLIC_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL || vars.SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY || vars.SUPABASE_PUBLISHABLE_KEY }}
+          MONO_PUBLIC_KEY: ${{ secrets.MONO_PUBLIC_KEY || vars.MONO_PUBLIC_KEY }}
 
       - name: Validate site assets
         run: |
