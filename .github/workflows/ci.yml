@@ -27,6 +27,7 @@ jobs:
           node --check diagnostics.js
           node --check financial-services.js
           node --check supabase-client.js
+          node --check importer.js
           node --check _build.js
       - name: Install test dependencies
         run: npm install --no-audit --no-fund

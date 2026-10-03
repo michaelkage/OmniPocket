@@ -6,6 +6,7 @@ const files = [
   "app.js", "domain.js", "storage.js", "bus.js", "bank-core.js", "architecture.js",
   "diagnostics.js", "v1-completion.js", "production-hardening.js", "financial-services.js",
   "supabase-client.js",
+  "importer.js",
 ];
 for (const file of files) assert(fs.existsSync(file), `Missing required asset: ${file}`);
 
