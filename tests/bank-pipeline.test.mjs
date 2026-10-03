@@ -19,9 +19,10 @@ const expectedNgn = Number(fixture.data[0].amount) / 100;
 assert.equal(expectedNgn, 15000, "Mono fixture must remain interpreted as minor units");
 assert.equal(Number(fixture.data[1].balance) / 100, 243320, "Fixture balance normalization must remain stable");
 
-assert.match(app, /const isFirstProviderSync=!local\.connection\?\.lastSyncedAt/);
-assert.match(app, /if\(isFirstProviderSync\)\{local\.openingBalance=currentBalance-importedNet;\}/);
-assert.match(app, /rebuildBalances\(\);local\.connection=\{/);
+const bankConnection = fs.readFileSync("bank-connection.js","utf8");
+assert.match(bankConnection, /const isFirstProviderSync=!local\.connection\?\.lastSyncedAt/);
+assert.match(bankConnection, /if\(isFirstProviderSync\)\{local\.openingBalance=currentBalance-importedNet;\}/);
+assert.match(bankConnection, /rebuildBalances\(\);local\.connection=\{/);
 assert.match(app, /window\.OmniPocketBank\?\.freshness/);
 assert.match(config, /\[functions\.mono-webhook\][\s\S]*verify_jwt = false/);
 assert.doesNotMatch(sync, /Access-Control-Allow-Origin": "\*"/);

@@ -10,58 +10,7 @@ async function exchangeMonoCode(code, accountName, preferredAccountId = null) {
   return data;
 }
 
-async function syncMonoAccount(monoAccountId, accountName = "Connected bank", preferredAccountId = null) {
-  const startedAt = Date.now(), preferred = preferredAccountId ? account(preferredAccountId) : null;
-  const payload = await supabaseFunction("mono-account-sync", {
-    accountId: monoAccountId,
-    connectionId: preferred?.connection?.serverConnectionId || null,
-    clientAccountId: preferred?.id || null,
-  });
-  const rawAccount = payload?.account?.data?.account || payload?.account?.data || payload?.account?.account || payload?.account;
-  const rawTransactions = Array.isArray(payload?.transactions) ? payload.transactions : (payload?.transactions?.data || []);
-  if (!rawAccount) throw new Error("Mono returned no account details.");
-  const currency = CURRENCIES.includes(rawAccount.currency) ? rawAccount.currency : "NGN";
-  const currentBalance = minorUnitAmount(rawAccount.balance);
-  let local = preferred || state.accounts.find(x => x.connection?.provider === "mono" && x.connection.providerAccountId === monoAccountId);
-  if (!local) {
-    local = {
-      id: uid(), name: accountName || rawAccount.name || "Connected bank", institution: rawAccount.institution?.name || "", type: "bank", currency,
-      openingBalance: currentBalance, balance: currentBalance, archived: false, createdAt: Date.now(),
-      connection: {
-        provider: "mono", providerAccountId: monoAccountId, status: "connected", lastSyncedAt: null, syncStatus: "syncing", lastSyncError: "",
-        lastSyncStartedAt: null, lastSyncCompletedAt: null, lastSyncDurationMs: null, importedTransactionIds: [], rawRetainedUntil: null,
-        needsReauth: false, disconnectedAt: null, providerStatus: null, provenance: "bank_sync",
-      },
-    };
-    state.accounts.push(local);
-  }
-  const transactions = rawTransactions.map(tx => {
-    const currency = CURRENCIES.includes(tx.currency) ? tx.currency : "NGN";
-    return {
-      id: uid(),
-      connectionId: local.id,
-      mono_transaction_id: tx.id,
-      type: tx.type === "debit" ? "expense" : "income",
-      amount: minorUnitAmount(tx.amount),
-      currency,
-      narration: tx.narration || tx.description || "",
-      category: tx.category || "other",
-      balance: tx.balance ? minorUnitAmount(tx.balance) : null,
-      transaction_at: new Date(tx.date).toISOString(),
-      raw: tx,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    };
-  });
-  await persistTransactions(transactions);
-  local.balance = currentBalance;
-  local.connection.syncStatus = "connected";
-  local.connection.lastSyncedAt = new Date().toISOString();
-  local.connection.lastSyncCompletedAt = new Date().toISOString();
-  local.connection.lastSyncDurationMs = Date.now() - startedAt;
-  saveState();
-  return { account: local, transactions };
-}
+async function syncMonoAccount(monoAccountId,accountName="Connected bank",preferredAccountId=null){const startedAt=Date.now(),preferred=preferredAccountId?account(preferredAccountId):null,payload=await supabaseFunction("mono-account-sync",{accountId:monoAccountId,connectionId:preferred?.connection?.serverConnectionId||null,clientAccountId:preferred?.id||null});const rawAccount=payload?.account?.data?.account||payload?.account?.data||payload?.account?.account||payload?.account,rawTransactions=Array.isArray(payload?.transactions)?payload.transactions:(payload?.transactions?.data||[]);if(!rawAccount)throw new Error("Mono returned no account details.");const currency=CURRENCIES.includes(rawAccount.currency)?rawAccount.currency:"NGN",currentBalance=minorUnitAmount(rawAccount.balance);let local=preferred||state.accounts.find(x=>x.connection?.provider==="mono"&&x.connection.providerAccountId===monoAccountId);if(!local){local={id:uid(),name:accountName||rawAccount.name||"Connected bank",institution:rawAccount.institution?.name||"",type:"bank",currency,openingBalance:currentBalance,balance:currentBalance,archived:false,createdAt:Date.now(),connection:{provider:"mono",providerAccountId:monoAccountId,status:"connected",lastSyncedAt:null,syncStatus:"syncing",lastSyncError:"",lastSyncStartedAt:null,lastSyncCompletedAt:null,lastSyncDurationMs:null,importedTransactionCount:0,totalImportedTransactionCount:0,syncHistory:[],serverConnectionId:payload?.connection?.id||null}};state.accounts.push(local);}const importedAt=Date.now();let importedNet=0,importedCount=0;const isFirstProviderSync=!local.connection?.lastSyncedAt;for(const tx of rawTransactions){const pid=tx.mono_transaction_id||tx.id||tx._id;if(!pid)continue;const amount=tx.amount_minor!=null?minorUnitAmount(tx.amount_minor):minorUnitAmount(tx.amount),credit=String(tx.type||"").toLowerCase()==="credit";if(tx.type!==undefined) importedNet+=credit?amount:-amount;const existing=state.transactions.find(t=>t.external?.provider==="mono"&&t.external.providerTransactionId===String(pid));if(existing){existing.external.lastSeenAt=new Date().toISOString();if(tx.bankStatus)existing.bankStatus=tx.bankStatus;continue;}const suggestion=suggestTransactionCategory({description:tx.narration,providerCategory:tx.category});state.transactions.push({id:uid(),type:credit?"income":"expense",status:tx.bankStatus==="failed"?"recorded":"recorded",bankStatus:tx.bankStatus||"posted",date:String(tx.transaction_at||tx.date||today()).slice(0,10),createdAt:importedAt,sourceAccountId:local.id,destinationAccountId:null,amount,currency:tx.currency||currency,receivedAmount:null,receivedCurrency:null,fxRate:null,fxSource:"bank_import",provenance:{source:"bank_sync",provider:"mono",providerTransactionId:String(pid)},category:tx.category||"Other",suggestedCategory:suggestion?.category||null,categoryConfidence:suggestion?.confidence||null,categoryReason:suggestion?.reason||"",note:tx.narration||"Imported from Mono",linkedGoalIds:[],external:{provider:"mono",providerTransactionId:String(pid),importedAt:new Date(importedAt).toISOString(),lastSeenAt:new Date(importedAt).toISOString()}});importedCount++;}if(isFirstProviderSync){local.openingBalance=currentBalance-importedNet;}rebuildBalances();local.connection={...(local.connection||{}),providerBalance:currentBalance,providerBalanceAt:new Date().toISOString()};local.institution=rawAccount.institution?.name||local.institution;local.currency=currency;const completedAt=Date.now(),durationMs=completedAt-startedAt,total=Number(local.connection?.totalImportedTransactionCount)||0;local.connection={...(local.connection||{}),provider:"mono",providerAccountId:monoAccountId,serverConnectionId:payload?.connection?.id||local.connection?.serverConnectionId||null,status:"connected",lastSyncedAt:new Date(completedAt).toISOString(),lastSyncStartedAt:new Date(startedAt).toISOString(),lastSyncCompletedAt:new Date(completedAt).toISOString(),lastSyncDurationMs:durationMs,importedTransactionCount:importedCount,totalImportedTransactionCount:total+importedCount,syncStatus:"healthy",lastSyncError:"",syncHistory:[{startedAt:new Date(startedAt).toISOString(),completedAt:new Date(completedAt).toISOString(),status:"success",durationMs,importedCount},...(local.connection?.syncHistory||[])].slice(0,20)};saveState();emitStateEvent("account:updated",{accountId:local.id,provider:"mono",importedCount});return local;}
 
 function createMockBankDataset(connection = null) {
   const account = {
@@ -138,31 +87,6 @@ async function syncMockBankAccount(preferredAccountId = null) {
   account.balance = 1000;
   saveState();
   return account;
-}
-
-async function syncConnectedBankAccounts() {
-  const connected = state.accounts.filter(a => !a.archived && a.connection?.status === "connected" && a.connection.provider);
-  for (const a of connected) {
-    try {
-      if (a.connection.provider === "mock") {
-        await syncMockBankAccount(a.id);
-      } else if (a.connection.provider === "mono" && a.connection.providerAccountId) {
-        await syncMonoAccount(a.connection.providerAccountId, a.name, a.id);
-      }
-    } catch (error) {
-      console.warn("Bank sync failed for " + a.name, error);
-      a.connection.syncStatus = "error";
-      a.connection.lastSyncError = error.message || "Sync failed";
-      saveState();
-    }
-  }
-}
-
-async function connectDemoBankAccount() {
-  const account = await syncMockBankAccount();
-  $("accountDialog")?.close();
-  alert("Demo bank connected. A realistic balance and sample transactions are now flowing through the same account pipeline.");
-  openAccountDetail(account.id);
 }
 
 async function connectBankAccount() {
