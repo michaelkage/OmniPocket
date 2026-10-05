@@ -5,10 +5,10 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#6750A4">
   <meta name="description" content="OmniPocket — local-first multi-currency wealth tracker.">
-  <link rel="preconnect" href="https://googleapis.com">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://gstatic.com" crossorigin>
-  <link href="https://googleapis.com/css2?family=Roboto+Flex:opsz,wdth,wght,GRAD@8..144,25..151,100..1000,-200..150&display=swap" rel="stylesheet">
-  <link href="https://googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Roboto+Flex:opsz,wdth,wght,GRAD@8..144,25..151,100..1000,-200..150&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" rel="stylesheet" />
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="styles.css">
@@ -259,7 +259,7 @@
               <div class="muted">Hidden from net worth and automatic sync until restored.</div>
             </div>
           </div>
-          <div id="accountsArchivalList" class="stack"></div>
+          <div id="accountsArchivedList" class="stack"></div>
         </section>
       </div>
       <div id="pageGoals" class="page-view" hidden>
@@ -313,21 +313,22 @@
           </div>
           <div id="paymentCenterTimeline" class="payment-center-list"></div>
         </section>
-        <div id="pageActivity" class="page-view" hidden>
+      </div>
+      <div id="pageActivity" class="page-view" hidden>
           <section class="surface page-card">
             <div class="widget-head">
               <span class="eyebrow">MONEY FLOW</span>
               <h1>Activity</h1>
               <div class="muted">A ledger of recorded movements, including imported activity waiting for review.</div>
             </div>
-          </div>
           <div class="activity-filter">
             <input id="activitySearch" placeholder="Search activity…" autocomplete="off">
           </div>
           <div id="activityReviewQueue" class="review-queue" hidden></div>
           <div id="activityFullList" class="stack"></div>
         </section>
-        <div id="pageMore" class="page-view" hidden>
+      </div>
+      <div id="pageMore" class="page-view" hidden>
           <section class="surface page-card">
             <div>
               <span class="eyebrow">SYSTEM</span>
@@ -357,7 +358,31 @@
             </div>
           </section>
         </div>
-      </div>
+      </main>
+      <button type="button" class="fab" id="fab" aria-label="Quick money action">
+        <span class="material-symbols-outlined">add</span>
+      </button>
+      <nav class="bottom-nav" aria-label="Primary navigation">
+        <button type="button" class="nav-item active" data-page="Home">
+          <span class="material-symbols-outlined">home</span><span>Home</span>
+        </button>
+        <button type="button" class="nav-item" data-page="Accounts">
+          <span class="material-symbols-outlined">account_balance</span><span>Accounts</span>
+        </button>
+        <button type="button" class="nav-item" data-page="Goals">
+          <span class="material-symbols-outlined">track_changes</span><span>Goals</span>
+        </button>
+        <button type="button" class="nav-item" data-page="Activity">
+          <span class="material-symbols-outlined">receipt_long</span><span>Activity</span>
+        </button>
+        <button type="button" class="nav-item" data-page="Payments">
+          <span class="material-symbols-outlined">payments</span><span>Payments</span>
+        </button>
+        <button type="button" class="nav-item" data-page="More">
+          <span class="material-symbols-outlined">more_horiz</span><span>More</span>
+        </button>
+      </nav>
+    </div>
       <dialog id="paymentDialog" class="app-dialog">
         <div class="dialog-head">
           <div>
@@ -406,8 +431,12 @@
             Narration
             <input id="paymentNarration" maxlength="120" placeholder="What was this?">
           </label>
+          <label>
+            USSD code <span class="muted">(optional)</span>
+            <input id="paymentUssd" inputmode="tel" placeholder="e.g. *737*…#">
+          </label>
           <div class="dialog-actions">
-            <button type="submit" class="primary">
+            <button type="button" id="paymentSubmit" class="primary">
               <span class="material-symbols-outlined">send</span> Send
             </button>
           </div>
@@ -568,7 +597,112 @@
           </div>
         </form>
       </dialog>
-      <!-- Additional dialogs and UI elements would continue here -->
+<dialog id="accountDetailDialog" class="app-dialog">
+  <div class="dialog-head"><div><span class="eyebrow">ACCOUNT</span><h2 id="accountDetailTitle">Account</h2><div id="accountDetailMeta" class="muted"></div></div><button type="button" class="icon-button" onclick="this.closest('dialog').close()">✕</button></div>
+  <div class="detail-balance"><strong id="accountDetailBalance">₦0</strong><span id="accountDetailConverted" class="muted">≈ ₦0</span></div>
+  <div id="accountDetailStats" class="detail-stats"></div>
+  <div class="account-sync-status"><span class="eyebrow">CONNECTION</span><strong id="accountDetailSyncMeta">Managed locally on this device.</strong></div><div id="accountDetailSyncHistory" class="account-detail-sync-history" hidden></div>
+  <div class="detail-section"><div class="eyebrow">GOALS</div><div id="accountDetailGoals" class="stack"></div></div>
+  <div class="detail-section"><div class="eyebrow">RECENT ACTIVITY</div><div id="accountDetailActivity" class="stack"></div></div>
+  <div class="dialog-actions"><button type="button" id="accountDetailRefresh">Refresh local balance</button><button type="button" id="accountDetailReconcile">Reconcile</button><button type="button" id="accountDetailSync">Sync now</button><button type="button" id="accountDetailDisconnect">Disconnect bank</button><button type="button" id="accountDetailEdit">Edit</button><button type="button" id="accountDetailArchive">Archive</button><button type="button" class="primary" onclick="this.closest('dialog').close()">Done</button></div>
+</dialog>
+      <dialog id="goalDetailDialog" class="app-dialog">
+  <div class="dialog-head"><div><span class="eyebrow">TARGET INTELLIGENCE</span><h2 id="goalDetailTitle">Goal</h2></div><button type="button" class="icon-button" onclick="this.closest('dialog').close()">✕</button></div>
+  <div class="goal-health-row"><span id="goalDetailHealth" class="goal-health-badge">Active</span><span id="goalDetailHealthNote" class="muted"></span></div>
+  <div class="detail-balance"><strong id="goalDetailProgress">₦0 of ₦0</strong><span id="goalDetailMeta" class="muted"></span></div>
+  <div class="progress-track"><div id="goalDetailBar" class="progress-fill"></div></div>
+  <div class="goal-intelligence-grid">
+    <div class="goal-intel-card"><span class="eyebrow">REMAINING</span><strong id="goalDetailRemaining">₦0</strong></div>
+    <div class="goal-intel-card"><span class="eyebrow">REQUIRED PACE</span><strong id="goalDetailRequired">—</strong></div>
+    <div class="goal-intel-card"><span class="eyebrow">PROJECTED</span><strong id="goalDetailProjected">—</strong></div>
+  </div>
+  <div id="goalDetailProjectionNote" class="goal-intel-note"></div>
+  <div class="detail-section">
+    <div class="goal-section-head"><div><div class="eyebrow">TRAJECTORY</div><div class="muted">Last 30 days of net contribution versus the pace required by the deadline.</div></div></div>
+    <div id="goalDetailTrajectory"></div>
+    <div id="goalDetailTrajectoryMeta" class="goal-intel-note"></div>
+  </div>
+  <div class="detail-section"><div class="eyebrow">PACE</div><div id="goalDetailPace" class="detail-callout"></div></div>
+  <div class="detail-section"><div class="eyebrow">CONTRIBUTING ACCOUNTS</div><div id="goalDetailAccounts" class="stack"></div></div>
+  <div class="detail-section">
+    <div class="goal-section-head"><div><div class="eyebrow">LINKED ACTIVITY</div><div class="muted">Transactions you explicitly associated with this goal.</div></div></div>
+    <div id="goalDetailLinkedActivity" class="stack"></div>
+  </div>
+  <div class="detail-section">
+    <div class="goal-section-head"><div><div class="eyebrow">CONNECTED ACTIVITY</div><div class="muted">Activity inferred because it touches an included account.</div></div></div>
+    <div id="goalDetailConnectedActivity" class="stack"></div>
+    <div id="goalDetailActivitySummary" class="goal-intel-note"></div>
+  </div>
+  <div class="goal-detail-footnote">Goal progress is based on the balances of included accounts. Linked transactions describe intent and are not added again.</div>
+  <div class="dialog-actions"><button type="button" id="goalDetailEdit">Edit goal</button><button type="button" class="primary" onclick="this.closest('dialog').close()">Done</button></div>
+</dialog>
+      <dialog id="reconcileDialog" class="app-dialog">
+<div class="dialog-head"><div><span class="eyebrow">RECONCILIATION</span><h2>Match actual balance</h2><div id="reconcileMeta" class="muted"></div></div><button type="button" class="icon-button" onclick="this.closest('dialog').close()">✕</button></div>
+<form id="reconcileForm" class="form-grid"><label>Actual balance<input id="reconcileAmount" type="number" step="0.01" required></label><label>Note <span class="muted">(optional)</span><input id="reconcileNote" placeholder="Why did it differ?"></label><div class="dialog-actions"><button type="button" onclick="this.closest('dialog').close()">Cancel</button><button type="submit" class="primary">Reconcile</button></div></form>
+</dialog>
+      <dialog id="currencyDialog" class="app-dialog">
+<div class="dialog-head"><div><span class="eyebrow">DISPLAY</span><h2>Base currency</h2><div class="muted">Net worth will be converted into this currency.</div></div><button type="button" class="icon-button" onclick="this.closest('dialog').close()">✕</button></div>
+<form id="currencyForm" class="form-grid"><label>Currency<select id="baseCurrencySelect"><option>NGN</option><option>USD</option><option>GBP</option><option>EUR</option></select></label><div class="dialog-actions"><button type="button" onclick="this.closest('dialog').close()">Cancel</button><button type="submit" class="primary">Use currency</button></div></form>
+</dialog>
+      <dialog id="transactionDialog" class="app-dialog">
+<div class="dialog-head"><div><span class="eyebrow">TRANSACTION</span><h2 id="transactionDetailTitle">Activity</h2><div id="transactionDetailMeta" class="muted"></div></div><button type="button" class="icon-button" onclick="this.closest('dialog').close()">✕</button></div>
+<div class="detail-balance"><strong id="transactionDetailAmount">₦0</strong><span id="transactionDetailContext" class="muted"></span></div>
+<div class="detail-section"><div class="eyebrow">STATUS</div><div id="transactionDetailStatus" class="detail-callout"></div></div>
+<div id="transactionSuggestionSection" class="detail-section" hidden><div class="eyebrow">SMART CATEGORY</div><div id="transactionSuggestion" class="detail-callout"></div><div class="dialog-actions"><button type="button" id="transactionAcceptSuggestion" class="primary">Accept suggestion</button></div></div><div id="transactionHandlingSection" class="detail-section" hidden><div class="eyebrow">SMART HANDLING</div><div id="transactionHandling" class="detail-callout"></div><div class="dialog-actions"><button type="button" id="transactionAcceptHandling" class="primary">Accept transfer</button></div></div><div id="transactionPairSection" class="detail-section" hidden><div class="eyebrow">TRANSFER MATCH</div><div id="transactionPair" class="detail-callout"></div><div class="dialog-actions"><button type="button" id="transactionAcceptPair" class="primary">Merge as transfer</button></div></div>
+<div class="detail-section"><div class="eyebrow">GOALS</div><div id="transactionDetailGoals" class="stack"></div></div><div class="detail-section"><div class="eyebrow">NOTE</div><div id="transactionDetailNote" class="muted">No note.</div></div>
+<div class="dialog-actions"><button type="button" id="transactionReviewButton">Mark for review</button><button type="button" id="transactionEditButton">Edit</button><button type="button" id="transactionDeleteButton">Delete</button><button type="button" class="primary" onclick="this.closest('dialog').close()">Done</button></div>
+</dialog>
+      <dialog id="editTransactionDialog" class="app-dialog">
+<div class="dialog-head"><div><span class="eyebrow">TRANSACTION</span><h2>Edit activity</h2></div><button type="button" class="icon-button" onclick="this.closest('dialog').close()">✕</button></div>
+<form id="editTransactionForm" class="form-grid">
+<label>Type<select id="editTxType"><option value="income">Add money</option><option value="expense">Spend</option><option value="transfer">Transfer</option><option value="withdrawal">Cash out</option><option value="adjustment">Adjustment</option></select></label><label>Account<select id="editTxSource" required></select></label><label id="editTxDestinationWrap">Destination<select id="editTxDestination"></select></label><label>Amount<input id="editTxAmount" type="number" min="0.01" step="0.01" required></label><label id="editTxReceivedWrap">Received amount<input id="editTxReceived" type="number" min="0" step="0.01"></label><label id="editTxFxWrap">Actual FX rate<input id="editTxFxRate" type="number" min="0" step="0.000001"></label>
+<label>Date<input id="editTxDate" type="date" required></label>
+<label>Category / label<input id="editTxCategory"></label>
+<label>Note<input id="editTxNote"></label>
+<label>Status<select id="editTxStatus"><option value="recorded">Recorded</option><option value="needs_review">Handle later</option></select></label>
+<div class="dialog-actions"><button type="button" onclick="this.closest('dialog').close()">Cancel</button><button type="submit" class="primary">Save changes</button></div>
+</form>
+</dialog>
+      <dialog id="smartParserDialog" class="app-dialog"><div class="dialog-head"><div><span class="eyebrow">SMART ENTRY</span><h2>Parse an alert</h2><div class="muted">Paste a bank/SMS alert. Parsing stays in your browser.</div></div><button type="button" class="icon-button" onclick="this.closest('dialog').close()">✕</button></div><div class="form-grid"><label>Alert text<textarea id="smartTextInput" rows="6" placeholder="Paste the transaction SMS here…"></textarea></label><div class="dialog-actions"><button type="button" id="smartPasteButton">Paste clipboard</button><button type="button" id="smartParseButton" class="primary">Parse</button></div><div id="smartResult" class="detail-callout" hidden><div><strong id="smartAmount"></strong> · <span id="smartCategory"></span> · <span id="smartDate"></span></div><div class="dialog-actions"><button type="button" id="smartApprove" class="primary">Approve & log</button></div></div><label>Receipt image<input id="smartReceiptInput" type="file" accept="image/*"></label><div id="receiptStatus" class="muted">Images stay on-device. A bundled local OCR engine can be attached without changing the parser.</div></div></dialog>
+      <dialog id="dashboardSettingsDialog" class="app-dialog"><div class="dialog-head"><div><span class="eyebrow">WORKSPACE</span><h2>Customize dashboard</h2><div class="muted">Choose visible nodes and their order.</div></div><button type="button" class="icon-button" onclick="this.closest('dialog').close()">✕</button></div><form id="dashboardSettingsForm" class="form-grid"><div class="check-list">
+<label class="check-row"><input type="checkbox" data-widget-hidden="networth" checked> Net worth</label><label class="check-row"><input type="checkbox" data-widget-hidden="trend" checked> Wealth trend</label><label class="check-row"><input type="checkbox" data-widget-hidden="goals" checked> Goals</label><label class="check-row"><input type="checkbox" data-widget-hidden="accounts" checked> Accounts</label><label class="check-row"><input type="checkbox" data-widget-hidden="activity" checked> Activity</label><label class="check-row"><input type="checkbox" data-widget-hidden="quick" checked> Quick actions</label><label class="check-row"><input type="checkbox" data-widget-hidden="fx" checked> FX cache</label><label class="check-row"><input type="checkbox" data-widget-hidden="relations" checked> Relationship graph</label><label class="check-row"><input type="checkbox" data-widget-hidden="insights" checked> Financial signals</label><label class="check-row"><input type="checkbox" data-widget-hidden="spending" checked> Spending mix</label></div><label>Widget order <select id="widgetOrderSelect"><option value="networth,trend,goals,accounts,activity,quick,fx,relations,insights,spending">Wealth → Trend → Goals → Accounts → Activity → Quick → FX → Network → Intelligence → Spending</option><option value="quick,networth,accounts,activity,goals,trend,fx,insights,spending">Quick → Wealth → Accounts → Activity → Goals → Trend → FX → Intelligence → Spending</option><option value="trend,networth,goals,activity,accounts,fx,quick,insights,spending">Trend → Wealth → Goals → Activity → Accounts → FX → Quick → Intelligence → Spending</option></select></label><div class="dialog-actions"><button type="button" onclick="this.closest('dialog').close()">Cancel</button><button type="submit" class="primary">Save workspace</button></div></form></dialog>
+      <dialog id="quickDialog" class="app-dialog">
+<div class="dialog-head"><div><span class="eyebrow">QUICK ENTRY</span><h2 id="quickTitle">Add money</h2></div><button class="icon-button" type="button" onclick="this.closest('dialog').close()">✕</button></div>
+<form id="quickForm" class="form-grid">
+<label><span id="quickAmountLabel">Amount</span><input id="quickAmount" inputmode="decimal" type="number" min="0.01" step="0.01" required></label>
+<label>Account<select id="quickAccount" required></select></label>
+<div id="quickDestinationWrap"><label>Destination<select id="quickDestination"></select></label></div>
+<div id="quickReceivedWrap"><label><span id="quickReceivedLabel">Received</span><input id="quickReceivedAmount" type="number" min="0" step="0.01"></label><label>Received currency<select id="quickReceivedCurrency"><option>NGN</option><option>USD</option><option>GBP</option><option>EUR</option></select></label></div>
+<div id="quickFxWrap"><label>Actual FX rate <span class="muted">(optional)</span><input id="quickFxRate" type="number" min="0" step="0.000001"></label></div>
+<div id="quickCategoryWrap"><label>Category<select id="quickCategory"><option>Food</option><option>Transport</option><option>Utilities</option><option>Shopping</option><option>Other</option></select></label></div>
+<div id="quickStatusWrap"><label>Status<select id="quickStatus"><option value="recorded">Recorded</option><option value="needs_review">Handle later</option></select></label></div>
+<label>Date<input id="quickDate" type="date" required></label>
+<label>Note <span class="muted">(optional)</span><input id="quickNote" maxlength="120" placeholder="What was this?"></label>
+<div id="quickTxGoals" class="check-list"></div>
+<div class="dialog-actions"><button type="button" onclick="this.closest('dialog').close()">Cancel</button><button class="primary" type="submit">Save</button></div>
+</form></dialog>
+      <dialog id="statementImportDialog" class="app-dialog">
+  <div class="dialog-head"><div><span class="eyebrow">LOCAL IMPORT</span><h2>Bank statement import</h2><div class="muted">CSV, XLSX and XLS files are processed locally. New rows enter the review queue.</div></div><button type="button" class="icon-button" onclick="this.closest('dialog').close()">✕</button></div>
+  <div class="form-grid">
+    <label>Account<select id="statementImportAccount"></select></label>
+    <label>Statement file<input id="statementImportFilePicker" type="file" accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"></label>
+    <div id="statementMappingPanel" class="statement-mapping-panel" hidden>
+      <div><span class="eyebrow">COLUMN MAPPING</span><strong>Tell OmniPocket what each column means</strong></div>
+      <label>Date<select id="statementMapDate"></select></label>
+      <label>Description / narration <span class="muted">(optional)</span><select id="statementMapDescription"></select></label>
+      <label>Reference <span class="muted">(optional)</span><select id="statementMapReference"></select></label>
+      <label>Signed amount <span class="muted">(use this if positive = money in, negative = money out)</span><select id="statementMapAmount"></select></label>
+      <div class="mapping-divider">OR</div>
+      <label>Debit / money out <span class="muted">(optional)</span><select id="statementMapDebit"></select></label>
+      <label>Credit / money in <span class="muted">(optional)</span><select id="statementMapCredit"></select></label>
+      <label class="statement-remember"><input id="statementRememberMapping" type="checkbox" checked> Remember this mapping for this account/institution</label>
+      <div class="dialog-actions"><button id="statementPreviewButton" type="button" class="primary">Preview transactions</button></div>
+    </div>
+    <div id="statementImportSummary" class="detail-callout">Choose an account and statement file.</div>
+    <div id="statementImportPreview" class="stack"></div>
+    <div class="dialog-actions"><button type="button" onclick="this.closest('dialog').close()">Cancel</button><button type="button" id="statementImportConfirm" class="primary" disabled>Import to review</button></div>
+  </div>
+</dialog>
       <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
       <script src="_build.js"></script>
       <script src="storage.js"></script>
