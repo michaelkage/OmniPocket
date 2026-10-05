@@ -1,0 +1,1 @@
+CRITICAL WORKSPACE RULE: Never write custom layout blocks, raw margins, or ad-hoc component styles. Always check the official imports in @material/web or @mui/material to see if a pre-built layout, container, or component exists first. Restrict designs completely to Material 3 design tokens.
