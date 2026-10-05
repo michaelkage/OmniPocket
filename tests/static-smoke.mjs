@@ -10,6 +10,7 @@ const files = [
   "bank-sync-ui.js",
   "payments-ui.js",
   "importer.js",
+  "quick-entry-ui.js",
 ];
 for (const file of files) assert(fs.existsSync(file), `Missing required asset: ${file}`);
 
@@ -20,7 +21,7 @@ const build = fs.readFileSync("_build.js", "utf8");
 for (const marker of ["supabase-js", "bank-core.js", "architecture.js", "diagnostics.js"]) {
   assert(html.includes(marker), `Missing integration marker: ${marker}`);
 }
-const allApp = [app, fs.readFileSync("bank-connection.js", "utf8"), fs.readFileSync("bank-sync-ui.js", "utf8"), fs.readFileSync("payments-ui.js", "utf8"), fs.readFileSync("importer.js", "utf8")].join("\n");
+const allApp = [app, fs.readFileSync("bank-connection.js", "utf8"), fs.readFileSync("bank-sync-ui.js", "utf8"), fs.readFileSync("payments-ui.js", "utf8"), fs.readFileSync("quick-entry-ui.js", "utf8"), fs.readFileSync("importer.js", "utf8")].join("\n");
 for (const marker of ["mono-exchange-token", "mono-account-sync", "omnipocket-payment-initiate"]) {
   assert(allApp.includes(marker), `Missing app integration marker: ${marker}`);
 }
