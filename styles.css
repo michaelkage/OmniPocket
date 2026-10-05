@@ -865,3 +865,251 @@ body {
     transform: scale(1);
   }
 }
+
+/* Responsive Material 3 layout hardening */
+.main-content,
+.surface,
+.page-card,
+.dashboard-shell,
+.dashboard-widget,
+.widget,
+.account-full,
+.goal-row,
+.account-row,
+.activity-row {
+  min-width: 0;
+}
+
+.hero-row,
+.widget-head,
+.dashboard-toolbar,
+.goal-row,
+.account-row,
+.activity-row {
+  min-width: 0;
+}
+
+.hero-row > *,
+.widget-head > *,
+.dashboard-toolbar > *,
+.goal-row > *,
+.account-row > *,
+.activity-row > * {
+  min-width: 0;
+}
+
+.hero-row h1,
+.widget h2,
+.dashboard-widget h2,
+.dashboard-widget h3,
+.account-full h3,
+.goal-row h3,
+.activity-row strong,
+.account-row strong {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.hero-row h1 {
+  max-width: 100%;
+}
+
+.account-main,
+.activity-row > :first-child,
+.goal-row > :first-child {
+  min-width: 0;
+}
+
+.account-main > div,
+.activity-row > div,
+.goal-row > div {
+  min-width: 0;
+}
+
+.account-row .amount,
+.activity-value,
+.goal-row .amount {
+  flex: 0 0 auto;
+  text-align: right;
+  max-width: 48%;
+  overflow-wrap: anywhere;
+}
+
+.dashboard-widget {
+  overflow: hidden;
+}
+
+.dashboard-widget .widget-head {
+  flex-wrap: wrap;
+}
+
+.dashboard-widget .widget-head > :last-child {
+  max-width: 100%;
+}
+
+.dashboard-widget p,
+.dashboard-widget .muted,
+.dashboard-widget .eyebrow {
+  overflow-wrap: anywhere;
+}
+
+.link-row > * {
+  min-width: 0;
+}
+
+.link-row span:last-child {
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
+.app-dialog {
+  box-sizing: border-box;
+  max-height: min(760px, calc(100dvh - 32px));
+  overflow: auto;
+}
+
+.app-dialog h1,
+.app-dialog h2,
+.app-dialog h3,
+.app-dialog p,
+.app-dialog .muted {
+  overflow-wrap: anywhere;
+}
+
+.dialog-head > div {
+  min-width: 0;
+}
+
+.dialog-head h2 {
+  overflow-wrap: anywhere;
+}
+
+.dialog-actions {
+  min-width: 0;
+}
+
+@media (max-width: 720px) {
+  .main-content {
+    padding: 12px;
+  }
+
+  .hero-row {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .hero-row > :first-child {
+    flex: 1 1 100%;
+  }
+
+  .hero-row > :last-child {
+    margin-left: auto;
+  }
+
+  .hero-row h1 {
+    font-size: clamp(34px, 12vw, 48px);
+    line-height: 1.02;
+  }
+
+  .hero-meta {
+    flex-wrap: wrap;
+  }
+
+  .dashboard-shell {
+    padding: 12px;
+    border-radius: 24px;
+  }
+
+  .dashboard-galaxy {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .dashboard-widget,
+  .widget-networth,
+  .widget-trend,
+  .widget-goals,
+  .widget-accounts,
+  .widget-activity,
+  .widget-quick,
+  .widget-fx,
+  .widget-insights,
+  .widget-spending {
+    grid-column: 1 / -1;
+  }
+
+  .dashboard-widget {
+    padding: 16px;
+  }
+
+  .dashboard-toolbar {
+    flex-wrap: wrap;
+  }
+
+  .dashboard-toolbar > * {
+    width: 100%;
+  }
+
+  .widget-head {
+    align-items: flex-start;
+  }
+
+  .account-row,
+  .activity-row,
+  .goal-row {
+    align-items: flex-start;
+  }
+
+  .account-row .amount,
+  .activity-value,
+  .goal-row .amount {
+    max-width: 44%;
+    white-space: normal;
+  }
+}
+
+@media (max-width: 520px) {
+  .app-shell {
+    padding-bottom: 82px;
+  }
+
+  .topbar {
+    height: 60px;
+    padding: 0 12px;
+  }
+
+  .brand {
+    min-width: 0;
+  }
+
+  .brand span:last-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .hero-card {
+    padding: 20px;
+  }
+
+  .widget,
+  .page-card {
+    padding: 16px;
+  }
+
+  .bottom-nav {
+    padding-inline: 4px;
+  }
+
+  .nav-item {
+    min-width: 0;
+    flex: 1 1 0;
+  }
+
+  .app-dialog {
+    width: calc(100% - 20px);
+    max-height: calc(100dvh - 20px);
+    padding: 18px;
+    border-radius: 24px;
+  }
+}
