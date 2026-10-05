@@ -46,6 +46,28 @@ function setTheme(scheme, isDark) {
   root.style.setProperty('--md-sys-color-shadow', hexFromArgb(scheme.shadow));
   root.style.setProperty('--md-sys-color-surface-tint', hexFromArgb(scheme.surfaceTint));
   root.style.setProperty('--md-sys-color-scrim', hexFromArgb(scheme.scrim));
+
+  // Material 3 shape tokens used by the handcrafted UI.
+  root.style.setProperty('--md-sys-shape-none', '0');
+  root.style.setProperty('--md-sys-shape-small', '8px');
+  root.style.setProperty('--md-sys-shape-medium', '12px');
+  root.style.setProperty('--md-sys-shape-large', '28px');
+  root.style.setProperty('--md-sys-shape-full', '9999px');
+
+  // Material 3 typography tokens from theme.tokens.json.
+  root.style.setProperty('--md-sys-typescale-display-large-size', '57px');
+  root.style.setProperty('--md-sys-typescale-display-large-line-height', '64px');
+  root.style.setProperty('--md-sys-typescale-headline-large-size', '32px');
+  root.style.setProperty('--md-sys-typescale-headline-large-line-height', '40px');
+  root.style.setProperty('--md-sys-typescale-title-large-size', '22px');
+  root.style.setProperty('--md-sys-typescale-title-large-line-height', '28px');
+  root.style.setProperty('--md-sys-typescale-body-large-size', '16px');
+  root.style.setProperty('--md-sys-typescale-body-large-line-height', '24px');
+  root.style.setProperty('--md-sys-typescale-body-medium-size', '14px');
+  root.style.setProperty('--md-sys-typescale-body-medium-line-height', '20px');
+  root.style.setProperty('--md-sys-typescale-label-large-size', '14px');
+  root.style.setProperty('--md-sys-typescale-label-large-line-height', '20px');
+
   root.setAttribute('data-md-theme', isDark ? 'dark' : 'light');
   root.style.setProperty('color-scheme', isDark ? 'dark' : 'light');
 }
@@ -59,9 +81,11 @@ async function init() {
 
   function apply() {
     const isDark = mediaQuery.matches;
+    // SchemeTonalSpot is already a color-scheme object in the current
+    // material-color-utilities API; it does not expose toJSON().
     const scheme = isDark
-      ? new SchemeTonalSpot(Hct.fromInt(seed), true, 0).toJSON()
-      : new SchemeTonalSpot(Hct.fromInt(seed), false, 0).toJSON();
+      ? new SchemeTonalSpot(Hct.fromInt(seed), true, 0)
+      : new SchemeTonalSpot(Hct.fromInt(seed), false, 0);
     setTheme(scheme, isDark);
   }
 
