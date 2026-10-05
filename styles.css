@@ -90,7 +90,7 @@ body {
   background: color-mix(in srgb, var(--md-sys-color-surface), var(--md-sys-color-outline) 8%);
   border: 1px solid var(--md-sys-color-outline);
   box-shadow: 0 18px 55px color-mix(in srgb, black, black 20%);
-  border-radius: var(--md-sys-color-surface);
+  border-radius: var(--md-sys-shape-medium);
 }
 
 .hero-card {
