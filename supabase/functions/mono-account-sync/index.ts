@@ -53,7 +53,7 @@ function amountFromProvider(value: any, unit: string) {
 }
 function normalizeTransaction(tx: any, amountUnit: string) {
   return {
-    mono_transaction_id: String(tx?._id || tx?.id || tx?.transaction_id || crypto.randomUUID()),
+    mono_transaction_id: tx?._id || tx?.id || tx?.transaction_id ? String(tx._id || tx.id || tx.transaction_id) : null,
     type: String(tx?.type || "").toLowerCase() === "credit" ? "credit" : "debit",
     amount_minor: Math.round(amountFromProvider(tx?.amount, amountUnit) * 100),
     currency: String(tx?.currency || "NGN").toUpperCase(),
@@ -103,25 +103,45 @@ async function syncAccount(supabase: any, userId: string, monoAccountId: string,
     }
   }
 
-  const normalized = transactions.map((tx: any) => normalizeTransaction(tx, amountUnit));
+  const normalized = transactions
+    .map((tx: any) => normalizeTransaction(tx, amountUnit))
+    .filter((tx: any) => {
+      if (tx.mono_transaction_id) return true;
+      console.warn("Skipping Mono transaction without a stable provider ID");
+      return false;
+    });
+  const transactionIds = normalized.map((tx: any) => tx.mono_transaction_id);
+  const { data: existingRows, error: existingRowsError } = transactionIds.length
+    ? await supabase.from("bank_transactions").select("mono_transaction_id").eq("connection_id", connection.id).in("mono_transaction_id", transactionIds)
+    : { data: [], error: null };
+  if (existingRowsError) throw existingRowsError;
+  const existingIds = new Set((existingRows || []).map((row: any) => row.mono_transaction_id));
+  let insertedCount = 0;
+  let updatedCount = 0;
   for (const tx of normalized) {
     const { error } = await supabase.from("bank_transactions").upsert(
       { user_id: userId, connection_id: connection.id, ...tx, provenance: "bank_sync" },
       { onConflict: "connection_id,mono_transaction_id" }
     );
     if (error) throw error;
+    if (existingIds.has(tx.mono_transaction_id)) updatedCount++;
+    else {
+      insertedCount++;
+      existingIds.add(tx.mono_transaction_id);
+    }
   }
 
   const completedAt = new Date().toISOString();
   const { error: eventError } = await supabase.from("bank_sync_events").insert({
     user_id: userId, connection_id: connection.id, provider: "mono",
     event_type: "account_sync", status: "success", started_at: startedAt, completed_at: completedAt,
-    imported_count: normalized.length, metadata: { data_status: row.data_status, amount_unit: amountUnit }
+    imported_count: insertedCount, metadata: { data_status: row.data_status, amount_unit: amountUnit, fetched_count: transactions.length, inserted_count: insertedCount, updated_count: updatedCount, skipped_count: transactions.length - normalized.length }
   });
   if (eventError) console.warn("Could not record bank sync event:", eventError.message);
 
   return {
-    connection, account, transactionsImported: normalized.length,
+    connection, account, transactionsImported: insertedCount, transactionsFetched: transactions.length,
+    transactionsInserted: insertedCount, transactionsUpdated: updatedCount, transactionsSkipped: transactions.length - normalized.length,
     transactions: normalized, dataStatus: row.data_status, amountUnit
   };
 }
