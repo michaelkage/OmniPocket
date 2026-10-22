@@ -1394,7 +1394,7 @@ function renderFullViews() {
   const goalsEl = $("goalsFullList");
   if (goalsEl) goalsEl.innerHTML = state.goals.map(g => {
     const p = goalProgress(g);
-    return `<div class="goal-row interactive-row" data-goal-id="${escapeHtml(g.id)}" tabindex="0" role="button" aria-label="Open goal"><div><strong>${escapeHtml(g.name)}</strong><div class="muted">${escapeHtml(money(p.current,g.currency))} of ${escapeHtml(money(g.target,g.currency))} · ${p.pct.toFixed(0)}%${g.deadline ? " · "+escapeHtml(g.deadline) : ""}</div></div><span class="status-chip">${escapeHtml(g.status)}</span></div>`;
+    return `<div class="goal-row interactive-row" data-goal-id="${escapeHtml(g.id)}" tabindex="0" role="button" aria-label="Open goal"><div><strong>${escapeHtml(g.name)}</strong><div class="muted">${escapeHtml(state.settings.privacyHidden ? "••••••" : money(p.current,g.currency) + " of " + money(g.target,g.currency))} · ${p.pct.toFixed(0)}%${g.deadline ? " · "+escapeHtml(g.deadline) : ""}</div></div><span class="status-chip">${escapeHtml(g.status)}</span></div>`;
   }).join("") || '<div class="empty-state">No goals yet.</div>';
 
   const search = ($("activitySearch")?.value || "").toLowerCase();
@@ -1891,6 +1891,17 @@ $("modeButton")?.addEventListener("click", () => {
   saveState();
 });
 
+if (!$("themeButton")) {
+  const settingsList = document.querySelector("#pageMore .settings-list");
+  if (settingsList) {
+    const themeButton = document.createElement("button");
+    themeButton.type = "button";
+    themeButton.id = "themeButton";
+    themeButton.innerHTML = '<span class="material-symbols-outlined">dark_mode</span> Appearance · System';
+    settingsList.prepend(themeButton);
+  }
+}
+
 $("themeButton")?.addEventListener("click", () => {
   const api = window.OmniPocketTheme;
   if (!api) return;
@@ -2235,7 +2246,7 @@ function syncPrivacyControls() {
   }
   const settingsButton = $("privacySettingsButton");
   if (settingsButton) settingsButton.innerHTML = '<span class="material-symbols-outlined">' + (hidden ? "visibility" : "visibility_off") + '</span> Privacy · ' + (hidden ? "Hidden" : "Visible");
-  document.querySelectorAll("[data-financial-value]").forEach(el => {
+  document.querySelectorAll("[data-financial-value], #netWorth, #galaxyNetWorth").forEach(el => {
     el.classList.toggle("value-hidden", hidden);
     el.classList.toggle("value-visible", !hidden);
     el.dataset.valueHidden = String(hidden);
