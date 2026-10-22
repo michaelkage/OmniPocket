@@ -9,10 +9,22 @@ const config = fs.readFileSync("supabase/config.toml","utf8");
 const fixture = JSON.parse(fs.readFileSync("tests/fixtures/mono-transactions.json","utf8"));
 
 assert.match(sync, /const amountUnit = Deno\.env\.get\("MONO_AMOUNT_UNIT"\) \|\| "minor"/);
-assert.match(sync, /transactions\.map\(\(tx: any\) => normalizeTransaction\(tx, amountUnit\)\)/);
+assert.match(sync, /transactions\s*\.map\(\(tx: any\) => normalizeTransaction\(tx, amountUnit\)\)/);
 assert.match(exchange, /const amountUnit = Deno\.env\.get\("MONO_AMOUNT_UNIT"\) \|\| "minor"/);
-assert.match(exchange, /transactions\.map\(\(tx: any\) => normalizeTransaction\(tx, amountUnit\)\)/);
+assert.match(exchange, /transactions\s*\.map\(\(tx: any\) => normalizeTransaction\(tx, amountUnit\)\)/);
 assert.match(sync, /provider_balance_minor/);
+assert.match(sync, /transactionsInserted: insertedCount/);
+assert.match(sync, /transactionsUpdated: updatedCount/);
+assert.match(sync, /Skipping Mono transaction without a stable provider ID/);
+assert.match(exchange, /transactionsInserted: insertedCount/);
+assert.match(exchange, /transactionsUpdated: updatedCount/);
+assert.match(exchange, /Skipping Mono transaction without a stable provider ID/);
+assert.match(sync, /imported_count: insertedCount/);
+assert.match(exchange, /imported_count: insertedCount/);
+assert.match(sync, /fetched_count: transactions\.length/);
+assert.match(exchange, /fetched_count: transactions\.length/);
+assert.doesNotMatch(sync, /crypto\.randomUUID\(\)/);
+assert.doesNotMatch(exchange, /crypto\.randomUUID\(\)/);
 assert.match(sync, /bank_sync_events/);
 assert.doesNotMatch(sync, /amountFromProvider\(account\.balance, amountUnit\).*amountUnit/);
 
