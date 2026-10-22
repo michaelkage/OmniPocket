@@ -1213,7 +1213,7 @@ function renderActivity() {
           <div class="row-title-with-context"><span>${escapeHtml(transactionLabel(t))}</span>${context.scope==="transaction"&&context.transactionId===t.id?'<span class="context-link-badge">Selected</span>':context.scope!=="global"&&((context.scope==="account"&&contextAccountIds(context).includes(t.sourceAccountId))||(context.scope==="goal"&&contextAccountIds(context).some(id=>id===t.sourceAccountId||id===t.destinationAccountId)))?'<span class="context-link-badge">Connected</span>':""}</div>
           <div class="muted">${escapeHtml(t.date)} · ${context}</div>
         </div>
-        <span class="amount">${sign}${escapeHtml(money(t.amount, t.currency))}</span>
+        <span class="amount" data-financial-value>${sign}${escapeHtml(state.settings.privacyHidden ? "••••••" : money(t.amount, t.currency))}</span>
       </div>
     `;
   }).join("");
@@ -1388,7 +1388,7 @@ function renderFullViews() {
   if (accountsEl) accountsEl.innerHTML = state.accounts.filter(a => !a.archived).map(a => `
     <div class="account-row account-full interactive-row" data-account-id="${escapeHtml(a.id)}" tabindex="0" role="button" aria-label="Open account">
       <div class="account-main"><span class="node">◉</span><div><div class="row-title-with-context"><strong>${escapeHtml(a.name)}</strong>${a.connection?.provider === "mono" ? '<span class="context-link-badge">Connected</span>' : ""}</div><div class="muted">${escapeHtml(a.institution || "Personal")} · ${escapeHtml(a.type)} · ${escapeHtml(a.currency)}</div></div></div>
-      <div class="account-tools"><strong>${state.settings.privacyHidden ? "••••" : escapeHtml(money(a.balance,a.currency))}</strong><button type="button" data-reconcile="${escapeHtml(a.id)}">Reconcile</button></div>
+      <div class="account-tools"><strong data-financial-value>${state.settings.privacyHidden ? "••••••" : escapeHtml(money(a.balance,a.currency))}</strong><button type="button" data-reconcile="${escapeHtml(a.id)}">Reconcile</button></div>
     </div>`).join("") || '<div class="empty-state">No accounts yet.</div>';
 
   const goalsEl = $("goalsFullList");
@@ -1409,7 +1409,7 @@ function renderFullViews() {
     const direction = transactionDirection(t);
     const sign = direction === "out" ? "−" : direction === "in" ? "+" : "";
     const detail = t.type === "transfer" ? `${source?.name || "Unknown"} → ${dest?.name || "Unknown"}` : source?.name || "Unknown";
-    return `<div class="activity-row interactive-row" data-transaction-id="${escapeHtml(t.id)}" tabindex="0" role="button"><div><strong>${escapeHtml(transactionLabel(t))}</strong><div class="muted">${escapeHtml(t.date)} · ${escapeHtml(detail)}${t.note ? " · "+escapeHtml(t.note) : ""}</div></div><div class="activity-value"><strong>${sign}${escapeHtml(money(t.amount,t.currency))}</strong><span class="muted">${escapeHtml(t.status === "needs_review" ? "Handle later" : "Recorded")}${t.external?.provider ? " · " + escapeHtml(t.external.provider) : ""}</span></div></div>`;
+    return `<div class="activity-row interactive-row" data-transaction-id="${escapeHtml(t.id)}" tabindex="0" role="button"><div><strong>${escapeHtml(transactionLabel(t))}</strong><div class="muted">${escapeHtml(t.date)} · ${escapeHtml(detail)}${t.note ? " · "+escapeHtml(t.note) : ""}</div></div><div class="activity-value"><strong data-financial-value>${sign}${escapeHtml(state.settings.privacyHidden ? "••••••" : money(t.amount,t.currency))}</strong><span class="muted">${escapeHtml(t.status === "needs_review" ? "Handle later" : "Recorded")}${t.external?.provider ? " · " + escapeHtml(t.external.provider) : ""}</span></div></div>`;
   }).join("") || '<div class="empty-state">No matching activity.</div>';
 
   document.querySelectorAll("[data-reconcile]").forEach(button => {
