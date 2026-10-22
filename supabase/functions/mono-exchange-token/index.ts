@@ -136,8 +136,8 @@ async function syncAccount(supabase: any, userId: string, monoAccountId: string,
   await supabase.from("bank_sync_events").insert({
     user_id: userId, connection_id: connection.id, provider: "mono",
     event_type: "account_sync", status: "success", started_at: startedAt, completed_at: now,
-    imported_count: normalized.length,
-    metadata: { data_status: row.data_status, amount_unit: amountUnit }
+    imported_count: insertedCount,
+    metadata: { data_status: row.data_status, amount_unit: amountUnit, fetched_count: transactions.length, inserted_count: insertedCount, updated_count: updatedCount, skipped_count: transactions.length - normalized.length }
   });
 
   return {
