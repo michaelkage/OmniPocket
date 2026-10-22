@@ -47,8 +47,8 @@ jobs:
       - name: Required integrations present
         run: |
           grep -q "supabase-js" index.html
-          grep -q "mono-exchange-token" app.js
-          grep -q "mono-account-sync" app.js
+          grep -q "mono-exchange-token" app.js bank-connection.js bank-sync-ui.js
+          grep -q "mono-account-sync" app.js bank-connection.js bank-sync-ui.js
           grep -q "omnipocket-payment-initiate" app.js payments-ui.js quick-entry-ui.js v1-completion.js
       - name: No obvious secret leakage
         run: |
