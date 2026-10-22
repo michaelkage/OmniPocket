@@ -1157,6 +1157,8 @@ function render() {
   renderFullViews();
   renderDashboard();
   renderPaymentCenter();
+  syncPrivacyControls();
+  animateNewLedgerRows();
 }
 
 function providerLabel(a){const p=String(a?.connection?.provider||"").toLowerCase();return p==="mono"?"MONO":p==="mock"?"DEMO BANK":"LOCAL";}
@@ -1889,9 +1891,24 @@ $("modeButton")?.addEventListener("click", () => {
   saveState();
 });
 
+$("themeButton")?.addEventListener("click", () => {
+  const api = window.OmniPocketTheme;
+  if (!api) return;
+  api.set(api.get() === "dark" ? "light" : "dark");
+  syncThemeControl();
+});
+
+function syncThemeControl() {
+  const button = $("themeButton");
+  if (!button) return;
+  const current = window.OmniPocketTheme?.get?.() || "light";
+  button.innerHTML = '<span class="material-symbols-outlined">' + (current === "dark" ? "light_mode" : "dark_mode") + '</span> Appearance · ' + (current === "dark" ? "Dark" : "Light");
+}
+setTimeout(syncThemeControl, 0);
+
 $("privacySettingsButton")?.addEventListener("click", () => {
   state.settings.privacyHidden = !state.settings.privacyHidden;
-  $("privacySettingsButton").textContent = `Privacy · ${state.settings.privacyHidden ? "Hidden" : "Visible"}`;
+  syncPrivacyControls();
   saveState();
 });
 
@@ -2126,6 +2143,8 @@ $("statementImportConfirm")?.addEventListener("click", () => {
   const result = importStatementRows(rows);
   $("statementImportDialog").close();
   pendingStatementImport = null;
+  render();
+  animateNewLedgerRows();
   alert(result.imported + " imported to the review queue." + (result.duplicates ? " " + result.duplicates + " duplicate" + (result.duplicates === 1 ? "" : "s") + " skipped." : "") + (result.invalid ? " " + result.invalid + " invalid row" + (result.invalid === 1 ? "" : "s") + " skipped." : ""));
 });
 
@@ -2204,6 +2223,31 @@ $("privacyButton")?.addEventListener("click", () => {
   state.settings.privacyHidden = !state.settings.privacyHidden;
   saveState();
 });
+
+function syncPrivacyControls() {
+  const hidden = Boolean(state.settings.privacyHidden);
+  const top = $("privacyButton");
+  if (top) {
+    top.setAttribute("aria-label", hidden ? "Show balances" : "Hide balances");
+    top.setAttribute("aria-pressed", String(hidden));
+    const icon = top.querySelector(".material-symbols-outlined");
+    if (icon) icon.textContent = hidden ? "visibility" : "visibility_off";
+  }
+  const settingsButton = $("privacySettingsButton");
+  if (settingsButton) settingsButton.innerHTML = '<span class="material-symbols-outlined">' + (hidden ? "visibility" : "visibility_off") + '</span> Privacy · ' + (hidden ? "Hidden" : "Visible");
+  document.querySelectorAll("[data-financial-value]").forEach(el => {
+    el.classList.toggle("value-hidden", hidden);
+    el.classList.toggle("value-visible", !hidden);
+    el.dataset.valueHidden = String(hidden);
+  });
+}
+
+function animateNewLedgerRows() {
+  document.querySelectorAll("#activityFullList .activity-row, #activityList .activity-row, #accountsFullList .account-full").forEach((row, index) => {
+    row.classList.add("ledger-item");
+    row.style.setProperty("--ledger-index", String(Math.min(index, 18)));
+  });
+}
 
 $("baseCurrencyButton")?.addEventListener("click", () => {
   $("baseCurrencySelect").value = state.settings.baseCurrency;
