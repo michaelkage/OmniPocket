@@ -1397,3 +1397,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .activity-row { align-items: flex-start; }
   .activity-value { max-width: 100%; }
 }
+
+/* Privacy state is applied after render so the blur transition remains consistent. */
+[data-financial-value] { transition: filter 200ms var(--ease-mechanical); }
+[data-financial-value].value-hidden { filter: blur(8px); }
+[data-financial-value].value-visible { filter: blur(0); }
