@@ -1357,3 +1357,43 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .dashboard-galaxy { gap: 8px; }
   .dashboard-widget, .widget { padding: 14px; }
 }
+
+
+/* Final integration hardening: privacy, theme controls, responsive ledger lanes */
+[data-financial-value] { display: inline-block; transition: filter 200ms var(--ease-mechanical); }
+[data-financial-value].value-hidden { filter: blur(8px); }
+[data-financial-value].value-visible { filter: blur(0); }
+.settings-list button { width: 100%; display: flex; align-items: center; gap: 10px; min-width: 0; }
+.settings-list button .material-symbols-outlined { flex: 0 0 auto; }
+.app-shell, .main-content, .page-view, .dashboard-shell, .dashboard-galaxy,
+.dashboard-widget, .widget, .page-card, .surface, .account-main,
+.account-control-main, .activity-row, .account-row, .goal-row,
+.modal-card, .app-dialog, .dialog-head, .widget-head { min-width: 0; }
+.main-content, .page-card, .dashboard-widget, .widget, .modal-card, .app-dialog {
+  overflow-wrap: anywhere;
+}
+.hero-row, .dashboard-toolbar, .widget-head, .account-row, .activity-row,
+.account-control-main, .account-tools, .goal-row { flex-wrap: wrap; }
+.amount, .activity-value, .galaxy-networth, .hero-row h1,
+.detail-balance strong, .account-tools strong {
+  overflow-wrap: anywhere; word-break: normal; max-width: 100%;
+}
+.galaxy-account-core, .galaxy-core-ring, .galaxy-core-pulse, .galaxy-stars,
+.account-galaxy-center, .galaxy-orbit-link { box-shadow: none !important; filter: none !important; }
+.galaxy-account-core { border-radius: 2px !important; }
+.galaxy-account-node { border-radius: 2px !important; }
+.quick-actions button, .nav-item, .fab, .icon-button, .status-chip,
+.account-tools button, .settings-list button, .modal-card button,
+.app-dialog button, .detail-stats span, .provider-badge, .account-status-chip {
+  border-radius: 2px !important;
+}
+* { scrollbar-color: var(--op-border-strong) var(--op-bg); }
+@media (max-width: 420px) {
+  .hero-row { align-items: flex-start; }
+  .hero-row h1 { font-size: clamp(30px, 9vw, 42px); }
+  .dashboard-toolbar { align-items: flex-start; }
+  .dashboard-toolbar > button { max-width: 100%; }
+  .account-tools { width: 100%; align-items: flex-start; }
+  .activity-row { align-items: flex-start; }
+  .activity-value { max-width: 100%; }
+}
