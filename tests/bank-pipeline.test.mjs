@@ -14,6 +14,9 @@ assert.match(exchange, /const amountUnit = Deno\.env\.get\("MONO_AMOUNT_UNIT"\) 
 assert.match(exchange, /transactions\.map\(\(tx: any\) => normalizeTransaction\(tx, amountUnit\)\)/);
 assert.match(sync, /provider_balance_minor/);
 assert.match(sync, /bank_sync_events/);
+assert.match(sync, /function unwrapTransactions\(payload: any\): any\[\] \| null/);
+assert.match(sync, /if \(transactions === null\)/);
+assert.match(sync, /unexpected transaction response/);
 assert.doesNotMatch(sync, /amountFromProvider\(account\.balance, amountUnit\).*amountUnit/);
 
 const expectedNgn = Number(fixture.data[0].amount) / 100;
