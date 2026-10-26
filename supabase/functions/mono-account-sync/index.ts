@@ -39,12 +39,13 @@ async function mono(path: string, init: RequestInit = {}) {
 }
 
 function unwrapAccount(payload: any) { return payload?.data?.account || payload?.data || payload?.account || payload; }
-function unwrapTransactions(payload: any) {
+function unwrapTransactions(payload: any): any[] | null {
   const data = payload?.data;
   if (Array.isArray(data)) return data;
   if (Array.isArray(data?.transactions)) return data.transactions;
   if (Array.isArray(payload?.transactions)) return payload.transactions;
-  return [];
+  // A valid empty array is different from an unexpected API response shape.
+  return null;
 }
 function amountFromProvider(value: any, unit: string) {
   const n = Number(value);
@@ -72,6 +73,11 @@ async function syncAccount(supabase: any, userId: string, monoAccountId: string,
   const txPayload = await mono(`/accounts/${encodeURIComponent(monoAccountId)}/transactions?paginate=false`, { headers: { "x-real-time": "true" } });
   const account = unwrapAccount(accountPayload);
   const transactions = unwrapTransactions(txPayload);
+  if (transactions === null) {
+    const topLevelKeys = txPayload && typeof txPayload === "object" ? Object.keys(txPayload).slice(0, 12) : [];
+    console.error("Mono transactions response had an unexpected shape", { topLevelKeys });
+    throw new Error("Mono returned an unexpected transaction response. The account balance was not changed; retry sync or check the Mono transaction feed.");
+  }
   const now = new Date().toISOString();
   const providerBalanceMinor = account?.balance == null ? null : Math.round(amountFromProvider(account.balance, amountUnit) * 100);
   const row = {
