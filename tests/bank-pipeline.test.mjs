@@ -9,9 +9,9 @@ const config = fs.readFileSync("supabase/config.toml","utf8");
 const fixture = JSON.parse(fs.readFileSync("tests/fixtures/mono-transactions.json","utf8"));
 
 assert.match(sync, /const amountUnit = Deno\.env\.get\("MONO_AMOUNT_UNIT"\) \|\| "minor"/);
-assert.match(sync, /transactions\\s*\\.map\\(\\(tx: any\\) => normalizeTransaction\\(tx, amountUnit\\)\\)/);
+assert.match(sync, /transactions\s*\.map\(\(tx: any\) => normalizeTransaction\(tx, amountUnit\)\)/);
 assert.match(exchange, /const amountUnit = Deno\.env\.get\("MONO_AMOUNT_UNIT"\) \|\| "minor"/);
-assert.match(exchange, /transactions\\s*\\.map\\(\\(tx: any\\) => normalizeTransaction\\(tx, amountUnit\\)\\)/);
+assert.match(exchange, /transactions\s*\.map\(\(tx: any\) => normalizeTransaction\(tx, amountUnit\)\)/);
 assert.match(sync, /provider_balance_minor/);
 assert.match(sync, /bank_sync_events/);
 assert.match(sync, /function unwrapTransactions\(payload: any\): any\[\] \| null/);
