@@ -21,7 +21,7 @@ create index if not exists bank_sync_runs_connection_started_idx
 create index if not exists bank_sync_runs_user_started_idx
   on public.bank_sync_runs(user_id, started_at desc);
 alter table public.bank_sync_runs enable row level security;
-drop policy if exists "Users can read own bank sync runs" on public.bank_sync_runs;
+drop policy if exists "bank sync runs own select" on public.bank_sync_runs;
 create policy "Users can read own bank sync runs" on public.bank_sync_runs
   for select to authenticated using ((select auth.uid()) = user_id);
 
@@ -51,13 +51,13 @@ create table if not exists public.omnipocket_payments (
 );
 
 alter table public.omnipocket_payments enable row level security;
-drop policy if exists "Users can read own omnipocket payments" on public.omnipocket_payments;
+drop policy if exists "payments own select" on public.omnipocket_payments;
 create policy "Users can read own omnipocket payments" on public.omnipocket_payments
   for select to authenticated using ((select auth.uid()) = user_id);
-drop policy if exists "Users can create own omnipocket payments" on public.omnipocket_payments;
+drop policy if exists "payments own insert" on public.omnipocket_payments;
 create policy "Users can create own omnipocket payments" on public.omnipocket_payments
   for insert to authenticated with check ((select auth.uid()) = user_id);
-drop policy if exists "Users can update own omnipocket payments" on public.omnipocket_payments;
+drop policy if exists "payments own update" on public.omnipocket_payments;
 create policy "Users can update own omnipocket payments" on public.omnipocket_payments
   for update to authenticated using ((select auth.uid()) = user_id)
   with check ((select auth.uid()) = user_id);
@@ -70,7 +70,7 @@ alter table public.bank_transactions
   add column if not exists is_pending boolean not null default false,
   add column if not exists matched_payment_id uuid references public.omnipocket_payments(id) on delete set null;
 
-create index if not exists bank_transactions_dedupe_key_idx
-  on public.bank_transactions(dedupe_key) where dedupe_key is not null;
+create unique index if not exists bank_transactions_connection_dedupe_uidx
+  on public.bank_transactions(connection_id, dedupe_key) where dedupe_key is not null;
 create index if not exists bank_transactions_matched_payment_idx
   on public.bank_transactions(matched_payment_id) where matched_payment_id is not null;
