@@ -52,9 +52,9 @@ Deno.serve(async (req) => {
           narration: tx?.narration || tx?.description || tx?.remark || null, category: tx?.category || null,
           balance_minor: tx?.balance == null ? null : amountMinor(tx.balance, unit),
           transaction_at: tx?.date || tx?.created_at || tx?.createdAt || null, raw: tx || {},
+          dedupe_key: (tx?._id || tx?.id || tx?.transaction_id) ? "mono:" + String(tx._id || tx.id || tx.transaction_id) : null,
+          reconciliation_status: "unmatched", is_pending: Boolean(tx?.pending), posted_at: tx?.date || tx?.created_at || tx?.createdAt || null,
         })).filter((tx: any) => { if (tx.mono_transaction_id) return true; console.warn("Skipping Mono transaction without stable ID", { connectionId: connection.id }); return false; });
-        const update = await admin.from("bank_connections").update({ status: "active", institution_name: account?.institution?.name || connection.institution_name, account_name: account?.name || connection.account_name || "Connected bank", account_number_last4: account?.account_number ? String(account.account_number).slice(-4) : connection.account_number_last4, currency: String(account?.currency || connection.currency || "NGN").toUpperCase(), account_type: account?.type || connection.account_type, balance_minor: balance, provider_balance_minor: balance, provider_balance_at: now, data_status: accountPayload?.data?.meta?.data_status || accountPayload?.data?.meta?.dataStatus || null, sync_status: "healthy", last_synced_at: now, last_sync_error: null }).eq("id", connection.id);
-        if (update.error) throw update.error;
         const ids = normalized.map((tx: any) => tx.mono_transaction_id);
         const existing = ids.length ? await admin.from("bank_transactions").select("mono_transaction_id").eq("connection_id", connection.id).in("mono_transaction_id", ids) : { data: [], error: null };
         if (existing.error) throw existing.error;
@@ -66,6 +66,8 @@ Deno.serve(async (req) => {
           if (saved.error) throw saved.error;
           if (existed) updated++; else { imported++; known.add(tx.mono_transaction_id); }
         }
+        const update = await admin.from("bank_connections").update({ status: "active", institution_name: account?.institution?.name || connection.institution_name, account_name: account?.name || connection.account_name || "Connected bank", account_number_last4: account?.account_number ? String(account.account_number).slice(-4) : connection.account_number_last4, currency: String(account?.currency || connection.currency || "NGN").toUpperCase(), account_type: account?.type || connection.account_type, balance_minor: balance, provider_balance_minor: balance, provider_balance_at: now, data_status: accountPayload?.data?.meta?.data_status || accountPayload?.data?.meta?.dataStatus || null, sync_status: "healthy", last_synced_at: now, last_successful_sync_at: now, last_sync_error: null }).eq("id", connection.id);
+        if (update.error) throw update.error;
         if (eventId) await admin.from("bank_sync_events").update({ status: "success", completed_at: new Date().toISOString(), imported_count: imported, metadata: { scheduled: true, amount_unit: unit, fetched_count: txs.length, inserted_count: imported, updated_count: updated, skipped_count: txs.length - normalized.length } }).eq("id", eventId);
         results.push({ connectionId: connection.id, status: "success", imported, updated, fetched: txs.length });
       } catch (e) {
