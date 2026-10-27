@@ -57,10 +57,9 @@ create policy "payments own select" on public.omnipocket_payments
 drop policy if exists "payments own insert" on public.omnipocket_payments;
 create policy "payments own insert" on public.omnipocket_payments
   for insert to authenticated with check ((select auth.uid()) = user_id);
+-- Payment status, verification timestamps, and provider references must only be
+-- changed by trusted server-side code; client updates could forge completion.
 drop policy if exists "payments own update" on public.omnipocket_payments;
-create policy "payments own update" on public.omnipocket_payments
-  for update to authenticated using ((select auth.uid()) = user_id)
-  with check ((select auth.uid()) = user_id);
 
 alter table public.bank_transactions
   add column if not exists dedupe_key text,
