@@ -772,7 +772,7 @@ function parseMoneyText(text) {
   for (const [pattern, label] of categories) if (new RegExp(pattern, "i").test(raw)) { category = label; break; }
   if (category === "Transfer") type = "transfer";
   if (category === "Income") type = "income";
-  const dateMatch = raw.match(/\b(20\\d{2}[-/]\\d{1,2}[-/]\\d{1,2})\b/);
+  const dateMatch = raw.match(/\b(20\d{2}[-/]\d{1,2}[-/]\d{1,2})\b/);
   return { amount, currency, category, type, date: dateMatch ? dateMatch[1].replace(/\//g, "-") : today(), raw };
 }
 
