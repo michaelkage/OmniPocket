@@ -59,6 +59,8 @@ function normalizeTransaction(tx: any, amountUnit: string) {
     currency: String(tx?.currency || "NGN").toUpperCase(),
     narration: tx?.narration || tx?.description || tx?.remark || null,
     category: tx?.category || null,
+    bank_status: ["pending", "posted", "reversed", "failed"].includes(String(tx?.status || "").toLowerCase())
+      ? String(tx.status).toLowerCase() : null,
     balance_minor: tx?.balance == null ? null : Math.round(amountFromProvider(tx.balance, amountUnit) * 100),
     transaction_at: tx?.date || tx?.created_at || tx?.createdAt || null,
     raw: tx || {},
@@ -72,6 +74,11 @@ async function syncAccount(supabase: any, userId: string, monoAccountId: string,
   const txPayload = await mono(`/accounts/${encodeURIComponent(monoAccountId)}/transactions?paginate=false`, { headers: { "x-real-time": "true" } });
   const account = unwrapAccount(accountPayload);
   const transactions = unwrapTransactions(txPayload);
+  if (!Array.isArray(transactions)) {
+    const topLevelKeys = txPayload && typeof txPayload === "object" ? Object.keys(txPayload).slice(0, 12) : [];
+    console.error("Mono transactions response had an unexpected shape", { topLevelKeys });
+    throw new Error("Mono returned an unexpected transaction response. The account balance was not changed; retry sync or check the Mono transaction feed.");
+  }
   const now = new Date().toISOString();
   const row = {
     user_id: userId, provider: "mono", mono_account_id: monoAccountId, status: "active",
