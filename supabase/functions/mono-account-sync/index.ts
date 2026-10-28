@@ -60,6 +60,8 @@ function normalizeTransaction(tx: any, amountUnit: string) {
     currency: String(tx?.currency || "NGN").toUpperCase(),
     narration: tx?.narration || tx?.description || tx?.remark || null,
     category: tx?.category || null,
+    bank_status: ["pending", "posted", "reversed", "failed"].includes(String(tx?.status || "").toLowerCase())
+      ? String(tx.status).toLowerCase() : null,
     balance_minor: tx?.balance == null ? null : Math.round(amountFromProvider(tx.balance, amountUnit) * 100),
     transaction_at: tx?.date || tx?.created_at || tx?.createdAt || null,
     raw: tx || {},
