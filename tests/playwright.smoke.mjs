@@ -74,6 +74,15 @@ try {
   check("focusing activity search cleared a normal query", searchFocus.preserved === "coffee");
   check("review-only search sentinel was not cleared on focus", searchFocus.reviewCleared);
 
+  // Pasted transaction alerts should retain an explicit ISO-style date instead of silently using today.
+  const parsedAlert = await page.evaluate(() => {
+    if (typeof window.parseMoneyText !== "function") return null;
+    return window.parseMoneyText("Salary credited NGN 15,000 on 2026-10-25");
+  });
+  check("pasted transaction parser is unavailable", !!parsedAlert);
+  check("pasted transaction parser lost the explicit date", parsedAlert?.date === "2026-10-25");
+  check("pasted transaction parser changed the amount", parsedAlert?.amount === 15000);
+
   // Every module must have evaluated and exported its global.
   const globals = await page.evaluate(() =>
     ["OmniPocketStorage", "OmniPocketEngine", "OmniPocketBus", "OmniPocketBank",
