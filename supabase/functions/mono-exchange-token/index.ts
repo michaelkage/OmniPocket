@@ -39,12 +39,12 @@ async function mono(path: string, init: RequestInit = {}) {
 }
 
 function unwrapAccount(payload: any) { return payload?.data?.account || payload?.data || payload?.account || payload; }
-function unwrapTransactions(payload: any) {
+function unwrapTransactions(payload: any): any[] | null {
   const data = payload?.data;
   if (Array.isArray(data)) return data;
   if (Array.isArray(data?.transactions)) return data.transactions;
   if (Array.isArray(payload?.transactions)) return payload.transactions;
-  return [];
+  return null;
 }
 function amountFromProvider(value: any, unit = Deno.env.get("MONO_AMOUNT_UNIT") || "minor") {
   const n = Number(value);
