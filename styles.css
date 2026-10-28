@@ -1402,3 +1402,151 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 [data-financial-value] { transition: filter 200ms var(--ease-mechanical); }
 [data-financial-value].value-hidden { filter: blur(8px); }
 [data-financial-value].value-visible { filter: blur(0); }
+
+
+/* OmniPocket precision UI layer — layout safety and tactile surfaces */
+:root {
+  --op-space-1: 4px;
+  --op-space-2: 8px;
+  --op-space-3: 12px;
+  --op-space-4: 16px;
+  --op-space-5: 20px;
+  --op-space-6: 24px;
+  --op-content-width: 1180px;
+  --op-radius-sm: 3px;
+  --op-radius-md: 6px;
+  --op-radius-lg: 10px;
+  --op-shadow-raised: 0 8px 24px rgba(0,0,0,.08);
+  font-family: "Roboto Flex", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: var(--op-bg, #f7f4ef);
+  color: var(--op-text, #111);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+html { min-width: 320px; background: var(--op-bg, #f7f4ef); }
+body {
+  min-width: 320px;
+  overflow-x: clip;
+  background: var(--op-bg, #f7f4ef);
+  color: var(--op-text, #111);
+  line-height: 1.5;
+}
+img, svg, video, canvas { max-width: 100%; }
+button, input, select, textarea { min-width: 0; }
+button { touch-action: manipulation; }
+:where(h1,h2,h3,h4,p,small,strong,span,label,li,a,button) { overflow-wrap: anywhere; }
+:where(h1,h2,h3,h4,p) { max-width: 100%; }
+:where(input,select,textarea,button):focus-visible {
+  outline: 2px solid var(--op-accent, #3b6e52);
+  outline-offset: 3px;
+}
+.app-shell { min-height: 100dvh; padding-bottom: max(92px, env(safe-area-inset-bottom)); }
+.topbar {
+  min-height: 64px; height: auto; padding: 10px clamp(14px, 3vw, 28px);
+  background: color-mix(in srgb, var(--op-bg, #f7f4ef), transparent 7%);
+  border-color: var(--op-border, #c9c5bc);
+}
+.brand { min-width: 0; letter-spacing: -.035em; }
+.main-content { width: min(var(--op-content-width), 100%); padding: clamp(12px, 2.6vw, 28px); }
+.surface, .hero-card, .widget, .page-card, .dashboard-shell, .dashboard-widget,
+.account-full, .goal-row, .modal-card, .app-dialog {
+  box-shadow: none;
+}
+.surface, .widget, .page-card, .dashboard-shell {
+  border-color: var(--op-border, #c9c5bc);
+}
+.hero-card { padding: clamp(18px, 3vw, 32px); border-radius: var(--op-radius-lg); }
+.hero-card::after { pointer-events: none; opacity: .5; }
+.hero-row { min-width: 0; flex-wrap: wrap; align-items: flex-start; }
+.hero-row > * { min-width: 0; }
+.hero-row h1 {
+  max-width: 100%; font-size: clamp(2rem, 6vw, 4.25rem);
+  line-height: 1.04; letter-spacing: -.055em; overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+.hero-meta { flex-wrap: wrap; align-items: center; }
+.widget-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: clamp(10px, 1.6vw, 18px); }
+.widget { min-width: 0; min-height: 0; padding: clamp(14px, 2vw, 22px); border-radius: var(--op-radius-md); }
+.widget-head { gap: 12px; flex-wrap: wrap; }
+.widget h2 { font-size: clamp(1rem, 1.5vw, 1.25rem); line-height: 1.3; }
+.stack { min-width: 0; }
+.account-row, .activity-row { min-width: 0; border: 1px solid transparent; border-radius: var(--op-radius-sm); }
+.account-row > *, .activity-row > *, .account-main > *, .account-tools > * { min-width: 0; }
+.amount { font-variant-numeric: tabular-nums; overflow-wrap: anywhere; text-align: right; }
+.dashboard-shell {
+  padding: clamp(12px, 2vw, 20px); border-radius: var(--op-radius-lg);
+  background: var(--op-surface, #efeee8);
+}
+.dashboard-shell::before { opacity: .28; background-size: 32px 32px; }
+.dashboard-toolbar { flex-wrap: wrap; align-items: center; }
+.dashboard-galaxy { gap: clamp(8px, 1.4vw, 14px); }
+.dashboard-widget { min-width: 0; border-radius: var(--op-radius-md); }
+.page-card { min-height: 0; padding: clamp(16px, 2.5vw, 28px); border-radius: var(--op-radius-lg); }
+.page-card h1 { font-size: clamp(1.5rem, 3vw, 2rem); line-height: 1.2; letter-spacing: -.035em; }
+.account-full, .goal-row { min-width: 0; border-radius: var(--op-radius-md); }
+.goal-row > *, .detail-balance > *, .detail-section > * { min-width: 0; }
+.detail-balance { border-radius: var(--op-radius-md); overflow: hidden; }
+.detail-balance strong { overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.quick-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.quick-actions button { min-width: 0; border: 1px solid var(--op-border, #c9c5bc); border-radius: var(--op-radius-md); transition: background .16s var(--ease-mechanical, ease), transform .16s var(--ease-mechanical, ease); }
+.quick-actions button:hover { transform: translateY(-1px); }
+.primary, .secondary, .account-tools button, .settings-list button, .link-row {
+  border-radius: var(--op-radius-sm);
+}
+.primary, .secondary { min-height: 44px; }
+.modal-card, .app-dialog { max-height: min(88dvh, 760px); overflow-y: auto; overscroll-behavior: contain; }
+.modal-card input, .modal-card select, .app-dialog input, .app-dialog select, .activity-filter input {
+  border-radius: var(--op-radius-sm); min-height: 44px; max-width: 100%;
+}
+.bottom-nav {
+  padding-bottom: max(8px, env(safe-area-inset-bottom));
+  height: calc(76px + env(safe-area-inset-bottom));
+  background: color-mix(in srgb, var(--op-bg, #f7f4ef), transparent 5%);
+  border-color: var(--op-border, #c9c5bc);
+}
+.nav-item { flex: 1 1 0; min-width: 0; max-width: 112px; border-radius: var(--op-radius-sm); }
+.nav-item span { max-width: 100%; white-space: nowrap; }
+.fab { border-radius: var(--op-radius-md); box-shadow: var(--op-shadow-raised); bottom: calc(92px + env(safe-area-inset-bottom)); }
+.status-chip { border-radius: 3px; }
+.progress-track { border-radius: 2px; }
+.progress-fill { border-radius: 2px; }
+.interactive-row { transition: background .16s ease, border-color .16s ease; }
+.interactive-row:hover, .interactive-row:focus-visible { transform: none; }
+:where(button, .interactive-row, .link-row) { -webkit-tap-highlight-color: transparent; }
+@media (max-width: 760px) {
+  .main-content { padding: 12px; }
+  .widget-grid { grid-template-columns: minmax(0, 1fr); }
+  .hero-row { gap: 12px; }
+  .hero-row h1 { font-size: clamp(2rem, 10vw, 3rem); }
+  .pulse-node { width: 52px; height: 52px; flex: 0 0 52px; }
+  .pulse-node span { width: 16px; height: 16px; }
+  .dashboard-galaxy { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .account-row, .activity-row { align-items: flex-start; }
+  .account-tools { flex-direction: row; flex-wrap: wrap; align-items: center; }
+  .account-tools button { padding: 8px 10px; }
+  .bottom-nav { left: 0; right: 0; width: 100%; transform: none; border-radius: 0; }
+  .fab { width: 54px; height: 54px; right: 14px; }
+}
+@media (max-width: 420px) {
+  .topbar { padding-inline: 12px; }
+  .main-content { padding: 10px; }
+  .hero-card { padding: 16px; }
+  .hero-meta { font-size: 12px; }
+  .quick-actions { grid-template-columns: minmax(0, 1fr); }
+  .dashboard-galaxy { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .goal-row { flex-direction: column; }
+  .account-full { flex-direction: column; }
+  .account-tools { width: 100%; }
+  .account-tools button { flex: 1 1 auto; }
+  .app-dialog { padding: 16px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}
