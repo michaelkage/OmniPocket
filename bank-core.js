@@ -29,6 +29,7 @@
     const type = String(tx?.type || "").toLowerCase();
     const providerId = tx?.mono_transaction_id || tx?.providerTransactionId || tx?.id || tx?._id || null;
     const currency = String(tx?.currency || opts.currency || "NGN").toUpperCase();
+    const rawStatus = String(tx?.bank_status ?? tx?.bankStatus ?? tx?.status ?? "").toLowerCase();
     return {
       provider: opts.provider || "mono",
       providerTransactionId: providerId ? String(providerId) : null,
@@ -37,8 +38,7 @@
       currency,
       narration: String(tx?.narration || tx?.description || tx?.remark || ""),
       category: tx?.category || null,
-      bankStatus: ["pending","posted","reversed","failed"].includes(String(tx?.status || "").toLowerCase())
-        ? String(tx.status).toLowerCase() : null,
+      bankStatus: ["pending","posted","reversed","failed"].includes(rawStatus) ? rawStatus : null,
       transactionAt: tx?.transaction_at || tx?.date || tx?.created_at || null,
       providerBalance: tx?.balance_minor == null ? null : amountFromProvider(tx.balance_minor, opts.amountUnit || UNIT),
       raw: tx
