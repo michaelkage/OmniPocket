@@ -1550,3 +1550,65 @@ button { touch-action: manipulation; }
     transition-duration: .01ms !important;
   }
 }
+
+
+/* Command-center composition: deliberate spans instead of oversized full-width panels */
+.dashboard-shell {
+  margin-top: 18px;
+  padding: clamp(12px, 1.8vw, 20px);
+  background: var(--op-bg, #f7f4ef);
+  border: 1px solid var(--op-border, #c9c5bc);
+}
+.dashboard-shell::before { display: none; }
+.dashboard-toolbar { margin-bottom: 18px; }
+.dashboard-toolbar h2 { font-size: clamp(1.35rem, 2.4vw, 1.8rem); font-weight: 650; letter-spacing: -.04em; }
+.dashboard-toolbar .muted { max-width: 48ch; margin-top: 5px; line-height: 1.5; }
+.dashboard-galaxy { gap: 12px; }
+.dashboard-widget {
+  align-self: stretch;
+  padding: clamp(14px, 1.5vw, 20px);
+  background: var(--op-surface, #efeee8);
+  border: 1px solid var(--op-border, #c9c5bc);
+  border-radius: var(--op-radius-md, 6px);
+  animation: none;
+}
+.widget-networth { grid-column: span 5; }
+.widget-trend { grid-column: span 7; }
+.widget-goals { grid-column: span 4; }
+.widget-accounts { grid-column: span 8; }
+.widget-activity { grid-column: span 7; }
+.widget-quick { grid-column: span 5; }
+.widget-fx { grid-column: span 6; }
+.widget-relations { grid-column: span 6; }
+.widget-insights { grid-column: span 6; }
+.widget-spending { grid-column: span 6; }
+.dashboard-widget .widget-head { margin-bottom: 14px; }
+.dashboard-widget .eyebrow { font-size: 10px; letter-spacing: .12em; }
+.galaxy-networth { margin: 14px 0 8px; font-size: clamp(30px, 4.1vw, 52px); line-height: 1.05; }
+.trend-chart { min-height: 150px; }
+.trend-line { filter: none; stroke-width: 3; }
+.dashboard-widget .status-chip { flex: 0 0 auto; }
+.widget-accounts .muted { max-width: 46ch; }
+.dashboard-widget .empty-state { padding: 14px 0; }
+.dashboard-widget .quick-actions { gap: 8px; }
+.dashboard-widget .quick-actions button { padding: 12px; min-height: 48px; }
+.dashboard-widget .quick-actions .material-symbols-outlined { vertical-align: middle; }
+@media (min-width: 761px) and (max-width: 1050px) {
+  .dashboard-galaxy { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .widget-networth, .widget-goals, .widget-fx, .widget-relations,
+  .widget-insights, .widget-spending { grid-column: span 3; }
+  .widget-trend, .widget-accounts, .widget-activity, .widget-quick { grid-column: span 6; }
+}
+@media (max-width: 760px) {
+  .dashboard-shell { margin-top: 12px; background: var(--op-bg, #f7f4ef); }
+  .dashboard-toolbar { gap: 12px; margin-bottom: 12px; }
+  .dashboard-toolbar > * { width: auto; }
+  .dashboard-toolbar > div { flex: 1 1 220px; }
+  .dashboard-toolbar > button { flex: 0 0 auto; width: auto; }
+  .widget-networth, .widget-trend, .widget-goals, .widget-accounts,
+  .widget-activity, .widget-quick, .widget-fx, .widget-relations,
+  .widget-insights, .widget-spending { grid-column: 1 / -1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-widget { animation: none !important; }
+}
