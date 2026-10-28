@@ -46,6 +46,34 @@ try {
 
   if ((await page.title()) !== "OmniPocket") failures.push("unexpected page title");
 
+  // The ledger search must remain discoverable and its review/list targets must exist.
+  const activityUi = await page.evaluate(() => {
+    const search = document.querySelector("#activitySearch");
+    return {
+      type: search?.getAttribute("type"),
+      label: search?.getAttribute("aria-label"),
+      fullList: !!document.querySelector("#activityFullList"),
+      reviewQueue: !!document.querySelector("#activityReviewQueue"),
+    };
+  });
+  check("activity search is not a native search input", activityUi.type === "search");
+  check("activity search has no descriptive accessible label", activityUi.label === "Search transactions by description, category, account or amount");
+  check("activity ledger container is missing", activityUi.fullList);
+  check("activity review queue container is missing", activityUi.reviewQueue);
+
+  // Focusing a normal search must preserve the query; only the internal review sentinel is cleared.
+  const searchFocus = await page.evaluate(() => {
+    const search = document.querySelector("#activitySearch");
+    search.value = "coffee";
+    search.dispatchEvent(new Event("focus"));
+    const preserved = search.value;
+    search.value = "__review__";
+    search.dispatchEvent(new Event("focus"));
+    return { preserved, reviewCleared: search.value === "" };
+  });
+  check("focusing activity search cleared a normal query", searchFocus.preserved === "coffee");
+  check("review-only search sentinel was not cleared on focus", searchFocus.reviewCleared);
+
   // Every module must have evaluated and exported its global.
   const globals = await page.evaluate(() =>
     ["OmniPocketStorage", "OmniPocketEngine", "OmniPocketBus", "OmniPocketBank",
