@@ -12,6 +12,10 @@ assert.match(sync, /const amountUnit = Deno\.env\.get\("MONO_AMOUNT_UNIT"\) \|\|
 assert.match(sync, /transactions\s*\.map\(\(tx: any\) => normalizeTransaction\(tx, amountUnit\)\)/);
 assert.match(exchange, /const amountUnit = Deno\.env\.get\("MONO_AMOUNT_UNIT"\) \|\| "minor"/);
 assert.match(exchange, /transactions\s*\.map\(\(tx: any\) => normalizeTransaction\(tx, amountUnit\)\)/);
+assert.match(sync, /bank_status: \["pending", "posted", "reversed", "failed"\]/);
+assert.match(exchange, /bank_status: \["pending", "posted", "reversed", "failed"\]/);
+assert.match(exchange, /function unwrapTransactions\(payload: any\): any\[\] \| null/);
+assert.match(exchange, /if \(transactions === null\)/);
 assert.match(sync, /provider_balance_minor/);
 assert.match(sync, /bank_sync_events/);
 assert.match(sync, /function unwrapTransactions\(payload: any\): any\[\] \| null/);
@@ -26,6 +30,9 @@ assert.equal(Number(fixture.data[1].balance) / 100, 243320, "Fixture balance nor
 const bankConnection = fs.readFileSync("bank-connection.js","utf8");
 assert.match(bankConnection, /const isFirstProviderSync=!local\.connection\?\.lastSyncedAt/);
 assert.match(bankConnection, /if\(isFirstProviderSync\)\{local\.openingBalance=currentBalance-importedNet;\}/);
+assert.match(bankConnection, /bankStatus=tx\.bank_status\|\|tx\.bankStatus\|\|"posted"/);
+assert.match(bankConnection, /!\["pending","failed","reversed"\]\.includes\(bankStatus\).*importedNet\+=credit\?amount:-amount/);
+assert.match(bankConnection, /existing\.bankStatus=bankStatus/);
 assert.match(bankConnection, /rebuildBalances\(\);local\.connection=\{/);
 assert.match(accounts, /window\.OmniPocketBank\?\.freshness/);
 assert.match(config, /\[functions\.mono-webhook\][\s\S]*verify_jwt = false/);
