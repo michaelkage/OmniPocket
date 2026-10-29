@@ -32,7 +32,8 @@ assert.match(bankConnection, /const isFirstProviderSync=!local\.connection\?\.la
 assert.match(bankConnection, /if\(isFirstProviderSync\)\{local\.openingBalance=currentBalance-importedNet;\}/);
 assert.match(bankConnection, /bankStatus=String\(tx\.bank_status\|\|tx\.bankStatus\|\|"posted"\)\.toLowerCase\(\)/);
 assert.match(bankConnection, /if\(!\["pending","posted","failed","reversed"\]\.includes\(bankStatus\)\)\{invalidTransactionCount\+\+;continue;\}/);
-assert.match(bankConnection, /!\["pending","failed","reversed"\]\.includes\(bankStatus\).*importedNet\+=credit\?amount:-amount/);
+assert.equal((bankConnection.match(/if\(!\["pending","failed","reversed"\]\.includes\(bankStatus\)\)importedNet\+=credit\?amount:-amount/g)||[]).length,2,"Only safe same-account and new transactions contribute to first-sync opening balance");
+assert.match(bankConnection, /if\(existing\.sourceAccountId&&existing\.sourceAccountId!==local\.id\)\{ownershipConflictCount\+\+;continue;\}if\(!\["pending","failed","reversed"\]\.includes\(bankStatus\)\)importedNet\+=credit\?amount:-amount/);
 assert.match(bankConnection, /Array\.isArray\(transactionPayload\?\.data\)\?transactionPayload\.data:null/);
 assert.match(bankConnection, /if\(!rawTransactions\)throw new Error\("Mono returned an unexpected transaction feed/);
 assert.match(bankConnection, /Mono returned an invalid account balance; the account was not updated/);
