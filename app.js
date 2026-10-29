@@ -183,24 +183,30 @@ function saveState() {
 
 let persistenceRevision = 0;
 let persistenceInFlight = false;
+let persistenceQueue = Promise.resolve();
 
-async function flushPersistence() {
+function flushPersistence() {
   persistTimer = null;
   const revision = ++persistenceRevision;
   const snapshot = structuredClone(state);
   persistenceInFlight = true;
-  try {
-    if (persistenceReady) await storage.save(snapshot);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
-  } catch (error) {
-    console.warn("Could not persist OmniPocket state.", error);
-  } finally {
+  // IndexedDB writes can take longer than the debounce window. Serialize them
+  // so an older snapshot can never finish after, and overwrite, a newer one.
+  persistenceQueue = persistenceQueue.catch(() => {}).then(async () => {
+    try {
+      if (persistenceReady) await storage.save(snapshot);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
+    } catch (error) {
+      console.warn("Could not persist OmniPocket state.", error);
+    }
+  }).finally(() => {
     persistenceInFlight = false;
     if (revision !== persistenceRevision) {
       clearTimeout(persistTimer);
       persistTimer = setTimeout(flushPersistence, 0);
     }
-  }
+  });
+  return persistenceQueue;
 }
 function account(id) {
   return state.accounts.find(a => a.id === id) || null;
