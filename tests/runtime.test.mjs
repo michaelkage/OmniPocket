@@ -307,6 +307,7 @@ const tx = (o) => ({
     localStorage: {
       getItem: key => (legacy.has(key) ? legacy.get(key) : null),
       setItem: (key, value) => legacy.set(key, value),
+      removeItem: key => legacy.delete(key),
     },
   };
   context.window = context;
@@ -338,8 +339,10 @@ const tx = (o) => ({
   assert.equal(migrated.schemaVersion, 3, "legacy snapshot must be returned on first load");
   assert.equal((await fresh.load()).schemaVersion, 3, "migrated payload must persist");
 
+  legacy.set("omnipocket.main", JSON.stringify({ schemaVersion: 8, accounts: [{ id: "resurrected" }] }));
   await store.clear();
   assert.equal(await store.load(), null, "clear must remove the stored snapshot");
+  assert.equal(legacy.has("omnipocket.main"), false, "clear must remove the fallback snapshot so cleared data cannot be resurrected");
 }
 
 // A blocked IndexedDB open must be retryable, and a late success must close its connection.
