@@ -81,6 +81,7 @@ const storage = fs.readFileSync("storage.js", "utf8");
 assert(storage.includes("if (this.dbPromise === tracked) this.dbPromise = null"), "failed IndexedDB opens must be retryable");
 assert(storage.includes("if (settled) {\n          db.close();"), "late IndexedDB opens must close their connection");
 assert(storage.includes("tx.onabort = () => reject(tx.error || new Error(\"OmniPocket clear was aborted.\"))"), "storage clear must reject on aborted transactions");
+assert(storage.includes("OmniPocket read was aborted."), "storage reads must reject on aborted transactions");
 assert(app.includes("persistenceReady = false;"), "failed IndexedDB saves must switch persistence to local fallback");
 assert(app.includes("Could not persist OmniPocket state to local storage."), "local fallback failures must be reported independently");
 
