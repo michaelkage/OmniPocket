@@ -65,12 +65,17 @@ async function simulateDemoBankScenario(scenario) {
 }
 
 async function syncMockBankAccount(preferredAccountId = null) {
-  const account = createMockBankDataset();
+  // Reuse the connected demo account and stable transaction IDs on every sync.
+  // A refresh should update the demo feed, not create five new rows and an account.
+  const account = state.accounts.find(a => a.id === preferredAccountId && a.connection?.provider === "mock")
+    || createMockBankDataset();
   const transactions = [];
   for (let i = 0; i < 5; i++) {
+    const id = "mock-" + account.id + "-" + (i + 1);
+    if (state.transactions.some(tx => tx.id === id)) continue;
     const date = new Date(Date.now() - i * 86400000);
     transactions.push({
-      id: uid(),
+      id,
       connectionId: account.id,
       type: "income",
       amount: 1000,
@@ -83,7 +88,7 @@ async function syncMockBankAccount(preferredAccountId = null) {
       updatedAt: Date.now(),
     });
   }
-  await persistTransactions(transactions);
+  if (transactions.length) await persistTransactions(transactions);
   account.balance = 1000;
   saveState();
   return account;
