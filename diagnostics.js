@@ -11,12 +11,20 @@
       dialog.className="app-dialog";
       document.body.appendChild(dialog);
     }
+    const mismatches=(d.reconciliation||[]).filter(item=>item.status==="mismatch");
     const rows=[
       ["Build",d.build],["Network",d.online?"Online":"Offline"],["IndexedDB",d.indexedDB?"Available":"Unavailable"],
       ["Supabase SDK",d.supabaseLoaded?"Loaded":"Missing"],["Connected banks",d.bank.connectedBanks],
       ["Healthy banks",d.bank.healthyBanks],["Stale banks",d.bank.staleBanks],["Sync errors",d.bank.erroredBanks],
-      ["Review queue",d.bank.reviewQueue],["Pending bank transactions",d.bank.pendingBankTransactions]
+      ["Balance mismatches",mismatches.length],["Review queue",d.bank.reviewQueue],["Pending bank transactions",d.bank.pendingBankTransactions]
     ];
+    const accounts=window.omnipocketState?.accounts||[];
+    for(const item of mismatches){
+      const account=accounts.find(a=>a.id===item.accountId);
+      const difference=Number(item.difference);
+      const formatted=Number.isFinite(difference)?new Intl.NumberFormat("en-NG",{maximumFractionDigits:2}).format(difference):"unknown";
+      rows.push([account?.name||"Connected account",(difference>0?"+":"")+formatted+" "+(item.currency||account?.currency||"")+" vs bank"]);
+    }
     dialog.innerHTML='<div class="dialog-head"><div><span class="eyebrow">SYSTEM</span><h2>Diagnostics</h2><div class="muted">Safe operational checks — no secrets are included.</div></div><button class="icon-button" type="button">✕</button></div><div class="stack">'+rows.map(r=>'<div class="detail-callout"><strong>'+escape(r[0])+'</strong><span>'+escape(r[1])+'</span></div>').join("")+'</div><div class="dialog-actions"><button id="omniCopyDiagnostics">Copy report</button><button class="primary" type="button">Done</button></div>';
     dialog.querySelector(".icon-button").onclick=()=>dialog.close();
     dialog.querySelector(".primary").onclick=()=>dialog.close();
