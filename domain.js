@@ -142,12 +142,12 @@
     for (const tx of state.transactions || []) {
       if (String(tx.date) < cutoffDate || !isFinanciallyEffective(tx)) continue;
       if (tx.type === "expense") {
-        const value = convert(state, tx.amount, tx.currency, state.settings.baseCurrency, tx.fxRate);
+        const value = convert(state, Math.abs(Number(tx.amount) || 0), tx.currency, state.settings.baseCurrency, tx.fxRate);
         const key = tx.category || "Other";
         totals[key] = (totals[key] || 0) + value;
         total += value;
       } else if (tx.type === "income") {
-        income += convert(state, tx.amount, tx.currency, state.settings.baseCurrency, tx.fxRate);
+        income += convert(state, Math.abs(Number(tx.amount) || 0), tx.currency, state.settings.baseCurrency, tx.fxRate);
       }
     }
     return { totals, total, income, days };
@@ -160,13 +160,16 @@
     const result = { income: 0, expenses: 0, transfers: 0, withdrawals: 0, adjustments: 0, count: 0 };
     for (const tx of state.transactions || []) {
       if (String(tx.date) < cutoffDate || !isFinanciallyEffective(tx)) continue;
-      const amount = convert(state, tx.amount, tx.currency, state.settings.baseCurrency, tx.fxRate);
+      const rawAmount = Math.abs(Number(tx.amount) || 0);
+      const amount = convert(state, rawAmount, tx.currency, state.settings.baseCurrency, tx.fxRate);
       result.count++;
       if (tx.type === "income") result.income += amount;
       if (tx.type === "expense") result.expenses += amount;
       if (tx.type === "transfer") result.transfers += amount;
       if (tx.type === "withdrawal") result.withdrawals += amount;
-      if (tx.type === "adjustment") result.adjustments += amount;
+      if (tx.type === "adjustment") {
+        result.adjustments += convert(state, adjustmentDelta(tx), tx.currency, state.settings.baseCurrency, tx.fxRate);
+      }
     }
     result.netFlow = result.income - result.expenses;
     return result;
