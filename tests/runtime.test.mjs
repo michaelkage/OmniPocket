@@ -342,6 +342,53 @@ const tx = (o) => ({
   assert.equal(await store.load(), null, "clear must remove the stored snapshot");
 }
 
+// A blocked IndexedDB open must be retryable, and a late success must close its connection.
+{
+  let opens = 0;
+  let lateConnectionClosed = false;
+  const makeDb = () => ({
+    objectStoreNames: { contains: () => true },
+    createObjectStore: () => {},
+    close() { lateConnectionClosed = true; },
+    transaction() {
+      return {
+        objectStore: () => ({ get: () => ({}) }),
+      };
+    },
+  });
+  const retryingIndexedDB = {
+    open() {
+      opens++;
+      const request = { result: makeDb(), onsuccess: null, onerror: null, onblocked: null, onupgradeneeded: null };
+      if (opens === 1) {
+        setTimeout(() => {
+          request.onblocked && request.onblocked();
+          setTimeout(() => request.onsuccess && request.onsuccess(), 0);
+        }, 0);
+      } else {
+        setTimeout(() => request.onsuccess && request.onsuccess(), 0);
+      }
+      return request;
+    },
+  };
+  const context = {
+    console, JSON, Date, Math, setTimeout,
+    indexedDB: retryingIndexedDB,
+    localStorage: { getItem: () => null, setItem: () => {} },
+  };
+  context.window = context;
+  vm.createContext(context);
+  vm.runInContext(fs.readFileSync("storage.js", "utf8"), context);
+  const store = new context.OmniPocketStorage({ dbName: "retry", storeName: "state", legacyKey: "legacy" });
+
+  await assert.rejects(store.open(), /upgrade is blocked/);
+  await new Promise(resolve => setTimeout(resolve, 10));
+  assert.equal(lateConnectionClosed, true, "late database success must close the connection");
+  const db = await store.open();
+  assert.ok(db, "a later open attempt should recover after a blocked attempt");
+  assert.equal(opens, 2, "a failed open must not permanently cache its rejected promise");
+}
+
 // ---------- bus.js ----------
 
 {
