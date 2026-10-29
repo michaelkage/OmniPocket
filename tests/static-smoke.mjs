@@ -71,4 +71,9 @@ assert(!/sb_publishable_/.test(app), "Supabase publishable key must not be hardc
 assert(!/["']test_pk_\w{8,}["']/.test(app), "Mono public key must not be hardcoded in app.js");
 assert(/window\.OMNIPOCKET_CONFIG/.test(app), "app.js must read the runtime config");
 
+// Persistence writes must be serialized to prevent stale IndexedDB snapshots winning races.
+assert(app.includes("let persistenceQueue = Promise.resolve()"), "persistence must have a serialized write queue");
+assert(app.includes("persistenceQueue = persistenceQueue.catch(() => {}).then(async () =>"), "each persistence snapshot must wait for the prior write");
+assert(app.includes("return persistenceQueue;"), "flushPersistence must expose the queued write for deterministic callers");
+
 console.log("OmniPocket static smoke tests passed");
