@@ -30,7 +30,8 @@ assert.equal(Number(fixture.data[1].balance) / 100, 243320, "Fixture balance nor
 const bankConnection = fs.readFileSync("bank-connection.js","utf8");
 assert.match(bankConnection, /const isFirstProviderSync=!local\.connection\?\.lastSyncedAt/);
 assert.match(bankConnection, /if\(isFirstProviderSync\)\{local\.openingBalance=currentBalance-importedNet;\}/);
-assert.match(bankConnection, /bankStatus=tx\.bank_status\|\|tx\.bankStatus\|\|"posted"/);
+assert.match(bankConnection, /bankStatus=String\(tx\.bank_status\|\|tx\.bankStatus\|\|"posted"\)\.toLowerCase\(\)/);
+assert.match(bankConnection, /if\(!\["pending","posted","failed","reversed"\]\.includes\(bankStatus\)\)continue/);
 assert.match(bankConnection, /!\["pending","failed","reversed"\]\.includes\(bankStatus\).*importedNet\+=credit\?amount:-amount/);
 assert.match(bankConnection, /Array\.isArray\(transactionPayload\?\.data\)\?transactionPayload\.data:null/);
 assert.match(bankConnection, /if\(!rawTransactions\)throw new Error\("Mono returned an unexpected transaction feed/);
