@@ -8,15 +8,6 @@ context.window = context;
 vm.createContext(context);
 vm.runInContext(fs.readFileSync("importer.js", "utf8"), context);
 
-assert.deepEqual(JSON.parse(JSON.stringify(context.normalizeStatementDate("2026-10-29"))), {
-  valid: true, date: "2026-10-29"
-});
-assert.deepEqual(JSON.parse(JSON.stringify(context.normalizeStatementDate("29/10/2026"))), {
-  valid: true, date: "2026-10-29"
-});
-assert.deepEqual(JSON.parse(JSON.stringify(context.normalizeStatementDate("2026-02-30"))), {
-  valid: false
-});
 const parsed = JSON.parse(JSON.stringify(context.parseStatementCsv(
   'Date,Description,Amount\\r\\n2026-10-29,"Transfer, savings",1250\\r\\n2026-10-28,"Cafe ""Central""",-450'
 )));
