@@ -74,6 +74,11 @@ const tx = (o) => ({
     ],
   });
   assert.equal(E.balancesAt(state).find(a => a.id === "a").balance, 350);
+  const asOf = new Date("2026-01-10T12:00:00");
+  assert.equal(E.spendingSummary(state, 30, asOf).total, 250, "spending summaries must use the same absolute expense magnitude as balances");
+  assert.equal(E.flowSummary(state, 30, asOf).expenses, 250, "cash-flow summaries must not invert negative expense amounts");
+  const goal = { id: "g", currency: "NGN", accountIds: ["a"] };
+  assert.equal(E.goalContributionHistory(state, goal).reduce((sum, row) => sum + row.value, 0), 250, "goal history must use normalized transaction signs");
 }
 
 // A same-currency transfer is net zero on total wealth but moves money between accounts.
