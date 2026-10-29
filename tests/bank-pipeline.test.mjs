@@ -37,6 +37,10 @@ assert.match(bankConnection, /Array\.isArray\(transactionPayload\?\.data\)\?tran
 assert.match(bankConnection, /if\(!rawTransactions\)throw new Error\("Mono returned an unexpected transaction feed/);
 assert.match(bankConnection, /Mono returned an invalid account balance; the account was not updated/);
 assert.match(bankConnection, /!\["credit","debit"\]\.includes\(direction\)\|\|rawAmount==null\|\|!Number\.isFinite\(amount\)\|\|amount<0/);
+assert.match(bankConnection, /const txCurrency=String\(tx\.currency\|\|currency\)\.toUpperCase\(\);if\(!CURRENCIES\.includes\(txCurrency\)\)continue/);
+assert.match(bankConnection, /dateCheck\.getUTCFullYear\(\)!==dateParts\[0\].*dateCheck\.getUTCMonth\(\)!==dateParts\[1\]-1.*dateCheck\.getUTCDate\(\)!==dateParts\[2\]/);
+assert.match(bankConnection, /existing\.currency=txCurrency;existing\.date=txDate/);
+assert.match(bankConnection, /date:txDate,createdAt:importedAt/);
 assert.match(bankConnection, /mock-" \+ account\.id \+ "-" \+ \(i \+ 1\)/);
 assert.match(bankConnection, /state\.transactions\.some\(tx => tx\.id === id\)/);
 assert.match(bankConnection, /state\.accounts\.find\(a => a\.id === preferredAccountId && a\.connection\?\.provider === "mock"\)/);
