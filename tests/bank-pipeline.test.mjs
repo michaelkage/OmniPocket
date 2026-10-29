@@ -41,6 +41,8 @@ assert.match(bankConnection, /mock-" \+ account\.id \+ "-" \+ \(i \+ 1\)/);
 assert.match(bankConnection, /state\.transactions\.some\(tx => tx\.id === id\)/);
 assert.match(bankConnection, /state\.accounts\.find\(a => a\.id === preferredAccountId && a\.connection\?\.provider === "mock"\)/);
 assert.match(bankConnection, /existing\.bankStatus=bankStatus/);
+assert.match(bankConnection, /existing\.type=credit\?"income":"expense";existing\.amount=amount;existing\.currency=tx\.currency\|\|currency/);
+assert.match(bankConnection, /existing\.date=String\(tx\.transaction_at\|\|tx\.date\|\|existing\.date\|\|today\(\)\)\.slice\(0,10\)/);
 assert.match(bankConnection, /rebuildBalances\(\);local\.connection=\{/);
 assert.match(accounts, /window\.OmniPocketBank\?\.freshness/);
 assert.match(config, /\[functions\.mono-webhook\][\s\S]*verify_jwt = false/);
