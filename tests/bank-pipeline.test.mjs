@@ -38,6 +38,9 @@ assert.match(bankConnection, /if\(!rawTransactions\)throw new Error\("Mono retur
 assert.match(bankConnection, /Mono returned an invalid account balance; the account was not updated/);
 assert.match(bankConnection, /!\["credit","debit"\]\.includes\(direction\)\|\|rawAmount==null\|\|!Number\.isFinite\(amount\)\|\|amount<0/);
 assert.match(bankConnection, /const txCurrency=String\(tx\.currency\|\|currency\)\.toUpperCase\(\);if\(!CURRENCIES\.includes\(txCurrency\)\)continue/);
+assert.match(bankConnection, /if\(txCurrency!==currency\)\{currencyMismatchCount\+\+;continue;\}/);
+assert.match(bankConnection, /currencyMismatchCount\?\[`\$\{currencyMismatchCount\} transaction\(s\) skipped because their currency differs from the linked account currency/);
+assert.match(bankConnection, /ownershipConflictCount,currencyMismatchCount,balanceMismatch,balanceDifference/);
 assert.match(bankConnection, /dateCheck\.getUTCFullYear\(\)!==dateParts\[0\].*dateCheck\.getUTCMonth\(\)!==dateParts\[1\]-1.*dateCheck\.getUTCDate\(\)!==dateParts\[2\]/);
 assert.match(bankConnection, /existing\.currency=txCurrency;existing\.date=txDate/);
 assert.match(bankConnection, /date:txDate,createdAt:importedAt/);
