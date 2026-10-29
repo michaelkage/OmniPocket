@@ -193,11 +193,20 @@ function flushPersistence() {
   // IndexedDB writes can take longer than the debounce window. Serialize them
   // so an older snapshot can never finish after, and overwrite, a newer one.
   persistenceQueue = persistenceQueue.catch(() => {}).then(async () => {
+    // Keep the browser fallback healthy even when IndexedDB is unavailable.
+    // Each store is attempted independently so one failure cannot skip the other.
+    if (persistenceReady) {
+      try {
+        await storage.save(snapshot);
+      } catch (error) {
+        persistenceReady = false;
+        console.warn("IndexedDB save failed; continuing with local fallback.", error);
+      }
+    }
     try {
-      if (persistenceReady) await storage.save(snapshot);
       localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
     } catch (error) {
-      console.warn("Could not persist OmniPocket state.", error);
+      console.warn("Could not persist OmniPocket state to local storage.", error);
     }
   }).finally(() => {
     persistenceInFlight = false;
