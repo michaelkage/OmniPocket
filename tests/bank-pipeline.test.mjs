@@ -36,6 +36,9 @@ assert.match(bankConnection, /Array\.isArray\(transactionPayload\?\.data\)\?tran
 assert.match(bankConnection, /if\(!rawTransactions\)throw new Error\("Mono returned an unexpected transaction feed/);
 assert.match(bankConnection, /Mono returned an invalid account balance; the account was not updated/);
 assert.match(bankConnection, /!\["credit","debit"\]\.includes\(direction\)\|\|rawAmount==null\|\|!Number\.isFinite\(amount\)\|\|amount<0/);
+assert.match(bankConnection, /mock-" \+ account\.id \+ "-" \+ \(i \+ 1\)/);
+assert.match(bankConnection, /state\.transactions\.some\(tx => tx\.id === id\)/);
+assert.match(bankConnection, /state\.accounts\.find\(a => a\.id === preferredAccountId && a\.connection\?\.provider === "mock"\)/);
 assert.match(bankConnection, /existing\.bankStatus=bankStatus/);
 assert.match(bankConnection, /rebuildBalances\(\);local\.connection=\{/);
 assert.match(accounts, /window\.OmniPocketBank\?\.freshness/);
