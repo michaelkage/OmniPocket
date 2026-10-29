@@ -4,6 +4,8 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
 
+process.env.TZ = "Africa/Lagos";
+
 function load(files) {
   const context = {
     console,
@@ -238,6 +240,16 @@ const tx = (o) => ({
   assert.equal(flow.count, 1, "flow count must exclude non-effective movements");
   const history = E.goalIntelligence(state, state.goals[0], new Date("2026-10-29T12:00:00Z")).history;
   assert.deepEqual(history.map(row => row.value), [500], "goal history must use the same effective movements");
+}
+
+// Calendar-day snapshots use the user's local date, not the UTC date.
+{
+  const state = makeState({
+    settings: { baseCurrency: "NGN", fx: { rates: { NGN: { NGN: 1 } } } },
+    accounts: [{ id: "a", currency: "NGN", openingBalance: 100, archived: false }],
+  });
+  const snap = E.snapshot(state, new Date("2026-10-28T23:30:00Z"));
+  assert.equal(snap.date, "2026-10-29", "late-evening UTC is already the next calendar day in Lagos");
 }
 
 // Empty state must not throw anywhere in the engine surface.
