@@ -56,7 +56,7 @@ function openAccountDetail(id) {
   const historyHost=$("accountDetailSyncHistory"), history=a.connection?.syncHistory||[];
   if(historyHost){
     historyHost.hidden=!a.connection?.provider;
-    historyHost.innerHTML=a.connection?.provider ? '<div class="eyebrow">SYNC HISTORY</div><div class="sync-history-list">'+(history.length?history.slice(0,8).map(h=>'<div class="sync-history-row"><span><strong>'+escapeHtml(h.status==="success"?"Successful sync":"Failed sync")+'</strong><small>'+escapeHtml(h.completedAt?new Date(h.completedAt).toLocaleString():"Unknown time")+'</small></span><span><strong>'+escapeHtml(String(h.importedCount||0))+'</strong><small>imported · '+escapeHtml(formatSyncDuration(h.durationMs))+'</small></span></div>').join(""):'<div class="empty-state">No sync runs yet.</div>')+'</div>' : "";
+    historyHost.innerHTML=a.connection?.provider ? '<div class="eyebrow">SYNC HISTORY</div><div class="sync-history-list">'+(history.length?history.slice(0,8).map(h=>'<div class="sync-history-row"><span><strong>'+escapeHtml(h.status==="success"?"Successful sync":h.status==="warning"?"Sync completed with warnings":"Failed sync")+'</strong><small>'+escapeHtml(h.completedAt?new Date(h.completedAt).toLocaleString():"Unknown time")+'</small></span><span><strong>'+escapeHtml(String(h.importedCount||0))+'</strong><small>imported · '+escapeHtml(formatSyncDuration(h.durationMs))+'</small></span></div>').join(""):'<div class="empty-state">No sync runs yet.</div>')+'</div>' : "";
   }
   const syncButton = $("accountDetailSync");
   if (syncButton) { syncButton.hidden = !a.connection?.providerAccountId; syncButton.disabled = a.connection?.syncStatus === "syncing"; syncButton.textContent = a.connection?.syncStatus === "syncing" ? "Syncing…" : "Sync now"; }
