@@ -51,6 +51,10 @@ assert.match(bankConnection, /status:ownershipConflictCount\?"warning":"success"
 assert.match(bankConnection, /existing\.type=credit\?"income":"expense";existing\.amount=amount;existing\.currency=tx\.currency\|\|currency/);
 assert.match(bankConnection, /existing\.date=String\(tx\.transaction_at\|\|tx\.date\|\|existing\.date\|\|today\(\)\)\.slice\(0,10\)/);
 assert.match(bankConnection, /rebuildBalances\(\);local\.connection=\{/);
+assert.match(bankConnection, /balanceMismatch=!Number\.isFinite\(balanceDifference\)\|\|Math\.abs\(balanceDifference\)>=0\.005/);
+assert.match(bankConnection, /syncStatus:syncWarning\?"warning":"healthy"/);
+assert.match(bankConnection, /status:syncWarning\?"warning":"success"/);
+assert.match(accounts, /h\.status==="warning"\?"Sync completed with warnings"/);
 assert.match(accounts, /window\.OmniPocketBank\?\.freshness/);
 assert.match(config, /\[functions\.mono-webhook\][\s\S]*verify_jwt = false/);
 assert.doesNotMatch(sync, /Access-Control-Allow-Origin": "\*"/);
