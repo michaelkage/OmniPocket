@@ -51,7 +51,7 @@ function bindReconcileDialog() {
         category: note || "Reconcile balance",
         sourceAccountId: a.id,
         currency: a.currency,
-        date: new Date().toISOString().slice(0, 10),
+        date: today(),
         note,
         bankStatus: "posted",
         external: { provider: "reconcile" },
