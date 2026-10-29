@@ -546,15 +546,20 @@ function statementColumn(headers, patterns) {
 function normalizeStatementDate(value) {
   const raw = String(value ?? "").trim();
   if (!raw) return "";
-  if (/^\d{4}[-/]\d{1,2}[-/]\d{1,2}$/.test(raw)) {
-    const parts = raw.split(/[-/]/).map(Number);
-    return parts[0] + "-" + String(parts[1]).padStart(2,"0") + "-" + String(parts[2]).padStart(2,"0");
+  const iso = raw.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/);
+  if (iso) {
+    const year=Number(iso[1]),month=Number(iso[2]),day=Number(iso[3]);
+    const d=new Date(year,month-1,day);
+    if(d.getFullYear()!==year||d.getMonth()!==month-1||d.getDate()!==day) return "";
+    return year+"-"+String(month).padStart(2,"0")+"-"+String(day).padStart(2,"0");
   }
   const dmy = raw.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/);
   if (dmy) {
     let year = Number(dmy[3]); if (year < 100) year += 2000;
-    const d = new Date(year, Number(dmy[2]) - 1, Number(dmy[1]));
-    if (d.getFullYear() === year && d.getMonth() === Number(dmy[2]) - 1 && d.getDate() === Number(dmy[1])) return d.toISOString().slice(0,10);
+    const month=Number(dmy[2]),day=Number(dmy[1]);
+    const d = new Date(year,month-1,day);
+    if(d.getFullYear()!==year||d.getMonth()!==month-1||d.getDate()!==day) return "";
+    return year+"-"+String(month).padStart(2,"0")+"-"+String(day).padStart(2,"0");
   }
   const parsed = new Date(raw);
   return Number.isNaN(parsed.getTime()) ? "" : parsed.toISOString().slice(0,10);
