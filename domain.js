@@ -65,6 +65,14 @@
     return amount * rate(state, from, to, overrideRate);
   }
 
+  // Keep every financial summary aligned with the balance engine: unposted,
+  // failed, reversed, and superseded bank movements must not affect totals.
+  function isFinanciallyEffective(tx) {
+    return tx?.status !== "needs_review" &&
+      tx?.status !== "superseded" &&
+      !["pending", "failed", "reversed"].includes(tx?.bankStatus);
+  }
+
   function adjustmentDelta(tx) {
     if (tx.adjustmentSign === -1) return -Math.abs(Number(tx.amount) || 0);
     if (tx.adjustmentSign === 1) return Math.abs(Number(tx.amount) || 0);
@@ -88,7 +96,7 @@
     }));
     const map = accountMap({ accounts });
     for (const tx of sortedTransactions(state, until)) {
-      if (tx.status === "needs_review" || tx.status === "superseded" || ["pending","failed","reversed"].includes(tx.bankStatus)) continue;
+      if (!isFinanciallyEffective(tx)) continue;
       const source = map.get(tx.sourceAccountId);
       const destination = map.get(tx.destinationAccountId);
       if (tx.type === "income" && source) source.balance += Math.abs(Number(tx.amount) || 0);
@@ -131,7 +139,7 @@
     let total = 0;
     let income = 0;
     for (const tx of state.transactions || []) {
-      if (String(tx.date) < cutoffDate || tx.status === "needs_review" || ["pending","failed","reversed"].includes(tx.bankStatus)) continue;
+      if (String(tx.date) < cutoffDate || !isFinanciallyEffective(tx)) continue;
       if (tx.type === "expense") {
         const value = convert(state, tx.amount, tx.currency, state.settings.baseCurrency, tx.fxRate);
         const key = tx.category || "Other";
@@ -150,7 +158,7 @@
     const cutoffDate = cutoff.toISOString().slice(0, 10);
     const result = { income: 0, expenses: 0, transfers: 0, withdrawals: 0, adjustments: 0, count: 0 };
     for (const tx of state.transactions || []) {
-      if (String(tx.date) < cutoffDate || tx.status === "needs_review") continue;
+      if (String(tx.date) < cutoffDate || !isFinanciallyEffective(tx)) continue;
       const amount = convert(state, tx.amount, tx.currency, state.settings.baseCurrency, tx.fxRate);
       result.count++;
       if (tx.type === "income") result.income += amount;
@@ -167,7 +175,7 @@
     const accountIds = new Set(goal.accountIds || []);
     const rows = [];
     for (const tx of state.transactions || []) {
-      if (tx.status === "needs_review") continue;
+      if (!isFinanciallyEffective(tx)) continue;
       const sourceIncluded = accountIds.has(tx.sourceAccountId);
       const destinationIncluded = accountIds.has(tx.destinationAccountId);
       if (!sourceIncluded && !destinationIncluded) continue;
