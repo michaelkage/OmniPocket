@@ -8,12 +8,12 @@ context.window = context;
 vm.createContext(context);
 vm.runInContext(fs.readFileSync("importer.js", "utf8"), context);
 
-const parsed = JSON.parse(JSON.stringify(context.parseStatementCsv(
-  'Date,Description,Amount\\r\\n2026-10-29,"Transfer, savings",1250\\r\\n2026-10-28,"Cafe ""Central""",-450'
-)));
-assert.deepEqual(parsed.headers, ["Date", "Description", "Amount"]);
-assert.equal(parsed.rows.length, 2);
-assert.equal(parsed.rows[0].Description, "Transfer, savings");
-assert.equal(parsed.rows[1].Description, 'Cafe "Central"');
-assert.equal(parsed.rows[1].Amount, "-450");
-console.log("OmniPocket statement date tests passed");
+const appSource = fs.readFileSync("app.js", "utf8");
+const dateStart = appSource.indexOf("function normalizeStatementDate(value) {");
+const dateEnd = appSource.indexOf("\n}\n\nfunction parseStatementAmount", dateStart) + 2;
+assert(dateStart >= 0 && dateEnd > dateStart);
+vm.runInContext(appSource.slice(dateStart, dateEnd), context);
+assert.equal(context.normalizeStatementDate("2026-10-29"), "2026-10-29");
+assert.equal(context.normalizeStatementDate("29/10/2026"), "2026-10-29");
+assert.equal(context.normalizeStatementDate("2026-02-30"), "");
+console.log("OmniPocket statement import tests passed");
