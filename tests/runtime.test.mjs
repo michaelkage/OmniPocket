@@ -345,6 +345,35 @@ const tx = (o) => ({
   assert.equal(legacy.has("omnipocket.main"), false, "clear must remove the fallback snapshot so cleared data cannot be resurrected");
 }
 
+// A read request can succeed before its transaction later aborts; do not resolve early.
+{
+  const db = {
+    transaction() {
+      const request = { result: { schemaVersion: 8 }, onsuccess: null, onerror: null };
+      const tx = {
+        error: new Error("simulated read abort"),
+        oncomplete: null, onerror: null, onabort: null,
+        objectStore: () => ({ get: () => request }),
+      };
+      setTimeout(() => {
+        request.onsuccess && request.onsuccess();
+        tx.onabort && tx.onabort();
+      }, 0);
+      return tx;
+    },
+  };
+  const context = {
+    console, JSON, Date, Math, setTimeout,
+    indexedDB: {},
+    localStorage: { getItem: () => null, setItem: () => {}, removeItem: () => {} },
+  };
+  context.window = context;
+  vm.createContext(context);
+  vm.runInContext(fs.readFileSync("storage.js", "utf8"), context);
+  const store = new context.OmniPocketStorage({ dbName: "abort-read", storeName: "state", legacyKey: "legacy" });
+  await assert.rejects(store.read(db), /simulated read abort/, "a successful request must not mask a later transaction abort");
+}
+
 // A blocked IndexedDB open must be retryable, and a late success must close its connection.
 {
   let opens = 0;
