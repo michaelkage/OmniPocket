@@ -14,7 +14,8 @@ const DEFAULT_RATES = {
 
 const $ = id => document.getElementById(id);
 const uid = () => crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-const today = () => new Date().toISOString().slice(0, 10);
+const localDateString = (date = new Date()) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+const today = () => localDateString();
 const clone = value => JSON.parse(JSON.stringify(value));
 
 const DEFAULT_STATE = {
