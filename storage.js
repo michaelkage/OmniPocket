@@ -88,6 +88,8 @@ class OmniPocketStorage {
       const request = tx.objectStore(this.storeName).get(this.key);
       request.onsuccess = () => resolve(request.result || null);
       request.onerror = () => reject(request.error || new Error("Could not read OmniPocket data."));
+      tx.onerror = () => reject(tx.error || new Error("Could not read OmniPocket data."));
+      tx.onabort = () => reject(tx.error || new Error("OmniPocket read was aborted."));
     });
   }
 
