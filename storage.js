@@ -111,7 +111,16 @@ class OmniPocketStorage {
     return new Promise((resolve, reject) => {
       const tx = db.transaction(this.storeName, "readwrite");
       tx.objectStore(this.storeName).delete(this.key);
-      tx.oncomplete = resolve;
+      tx.oncomplete = () => {
+        // The localStorage snapshot is also used as a recovery fallback. Leaving
+        // it behind would let a later load migrate cleared data back into IndexedDB.
+        try {
+          localStorage.removeItem(this.legacyKey);
+          resolve();
+        } catch (error) {
+          reject(error || new Error("Could not clear OmniPocket fallback data."));
+        }
+      };
       tx.onerror = () => reject(tx.error || new Error("Could not clear OmniPocket data."));
       tx.onabort = () => reject(tx.error || new Error("OmniPocket clear was aborted."));
     });
