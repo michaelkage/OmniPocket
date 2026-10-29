@@ -35,6 +35,7 @@ assert.match(bankConnection, /!\["pending","failed","reversed"\]\.includes\(bank
 assert.match(bankConnection, /Array\.isArray\(transactionPayload\?\.data\)\?transactionPayload\.data:null/);
 assert.match(bankConnection, /if\(!rawTransactions\)throw new Error\("Mono returned an unexpected transaction feed/);
 assert.match(bankConnection, /Mono returned an invalid account balance; the account was not updated/);
+assert.match(bankConnection, /!\["credit","debit"\]\.includes\(direction\)\|\|rawAmount==null\|\|!Number\.isFinite\(amount\)\|\|amount<0/);
 assert.match(bankConnection, /existing\.bankStatus=bankStatus/);
 assert.match(bankConnection, /rebuildBalances\(\);local\.connection=\{/);
 assert.match(accounts, /window\.OmniPocketBank\?\.freshness/);
