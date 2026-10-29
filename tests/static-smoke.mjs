@@ -82,6 +82,7 @@ assert(storage.includes("if (this.dbPromise === tracked) this.dbPromise = null")
 assert(storage.includes("if (settled) {\n          db.close();"), "late IndexedDB opens must close their connection");
 assert(storage.includes("tx.onabort = () => reject(tx.error || new Error(\"OmniPocket clear was aborted.\"))"), "storage clear must reject on aborted transactions");
 assert(storage.includes("OmniPocket read was aborted."), "storage reads must reject on aborted transactions");
+assert(storage.includes("localStorage.removeItem(this.legacyKey)"), "clearing storage must also remove the legacy fallback to prevent data resurrection");
 assert(app.includes("persistenceReady = false;"), "failed IndexedDB saves must switch persistence to local fallback");
 assert(app.includes("Could not persist OmniPocket state to local storage."), "local fallback failures must be reported independently");
 
