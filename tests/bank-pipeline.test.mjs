@@ -58,6 +58,11 @@ assert.match(bankConnection, /balanceMismatch=!Number\.isFinite\(balanceDifferen
 assert.match(bankConnection, /syncStatus:syncWarning\?"warning":"healthy"/);
 assert.match(bankConnection, /status:syncWarning\?"warning":"success"/);
 assert.match(accounts, /h\.status==="warning"\?"Sync completed with warnings"/);
+assert.match(accounts, /h\.ownershipConflictCount/);
+assert.match(accounts, /h\.currencyMismatchCount/);
+assert.match(accounts, /h\.invalidTransactionCount/);
+assert.match(accounts, /sync-history-diagnostics/);
+assert.match(accounts, /sync-history-skipped/);
 assert.match(accounts, /window\.OmniPocketBank\?\.freshness/);
 assert.match(config, /\[functions\.mono-webhook\][\s\S]*verify_jwt = false/);
 assert.doesNotMatch(sync, /Access-Control-Allow-Origin": "\*"/);
