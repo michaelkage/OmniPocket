@@ -41,7 +41,10 @@ assert.match(bankConnection, /!\["credit","debit"\]\.includes\(direction\)\|\|ra
 assert.match(bankConnection, /const txCurrency=String\(tx\.currency\|\|currency\)\.toUpperCase\(\);if\(!CURRENCIES\.includes\(txCurrency\)\)\{invalidTransactionCount\+\+;continue;\}/);
 assert.match(bankConnection, /if\(txCurrency!==currency\)\{currencyMismatchCount\+\+;continue;\}/);
 assert.match(bankConnection, /currencyMismatchCount\?\[`\$\{currencyMismatchCount\} transaction\(s\) skipped because their currency differs from the linked account currency/);
-assert.match(bankConnection, /ownershipConflictCount,currencyMismatchCount,invalidTransactionCount,balanceMismatch,balanceDifference/);\nassert.match(bankConnection, /if\(!pid\)\{invalidTransactionCount\+\+;continue;\}/);\nassert.match(bankConnection, /currencyMismatchCount\?\[`\$\{currencyMismatchCount\} transaction\(s\) skipped/);\nassert.match(bankConnection, /invalidTransactionCount\?\[`\$\{invalidTransactionCount\} transaction\(s\) skipped because their ID, amount, currency, date, direction, or bank status was invalid/);
+assert.match(bankConnection, /ownershipConflictCount,currencyMismatchCount,invalidTransactionCount,balanceMismatch,balanceDifference/);
+assert.match(bankConnection, /if\(!pid\)\{invalidTransactionCount\+\+;continue;\}/);
+assert.match(bankConnection, /currencyMismatchCount\?\[`\$\{currencyMismatchCount\} transaction\(s\) skipped/);
+assert.match(bankConnection, /invalidTransactionCount\?\[`\$\{invalidTransactionCount\} transaction\(s\) skipped because their ID, amount, currency, date, direction, or bank status was invalid/);
 assert.match(bankConnection, /dateCheck\.getUTCFullYear\(\)!==dateParts\[0\].*dateCheck\.getUTCMonth\(\)!==dateParts\[1\]-1.*dateCheck\.getUTCDate\(\)!==dateParts\[2\]/);
 assert.match(bankConnection, /existing\.currency=txCurrency;existing\.date=txDate/);
 assert.match(bankConnection, /date:txDate,createdAt:importedAt/);
