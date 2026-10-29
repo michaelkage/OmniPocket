@@ -31,9 +31,19 @@ function normalizeStatementDate(value) {
   if (!value) return { valid: false };
   const s = String(value).trim();
   const iso = s.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/);
-  if (iso) { const d = new Date(Number(iso[1]), Number(iso[2])-1, Number(iso[3])); if (!isNaN(d)) return { valid: true, date: d.toISOString().slice(0,10) }; }
+  if (iso) {
+    const year=Number(iso[1]),month=Number(iso[2]),day=Number(iso[3]);
+    const d=new Date(year,month-1,day);
+    if(d.getFullYear()===year&&d.getMonth()===month-1&&d.getDate()===day) return {valid:true,date:year+"-"+String(month).padStart(2,"0")+"-"+String(day).padStart(2,"0")};
+    return {valid:false};
+  }
   const nigerian = s.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})/);
-  if (nigerian) { const d = new Date(Number(nigerian[3]), Number(nigerian[2])-1, Number(nigerian[1])); if (!isNaN(d)) return { valid: true, date: d.toISOString().slice(0,10) }; }
+  if (nigerian) {
+    const day=Number(nigerian[1]),month=Number(nigerian[2]),year=Number(nigerian[3]);
+    const d=new Date(year,month-1,day);
+    if(d.getFullYear()===year&&d.getMonth()===month-1&&d.getDate()===day) return {valid:true,date:year+"-"+String(month).padStart(2,"0")+"-"+String(day).padStart(2,"0")};
+    return {valid:false};
+  }
   const d2 = new Date(s);
   if (!isNaN(d2) && s.length > 3) return { valid: true, date: d2.toISOString().slice(0,10) };
   return { valid: false };
