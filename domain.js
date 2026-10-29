@@ -4,6 +4,7 @@
  */
 (() => {
   const DAY = 86400000;
+  const dateKey = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 
   const clone = value => JSON.parse(JSON.stringify(value));
 
@@ -134,7 +135,7 @@
     const cutoff = new Date(asOf);
     cutoff.setHours(0, 0, 0, 0);
     cutoff.setDate(cutoff.getDate() - days + 1);
-    const cutoffDate = cutoff.toISOString().slice(0, 10);
+    const cutoffDate = dateKey(cutoff);
     const totals = {};
     let total = 0;
     let income = 0;
@@ -155,7 +156,7 @@
   function flowSummary(state, days = 30, asOf = new Date()) {
     const cutoff = new Date(asOf);
     cutoff.setDate(cutoff.getDate() - days + 1);
-    const cutoffDate = cutoff.toISOString().slice(0, 10);
+    const cutoffDate = dateKey(cutoff);
     const result = { income: 0, expenses: 0, transfers: 0, withdrawals: 0, adjustments: 0, count: 0 };
     for (const tx of state.transactions || []) {
       if (String(tx.date) < cutoffDate || !isFinanciallyEffective(tx)) continue;
@@ -220,7 +221,7 @@
     const pace = recentNet > 0 ? recentNet / 30 : 0;
     const projectedDays = pace > 0 ? Math.ceil(progress.remaining / pace) : null;
     const projectedDate = projectedDays != null
-      ? new Date(today.getTime() + projectedDays * DAY).toISOString().slice(0, 10)
+      ? dateKey(new Date(today.getTime() + projectedDays * DAY))
       : null;
     return {
       ...progress,
@@ -235,7 +236,7 @@
   }
 
   function snapshot(state, asOf = new Date()) {
-    const date = new Date(asOf).toISOString().slice(0, 10);
+    const date = dateKey(new Date(asOf));
     const balances = balancesAt(state, { date, createdAt: Number.MAX_SAFE_INTEGER });
     const base = state.settings.baseCurrency;
     const rates = clone(state.settings.fx?.rates || {});
@@ -408,7 +409,7 @@
     for (let i = 0; i < days; i++) {
       const date = new Date(start);
       date.setDate(start.getDate() + i);
-      const key = date.toISOString().slice(0, 10);
+      const key = dateKey(date);
       cumulative += byDate.get(key) || 0;
       points.push({ date: key, value: cumulative });
     }
