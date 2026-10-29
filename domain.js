@@ -186,18 +186,18 @@
 
       let value = 0;
       if (tx.type === "income" && sourceIncluded) {
-        value += convert(state, tx.amount, tx.currency, goal.currency, tx.fxRate);
+        value += convert(state, Math.abs(Number(tx.amount) || 0), tx.currency, goal.currency, tx.fxRate);
       } else if (tx.type === "expense" && sourceIncluded) {
-        value -= convert(state, tx.amount, tx.currency, goal.currency, tx.fxRate);
+        value -= convert(state, Math.abs(Number(tx.amount) || 0), tx.currency, goal.currency, tx.fxRate);
       } else if (tx.type === "withdrawal" && sourceIncluded) {
-        value -= convert(state, tx.amount, tx.currency, goal.currency, tx.fxRate);
+        value -= convert(state, Math.abs(Number(tx.amount) || 0), tx.currency, goal.currency, tx.fxRate);
       } else if (tx.type === "adjustment" && sourceIncluded) {
         value += adjustmentDelta(tx);
         value = convert(state, value, tx.currency, goal.currency, tx.fxRate);
       } else if (tx.type === "transfer") {
-        if (sourceIncluded) value -= convert(state, tx.amount, tx.currency, goal.currency, tx.fxRate);
+        if (sourceIncluded) value -= convert(state, Math.abs(Number(tx.amount) || 0), tx.currency, goal.currency, tx.fxRate);
         if (destinationIncluded) {
-          const received = tx.receivedAmount != null ? tx.receivedAmount : convert(state, tx.amount, tx.currency, tx.receivedCurrency || tx.currency, tx.fxRate);
+          const received = tx.receivedAmount != null ? Math.abs(Number(tx.receivedAmount) || 0) : convert(state, Math.abs(Number(tx.amount) || 0), tx.currency, tx.receivedCurrency || tx.currency, tx.fxRate);
           value += convert(state, received, tx.receivedCurrency || tx.currency, goal.currency);
         }
       }
