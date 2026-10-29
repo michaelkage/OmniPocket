@@ -49,8 +49,8 @@ assert.match(bankConnection, /state\.transactions\.some\(tx => tx\.id === id\)/)
 assert.match(bankConnection, /state\.accounts\.find\(a => a\.id === preferredAccountId && a\.connection\?\.provider === "mock"\)/);
 assert.match(bankConnection, /existing\.bankStatus=bankStatus/);
 assert.match(bankConnection, /if\(existing\.sourceAccountId&&existing\.sourceAccountId!==local\.id\)\{ownershipConflictCount\+\+;continue;\}/);
-assert.match(bankConnection, /syncStatus:ownershipConflictCount\?"warning":"healthy"/);
-assert.match(bankConnection, /status:ownershipConflictCount\?"warning":"success"/);
+assert.match(bankConnection, /syncStatus:syncWarning\?"warning":"healthy"/);
+assert.match(bankConnection, /status:syncWarning\?"warning":"success"/);
 assert.match(bankConnection, /existing\.type=credit\?"income":"expense";existing\.amount=amount;existing\.currency=txCurrency/);
 assert.match(bankConnection, /existing\.date=txDate/);
 assert.match(bankConnection, /rebuildBalances\(\);local\.connection=\{/);
