@@ -3,23 +3,30 @@
  */
 
 function parseStatementCsv(text) {
+  const input = String(text || "").replace(/^\uFEFF/, "");
   const rows = [];
-  let current = "";
-  let inQuotes = false;
-  const chars = text.replace(/\r\n/g, "\n").split("");
-  for (let i = 0; i < chars.length; i++) {
-    const c = chars[i];
-    if (c === '"') {
-      if (inQuotes && chars[i + 1] === '"') { current += '"'; i++; }
-      else inQuotes = !inQuotes;
-      continue;
-    }
-    if (c === "," && !inQuotes) { rows.push(current); current = ""; continue; }
-    if (c === "\n" && !inQuotes) { rows.push(current); current = ""; continue; }
-    current += c;
+  let row = [], cell = "", quoted = false;
+  for (let i = 0; i < input.length; i++) {
+    const ch = input[i], next = input[i + 1];
+    if (ch === '"') {
+      if (quoted && next === '"') { cell += '"'; i++; }
+      else quoted = !quoted;
+    } else if (ch === "," && !quoted) {
+      row.push(cell.trim()); cell = "";
+    } else if ((ch === "\n" || ch === "\r") && !quoted) {
+      if (ch === "\r" && next === "\n") i++;
+      row.push(cell.trim()); cell = "";
+      if (row.some(value => value !== "")) rows.push(row);
+      row = [];
+    } else cell += ch;
   }
-  rows.push(current);
-  return rows.map(cell => cell.trim());
+  if (cell !== "" || row.length) {
+    row.push(cell.trim());
+    if (row.some(value => value !== "")) rows.push(row);
+  }
+  if (rows.length < 2) return { headers: [], rows: [] };
+  const headers = rows[0].map((h, i) => String(h || "Column " + (i + 1)).trim());
+  return { headers, rows: rows.slice(1).map(values => Object.fromEntries(headers.map((h, i) => [h, values[i] ?? ""]))) };
 }
 
 function statementColumn(headers, patterns) {
@@ -66,12 +73,9 @@ function statementHeaderOptions(headers, selected, emptyLabel = "Ignore") {
 }
 
 function previewStatementImport(text, accountId, mapping = {}) {
-  const raw = parseStatementCsv(text);
-  if (!raw.length) return { headers: [], rows: [], invalidCount: 0, duplicateCount: 0, transferCount: 0 };
-  const headers = raw[0].split(",").map(c => c.replace(/^"|"$/g, ""));
-  if (!raw[1] && raw.length === 1) return { headers, rows: [], invalidCount: 0, duplicateCount: 0, transferCount: 0 };
-  const data = raw.slice(1).map(line => line.split(",").map(c => c.replace(/^"|"$/g, "")));
-  return previewStatementImportObjects(data, accountId, mapping, headers);
+  const parsed = parseStatementCsv(text);
+  if (!parsed.rows.length) return { headers: parsed.headers, rows: [], invalidCount: 0, duplicateCount: 0, transferCount: 0 };
+  return previewStatementImportObjects(parsed, accountId, mapping, parsed.headers);
 }
 
 function previewStatementImportObjects(parsed, accountId, mapping = {}, headersIn = []) {
