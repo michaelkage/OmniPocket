@@ -219,6 +219,27 @@ const tx = (o) => ({
   assert.equal(over.pct, 100, "goal progress must clamp at 100");
 }
 
+// Financial summaries must exclude non-effective bank movements consistently.
+{
+  const state = makeState({
+    accounts: [{ id: "a", currency: "NGN", openingBalance: 1000, archived: false }],
+    goals: [{ id: "g", currency: "NGN", accountIds: ["a"], target: 2000 }],
+    transactions: [
+      tx({ id: "posted-income", type: "income", amount: 500, bankStatus: "posted", sourceAccountId: "a", date: "2026-10-28", createdAt: 1 }),
+      tx({ id: "pending-income", type: "income", amount: 900, bankStatus: "pending", sourceAccountId: "a", date: "2026-10-28", createdAt: 2 }),
+      tx({ id: "reversed-expense", type: "expense", amount: 300, bankStatus: "reversed", sourceAccountId: "a", date: "2026-10-28", createdAt: 3 }),
+      tx({ id: "failed-expense", type: "expense", amount: 200, bankStatus: "failed", sourceAccountId: "a", date: "2026-10-28", createdAt: 4 }),
+      tx({ id: "superseded-income", type: "income", amount: 100, status: "superseded", sourceAccountId: "a", date: "2026-10-28", createdAt: 5 }),
+    ],
+  });
+  const flow = E.flowSummary(state, 30, new Date("2026-10-29T12:00:00Z"));
+  assert.equal(flow.income, 500, "flow income must only count posted movements");
+  assert.equal(flow.expenses, 0, "flow expenses must exclude failed/reversed movements");
+  assert.equal(flow.count, 1, "flow count must exclude non-effective movements");
+  const history = E.goalIntelligence(state, state.goals[0], new Date("2026-10-29T12:00:00Z")).history;
+  assert.deepEqual(history.map(row => row.value), [500], "goal history must use the same effective movements");
+}
+
 // Empty state must not throw anywhere in the engine surface.
 {
   const empty = makeState();
