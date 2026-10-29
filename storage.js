@@ -11,12 +11,14 @@ class OmniPocketStorage {
 
   open() {
     if (this.dbPromise) return this.dbPromise;
-    this.dbPromise = new Promise((resolve, reject) => {
+
+    const attempt = new Promise((resolve, reject) => {
       if (!("indexedDB" in window)) {
         reject(new Error("IndexedDB is not supported."));
         return;
       }
 
+      let settled = false;
       const request = indexedDB.open(this.dbName, this.version);
       request.onupgradeneeded = () => {
         const db = request.result;
@@ -24,11 +26,40 @@ class OmniPocketStorage {
           db.createObjectStore(this.storeName);
         }
       };
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error || new Error("Could not open IndexedDB."));
-      request.onblocked = () => reject(new Error("IndexedDB upgrade is blocked."));
+      request.onsuccess = () => {
+        const db = request.result;
+        // A blocked open may eventually succeed after its caller has fallen
+        // back. Close that late connection instead of leaking it.
+        if (settled) {
+          db.close();
+          return;
+        }
+        settled = true;
+        db.onversionchange = () => {
+          db.close();
+          this.dbPromise = null;
+        };
+        resolve(db);
+      };
+      request.onerror = () => {
+        if (settled) return;
+        settled = true;
+        reject(request.error || new Error("Could not open IndexedDB."));
+      };
+      request.onblocked = () => {
+        if (settled) return;
+        settled = true;
+        reject(new Error("IndexedDB upgrade is blocked."));
+      };
     });
-    return this.dbPromise;
+
+    const tracked = attempt.catch(error => {
+      // A transient failure must not permanently poison future open attempts.
+      if (this.dbPromise === tracked) this.dbPromise = null;
+      throw error;
+    });
+    this.dbPromise = tracked;
+    return tracked;
   }
 
   async load() {
@@ -80,6 +111,7 @@ class OmniPocketStorage {
       tx.objectStore(this.storeName).delete(this.key);
       tx.oncomplete = resolve;
       tx.onerror = () => reject(tx.error || new Error("Could not clear OmniPocket data."));
+      tx.onabort = () => reject(tx.error || new Error("OmniPocket clear was aborted."));
     });
   }
 }
