@@ -79,7 +79,12 @@ async function syncAccount(supabase: any, userId: string, monoAccountId: string,
   const reportedTransactionTotal = Number(transactionMeta.total);
   const hasReportedTransactionTotal = Number.isFinite(reportedTransactionTotal) && reportedTransactionTotal >= 0;
   const hasNextTransactionPage = Boolean(transactionMeta.next);
-  const transactionFeedComplete = !hasNextTransactionPage && (!hasReportedTransactionTotal || reportedTransactionTotal === transactions?.length);
+  const dataStatus = String(accountPayload?.data?.meta?.data_status || accountPayload?.data?.meta?.dataStatus || "").toUpperCase();
+  // Mono documents paginate=false as returning all transactions in one response.
+  // Explicit pagination, a count mismatch, or a partial account state is not complete.
+  const transactionFeedComplete = !hasNextTransactionPage
+    && (!hasReportedTransactionTotal || reportedTransactionTotal === transactions?.length)
+    && !["PARTIAL", "UNAVAILABLE", "PROCESSING", "FAILED"].includes(dataStatus);
   if (transactions === null) {
     const topLevelKeys = txPayload && typeof txPayload === "object" ? Object.keys(txPayload).slice(0, 12) : [];
     console.error("Mono transactions response had an unexpected shape", { topLevelKeys });
