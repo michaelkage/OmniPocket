@@ -116,13 +116,17 @@ async function syncAccount(supabase: any, userId: string, monoAccountId: string,
     }
   }
 
-  const normalized = transactions
-    .map((tx: any) => normalizeTransaction(tx, amountUnit))
-    .filter((tx: any) => {
-      if (tx.mono_transaction_id) return true;
+  const normalizedById = new Map<string, any>();
+  let duplicateTransactionCount = 0;
+  for (const tx of transactions.map((item: any) => normalizeTransaction(item, amountUnit))) {
+    if (!tx.mono_transaction_id) {
       console.warn("Skipping Mono transaction without a stable provider ID");
-      return false;
-    });
+      continue;
+    }
+    if (normalizedById.has(tx.mono_transaction_id)) duplicateTransactionCount++;
+    normalizedById.set(tx.mono_transaction_id, tx);
+  }
+  const normalized = [...normalizedById.values()];
   const transactionIds = normalized.map((tx: any) => tx.mono_transaction_id);
   const { data: existingRows, error: existingRowsError } = transactionIds.length
     ? await supabase.from("bank_transactions").select("mono_transaction_id").eq("connection_id", connection.id).in("mono_transaction_id", transactionIds)
@@ -148,14 +152,14 @@ async function syncAccount(supabase: any, userId: string, monoAccountId: string,
   const { error: eventError } = await supabase.from("bank_sync_events").insert({
     user_id: userId, connection_id: connection.id, provider: "mono",
     event_type: "account_sync", status: "success", started_at: startedAt, completed_at: completedAt,
-    imported_count: insertedCount, metadata: { data_status: row.data_status, amount_unit: amountUnit, fetched_count: transactions.length, inserted_count: insertedCount, updated_count: updatedCount, skipped_count: transactions.length - normalized.length }
+    imported_count: insertedCount, metadata: { data_status: row.data_status, amount_unit: amountUnit, fetched_count: transactions.length, inserted_count: insertedCount, updated_count: updatedCount, skipped_count: transactions.length - normalized.length, duplicate_count: duplicateTransactionCount }
   });
   if (eventError) console.warn("Could not record bank sync event:", eventError.message);
 
   return {
     connection, account, transactionsImported: insertedCount, transactionsFetched: transactions.length,
     transactionsInserted: insertedCount, transactionsUpdated: updatedCount, transactionsSkipped: transactions.length - normalized.length,
-    transactions: normalized, dataStatus: row.data_status, amountUnit,
+    duplicateTransactionCount, transactions: normalized, dataStatus: row.data_status, amountUnit,
     transactionFeedComplete, reportedTransactionTotal: hasReportedTransactionTotal ? reportedTransactionTotal : null
   };
 }
