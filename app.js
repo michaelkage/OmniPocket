@@ -1,7 +1,7 @@
 /* OmniPocket — V1 financial domain + UI engine */
 const STORAGE_KEY = "omnipocket.v1";
 const storage = new OmniPocketStorage({ dbName: "omnipocket", storeName: "state", legacyKey: STORAGE_KEY });
-const SCHEMA_VERSION = 8;
+const SCHEMA_VERSION = 9;
 const CURRENCIES = ["NGN", "USD", "GBP", "EUR"];
 const ACCOUNT_TYPES = ["bank", "cash", "wallet", "locked"];
 const TX_TYPES = ["income", "expense", "transfer", "withdrawal", "adjustment"];
@@ -31,6 +31,7 @@ const DEFAULT_STATE = {
   },
   accounts: [],
   transactions: [],
+  deletedExternalTransactions: [],
   goals: [],
   snapshots: []
 };
@@ -157,6 +158,8 @@ function migrateState(raw) {
       manualEdits: Array.isArray(t.external.manualEdits) ? [...new Set(t.external.manualEdits.filter(field => ["type", "amount", "currency", "date"].includes(field)))] : []
     } : null
   })) : [];
+
+  next.deletedExternalTransactions = Array.isArray(raw.deletedExternalTransactions) ? raw.deletedExternalTransactions.filter(item => item && item.provider && item.providerTransactionId).map(item => ({ provider: String(item.provider), providerAccountId: item.providerAccountId ? String(item.providerAccountId) : null, providerTransactionId: String(item.providerTransactionId), localAccountId: item.localAccountId ? String(item.localAccountId) : null, deletedAt: item.deletedAt || new Date().toISOString() })) : [];
 
   next.goals = Array.isArray(raw.goals) ? raw.goals.map(g => ({
     id: g.id || uid(),
@@ -524,6 +527,13 @@ function deleteTransaction(id) {
   if (index < 0) return;
   const t = state.transactions[index];
   if (!confirm("Delete this transaction? The account balance will be recalculated.")) return;
+  if (t.external?.provider && t.external?.providerTransactionId) {
+    const providerAccountId = account(t.sourceAccountId)?.connection?.providerAccountId || null;
+    state.deletedExternalTransactions = Array.isArray(state.deletedExternalTransactions) ? state.deletedExternalTransactions : [];
+    const tombstone = { provider: t.external.provider, providerAccountId, providerTransactionId: String(t.external.providerTransactionId), localAccountId: t.sourceAccountId || null, deletedAt: new Date().toISOString() };
+    const duplicate = state.deletedExternalTransactions.some(item => item.provider === tombstone.provider && item.providerAccountId === tombstone.providerAccountId && item.providerTransactionId === tombstone.providerTransactionId);
+    if (!duplicate) state.deletedExternalTransactions.push(tombstone);
+  }
   state.transactions.splice(index, 1);
   rebuildBalances();
   emitStateEvent("transaction:updated", { action: "deleted", transactionId: id });
