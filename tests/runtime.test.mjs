@@ -247,6 +247,52 @@ const tx = (o) => ({
   assert.deepEqual(history.map(row => row.value), [500], "goal history must use the same effective movements");
 }
 
+// Provider lifecycle transitions must immediately update every financial view.
+// Status matching is case/whitespace tolerant so provider casing cannot leak
+// pending, failed or reversed movements into totals.
+{
+  const state = makeState({
+    accounts: [{ id: "a", currency: "NGN", openingBalance: 1000, archived: false }],
+    goals: [{ id: "g", currency: "NGN", accountIds: ["a"], target: 2000 }],
+    transactions: [
+      tx({ id: "mutable", type: "expense", amount: 250, bankStatus: "posted", sourceAccountId: "a", date: "2026-10-28", createdAt: 1 }),
+    ],
+  });
+  const goal = state.goals[0];
+  const asOf = new Date("2026-10-29T12:00:00Z");
+  const balance = () => E.balancesAt(state).find(account => account.id === "a").balance;
+  const spend = () => E.spendingSummary(state, 30, asOf).total;
+  const flow = () => E.flowSummary(state, 30, asOf);
+  const goalNet = () => E.goalContributionHistory(state, goal).reduce((sum, row) => sum + row.value, 0);
+
+  assert.equal(balance(), 750);
+  assert.equal(spend(), 250);
+  assert.equal(flow().count, 1);
+  assert.equal(goalNet(), -250);
+
+  state.transactions[0].bankStatus = " PENDING ";
+  assert.equal(balance(), 1000, "posted-to-pending must restore the account balance");
+  assert.equal(spend(), 0, "pending expenses must leave spending totals");
+  assert.equal(flow().count, 0, "pending movements must leave cash-flow counts");
+  assert.equal(goalNet(), 0, "pending movements must leave goal contribution history");
+
+  state.transactions[0].bankStatus = "REVERSED";
+  assert.equal(balance(), 1000, "reversed movements must remain excluded");
+  assert.equal(spend(), 0);
+  assert.equal(goalNet(), 0);
+
+  state.transactions[0].bankStatus = "posted";
+  assert.equal(balance(), 750, "reposted movements must become effective again");
+  assert.equal(spend(), 250);
+  assert.equal(goalNet(), -250);
+
+  state.transactions[0].status = " SUPERSEDED ";
+  assert.equal(balance(), 1000, "superseded records must not affect balances");
+  assert.equal(spend(), 0, "superseded records must not affect spending");
+  assert.equal(flow().count, 0);
+  assert.equal(goalNet(), 0);
+}
+
 // Calendar-day snapshots use the user's local date, not the UTC date.
 {
   const state = makeState({
