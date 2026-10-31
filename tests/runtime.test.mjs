@@ -341,7 +341,8 @@ const tx = (o) => ({
             error: null,
             oncomplete: null, onerror: null, onabort: null,
           };
-          setTimeout(() => tx.oncomplete && tx.oncomplete(), 0);
+          // IndexedDB completes only after request callbacks; defer the fake transaction completion accordingly.
+          setTimeout(() => setTimeout(() => tx.oncomplete && tx.oncomplete(), 0), 0);
           return tx;
         },
       };
