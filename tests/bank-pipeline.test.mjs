@@ -10,7 +10,7 @@ const config = fs.readFileSync("supabase/config.toml","utf8");
 const fixture = JSON.parse(fs.readFileSync("tests/fixtures/mono-transactions.json","utf8"));
 
 assert.match(sync, /const amountUnit = Deno\.env\.get\("MONO_AMOUNT_UNIT"\) \|\| "minor"/);
-assert.match(sync, /transactions\s*\.map\(\(tx: any\) => normalizeTransaction\(tx, amountUnit\)\)/);
+assert.match(sync, /transactions\s*\.map\(\(item: any\) => normalizeTransaction\(item, amountUnit\)\)/);
 assert.match(exchange, /const amountUnit = Deno\.env\.get\("MONO_AMOUNT_UNIT"\) \|\| "minor"/);
 assert.match(exchange, /transactions\s*\.map\(\(tx: any\) => normalizeTransaction\(tx, amountUnit\)\)/);
 assert.match(sync, /bank_status: \["pending", "posted", "reversed", "failed"\]/);
@@ -23,7 +23,7 @@ assert.match(sync, /duplicateTransactionCount, transactions: normalized/);
 assert.match(sync, /bank_sync_events/);
 assert.match(sync, /function unwrapTransactions\(payload: any\): any\[\] \| null/);
 assert.match(sync, /if \(transactions === null\)/);
-assert.match(sync, /transactionFeedComplete = !hasNextTransactionPage && \(!hasReportedTransactionTotal \|\| reportedTransactionTotal === transactions\?\.length\)/);
+assert.match(sync, /transactionFeedComplete = !hasNextTransactionPage\s*&&\s*\(!hasReportedTransactionTotal \|\| reportedTransactionTotal === transactions\?\.length\)\s*&&\s*!\["PARTIAL", "UNAVAILABLE", "PROCESSING", "FAILED"\]\.includes\(dataStatus\)/);
 assert.match(sync, /\["PARTIAL", "UNAVAILABLE", "PROCESSING", "FAILED"\]\.includes\(dataStatus\)/);
 assert.match(exchange, /transactionFeedComplete,/);
 assert.match(exchange, /reportedTransactionTotal: hasReportedTransactionTotal \? reportedTransactionTotal : null/);
@@ -56,12 +56,12 @@ assert.match(bankConnection, /!\["credit","debit"\]\.includes\(direction\)\|\|ra
 assert.match(bankConnection, /const txCurrency=String\(tx\.currency\|\|currency\)\.toUpperCase\(\);if\(!CURRENCIES\.includes\(txCurrency\)\)\{invalidTransactionCount\+\+;continue;\}/);
 assert.match(bankConnection, /if\(txCurrency!==currency\)\{currencyMismatchCount\+\+;continue;\}/);
 assert.match(bankConnection, /currencyMismatchCount\?\[`\$\{currencyMismatchCount\} transaction\(s\) skipped because their currency differs from the linked account currency/);
-assert.match(bankConnection, /ownershipConflictCount,currencyMismatchCount,invalidTransactionCount,balanceMismatch,balanceDifference/);
+assert.match(bankConnection, /ownershipConflictCount,currencyMismatchCount,invalidTransactionCount,duplicateTransactionCount,balanceMismatch,balanceDifference/);
 assert.match(bankConnection, /if\(!pid\)\{invalidTransactionCount\+\+;continue;\}/);
 assert.match(bankConnection, /currencyMismatchCount\?\[`\$\{currencyMismatchCount\} transaction\(s\) skipped/);
 assert.match(bankConnection, /invalidTransactionCount\?\[`\$\{invalidTransactionCount\} transaction\(s\) skipped because their ID, amount, currency, date, direction, or bank status was invalid/);
 assert.match(bankConnection, /dateCheck\.getUTCFullYear\(\)!==dateParts\[0\].*dateCheck\.getUTCMonth\(\)!==dateParts\[1\]-1.*dateCheck\.getUTCDate\(\)!==dateParts\[2\]/);
-assert.match(bankConnection, /existing\.currency=txCurrency;existing\.date=txDate/);
+assert.match(bankConnection, /if\(!manualEdits\.has\("currency"\)\)existing\.currency=txCurrency;if\(!manualEdits\.has\("date"\)\)existing\.date=txDate/);
 assert.match(bankConnection, /manualEdits\.has\("type"\)/);
 assert.match(bankConnection, /manualEdits\.has\("amount"\)/);
 assert.match(bankConnection, /manualEdits\.has\("currency"\)/);
@@ -77,8 +77,8 @@ assert.match(bankConnection, /existing\.bankStatus=bankStatus/);
 assert.match(bankConnection, /if\(existing\.sourceAccountId&&existing\.sourceAccountId!==local\.id\)\{ownershipConflictCount\+\+;continue;\}/);
 assert.match(bankConnection, /syncStatus:syncWarning\?"warning":"healthy"/);
 assert.match(bankConnection, /status:syncWarning\?"warning":"success"/);
-assert.match(bankConnection, /existing\.type=credit\?"income":"expense";existing\.amount=amount;existing\.currency=txCurrency/);
-assert.match(bankConnection, /existing\.date=txDate/);
+assert.match(bankConnection, /if\(!manualEdits\.has\("type"\)\)existing\.type=credit\?"income":"expense";if\(!manualEdits\.has\("amount"\)\)existing\.amount=amount/);
+assert.match(bankConnection, /if\(!manualEdits\.has\("date"\)\)existing\.date=txDate/);
 assert.match(bankConnection, /rebuildBalances\(\);local\.connection=\{/);
 assert.match(bankConnection, /balanceMismatch=!Number\.isFinite\(balanceDifference\)\|\|Math\.abs\(balanceDifference\)>=0\.005/);
 assert.match(bankConnection, /syncStatus:syncWarning\?"warning":"healthy"/);
@@ -121,3 +121,13 @@ assert.match(syncAllBody, /a\.connection\.lastSyncStartedAt = new Date\(startedA
 assert.match(syncAllBody, /a\.connection\.lastSyncCompletedAt = completedAt/);
 assert.match(syncAllBody, /a\.connection\.lastSyncDurationMs = Date\.now\(\) - startedAt/);
 assert.match(syncAllBody, /catch \(error\)[\s\S]*a\.connection\.syncStatus = "error"/);
+
+assert.match(app, /deletedExternalTransactions = Array\.isArray\(raw\.deletedExternalTransactions\)/);
+assert.match(app, /state\.deletedExternalTransactions\.push\(tombstone\)/);
+assert.match(bankConnection, /deletedExternally=\(state\.deletedExternalTransactions\|\|\[\]\)\.some/);
+assert.match(bankConnection, /if\(deletedExternally\)continue/);
+assert.match(bankConnection, /state\.accounts\.find\(item => item\.connection\?\.provider === "mono" && item\.connection\.providerAccountId === data\.monoAccountId\)/);
+
+assert.match(app, /providerAccountId: t\.external\.providerAccountId \|\| null/);
+assert.match(app, /t\.external\.providerAccountId \|\| account\(t\.sourceAccountId\)/);
+assert.match(bankConnection, /external:\{provider:"mono",providerAccountId:String\(monoAccountId\),providerTransactionId:String\(pid\)/);
