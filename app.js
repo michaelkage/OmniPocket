@@ -153,7 +153,8 @@ function migrateState(raw) {
       provider: t.external.provider || null,
       providerTransactionId: t.external.providerTransactionId || null,
       importedAt: t.external.importedAt || null,
-      lastSeenAt: t.external.lastSeenAt || null
+      lastSeenAt: t.external.lastSeenAt || null,
+      manualEdits: Array.isArray(t.external.manualEdits) ? [...new Set(t.external.manualEdits.filter(field => ["type", "amount", "currency", "date"].includes(field)))] : []
     } : null
   })) : [];
 
@@ -1742,6 +1743,14 @@ $("editTransactionForm")?.addEventListener("submit", event => {
       paired.pairedTransactionId = null;
     }
     t.pairedTransactionId = null;
+  }
+  if (t.external?.provider === "mono") {
+    const manualEdits = new Set(t.external.manualEdits || []);
+    if (type !== t.type) manualEdits.add("type");
+    if (amount !== Number(t.amount)) manualEdits.add("amount");
+    if (source.currency !== t.currency) manualEdits.add("currency");
+    if (($("editTxDate").value || t.date) !== t.date) manualEdits.add("date");
+    t.external = { ...t.external, manualEdits: [...manualEdits] };
   }
   t.suggestedPairTransactionId = null;
   t.suggestedPairCandidates = [];
