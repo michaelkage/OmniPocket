@@ -102,3 +102,10 @@ assert.match(migratedSync, /syncStatus: a\.connection\.syncStatus === "syncing" 
 assert.match(migratedSync, /previous sync was interrupted before it completed/);
 assert.match(migratedSync, /lastSyncCompletedAt: a\.connection\.syncStatus === "syncing"/);
 assert.match(app, /if\(a\.connection\.syncStatus==="syncing"\)return alert\("A sync for this bank account is already in progress/);
+
+const syncAllBody = bankSyncUi.slice(bankSyncUi.indexOf("async function syncConnectedBankAccounts"), bankSyncUi.indexOf("async function connectDemoBankAccount"));
+assert.match(syncAllBody, /if \(a\.connection\.syncStatus === "syncing"\) continue/);
+assert.match(syncAllBody, /a\.connection\.lastSyncStartedAt = new Date\(startedAt\)\.toISOString\(\)/);
+assert.match(syncAllBody, /a\.connection\.lastSyncCompletedAt = completedAt/);
+assert.match(syncAllBody, /a\.connection\.lastSyncDurationMs = Date\.now\(\) - startedAt/);
+assert.match(syncAllBody, /catch \(error\)[\s\S]*a\.connection\.syncStatus = "error"/);
