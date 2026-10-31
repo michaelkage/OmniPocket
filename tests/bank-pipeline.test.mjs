@@ -20,6 +20,8 @@ assert.match(sync, /provider_balance_minor/);
 assert.match(sync, /bank_sync_events/);
 assert.match(sync, /function unwrapTransactions\(payload: any\): any\[\] \| null/);
 assert.match(sync, /if \(transactions === null\)/);
+assert.match(sync, /transactionFeedComplete = !hasNextTransactionPage && \(!hasReportedTransactionTotal \|\| reportedTransactionTotal === transactions\?\.length\)/);
+assert.match(sync, /reportedTransactionTotal: hasReportedTransactionTotal \? reportedTransactionTotal : null/);
 assert.match(sync, /unexpected transaction response/);
 assert.doesNotMatch(sync, /amountFromProvider\(account\.balance, amountUnit\).*amountUnit/);
 
@@ -29,7 +31,10 @@ assert.equal(Number(fixture.data[1].balance) / 100, 243320, "Fixture balance nor
 
 const bankConnection = fs.readFileSync("bank-connection.js","utf8");
 assert.match(bankConnection, /const isFirstProviderSync=!local\.connection\?\.lastSyncedAt/);
-assert.match(bankConnection, /if\(isFirstProviderSync\)\{local\.openingBalance=currentBalance-importedNet;\}/);
+assert.match(bankConnection, /transactionFeedComplete=payload\?\.transactionFeedComplete===true/);
+assert.match(bankConnection, /if\(\(isFirstProviderSync\|\|openingBalanceReconciliationPending\)&&transactionFeedComplete\)\{local\.openingBalance=currentBalance-importedNet;\}/);
+assert.match(bankConnection, /openingBalanceReconciliationPending:\(isFirstProviderSync\|\|openingBalanceReconciliationPending\)&&!transactionFeedComplete/);
+assert.match(bankConnection, /Opening-balance reconciliation is deferred until a complete feed is available/);
 assert.match(bankConnection, /bankStatus=String\(tx\.bank_status\|\|tx\.bankStatus\|\|"posted"\)\.toLowerCase\(\)/);
 assert.match(bankConnection, /if\(!\["pending","posted","failed","reversed"\]\.includes\(bankStatus\)\)\{invalidTransactionCount\+\+;continue;\}/);
 assert.equal((bankConnection.match(/if\(!\["pending","failed","reversed"\]\.includes\(bankStatus\)\)importedNet\+=credit\?amount:-amount/g)||[]).length,2,"Only safe same-account and new transactions contribute to first-sync opening balance");
