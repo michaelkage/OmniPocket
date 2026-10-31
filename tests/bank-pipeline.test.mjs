@@ -62,6 +62,13 @@ assert.match(bankConnection, /currencyMismatchCount\?\[`\$\{currencyMismatchCoun
 assert.match(bankConnection, /invalidTransactionCount\?\[`\$\{invalidTransactionCount\} transaction\(s\) skipped because their ID, amount, currency, date, direction, or bank status was invalid/);
 assert.match(bankConnection, /dateCheck\.getUTCFullYear\(\)!==dateParts\[0\].*dateCheck\.getUTCMonth\(\)!==dateParts\[1\]-1.*dateCheck\.getUTCDate\(\)!==dateParts\[2\]/);
 assert.match(bankConnection, /existing\.currency=txCurrency;existing\.date=txDate/);
+assert.match(bankConnection, /manualEdits\.has\("type"\)/);
+assert.match(bankConnection, /manualEdits\.has\("amount"\)/);
+assert.match(bankConnection, /manualEdits\.has\("currency"\)/);
+assert.match(bankConnection, /manualEdits\.has\("date"\)/);
+assert.match(bankConnection, /manualEdits:\[\]/);
+assert.match(app, /manualEdits: Array\.isArray\(t\.external\.manualEdits\)/);
+assert.match(app, /manualEdits\.add\("amount"\)/);
 assert.match(bankConnection, /date:txDate,createdAt:importedAt/);
 assert.match(bankConnection, /mock-" \+ account\.id \+ "-" \+ \(i \+ 1\)/);
 assert.match(bankConnection, /state\.transactions\.some\(tx => tx\.id === id\)/);
