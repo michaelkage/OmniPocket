@@ -96,3 +96,9 @@ assert.match(bankConnection, /async function syncMonoAccountUnlocked\(/);
 assert.match(bankConnection, /window\.__omnipocketMonoSyncLocks[\s\S]*keys\.some\(key => locks\.has\(key\)\)/);
 assert.match(bankConnection, /A sync for this bank account is already in progress/);
 assert.match(bankConnection, /try \{\s*return await syncMonoAccountUnlocked[\s\S]*finally \{\s*keys\.forEach\(key => locks\.delete\(key\)\)/);
+
+const migratedSync = app.slice(app.indexOf("connection: a.connection && typeof a.connection === \"object\" ? {"), app.indexOf("} : null", app.indexOf("connection: a.connection && typeof a.connection === \"object\" ? {")));
+assert.match(migratedSync, /syncStatus: a\.connection\.syncStatus === "syncing" \? "error"/);
+assert.match(migratedSync, /previous sync was interrupted before it completed/);
+assert.match(migratedSync, /lastSyncCompletedAt: a\.connection\.syncStatus === "syncing"/);
+assert.match(app, /if\(a\.connection\.syncStatus==="syncing"\)return alert\("A sync for this bank account is already in progress/);
