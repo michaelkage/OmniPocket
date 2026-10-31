@@ -5,6 +5,7 @@ const sync = fs.readFileSync("supabase/functions/mono-account-sync/index.ts","ut
 const exchange = fs.readFileSync("supabase/functions/mono-exchange-token/index.ts","utf8");
 const app = fs.readFileSync("app.js","utf8");
 const accounts = fs.readFileSync("accounts-ui.js","utf8");
+const bankSyncUi = fs.readFileSync("bank-sync-ui.js","utf8");
 const config = fs.readFileSync("supabase/config.toml","utf8");
 const fixture = JSON.parse(fs.readFileSync("tests/fixtures/mono-transactions.json","utf8"));
 
