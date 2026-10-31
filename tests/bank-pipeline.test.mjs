@@ -23,7 +23,7 @@ assert.match(sync, /duplicateTransactionCount, transactions: normalized/);
 assert.match(sync, /bank_sync_events/);
 assert.match(sync, /function unwrapTransactions\(payload: any\): any\[\] \| null/);
 assert.match(sync, /if \(transactions === null\)/);
-assert.match(sync, /transactionFeedComplete = !hasNextTransactionPage && \(!hasReportedTransactionTotal \|\| reportedTransactionTotal === transactions\?\.length\)/);
+assert.match(sync, /transactionFeedComplete = !hasNextTransactionPage\s*&&\s*\(!hasReportedTransactionTotal \|\| reportedTransactionTotal === transactions\?\.length\)\s*&&\s*!\["PARTIAL", "UNAVAILABLE", "PROCESSING", "FAILED"\]\.includes\(dataStatus\)/);
 assert.match(sync, /\["PARTIAL", "UNAVAILABLE", "PROCESSING", "FAILED"\]\.includes\(dataStatus\)/);
 assert.match(exchange, /transactionFeedComplete,/);
 assert.match(exchange, /reportedTransactionTotal: hasReportedTransactionTotal \? reportedTransactionTotal : null/);
