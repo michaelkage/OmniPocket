@@ -373,7 +373,9 @@ function openTransactionDetail(id) {
   $("transactionDetailContext").textContent = t.type === "transfer" || t.type === "withdrawal"
     ? (source?.name || "Unknown") + " → " + (dest?.name || "Unknown")
     : source?.name || incoming?.name || "Unknown account";
-  $("transactionDetailStatus").textContent = t.bankStatus === "pending" ? "Pending at provider — not included in available balance" : t.bankStatus === "failed" ? "Failed at provider — no balance movement" : t.bankStatus === "reversed" ? "Reversed by provider" : t.status === "needs_review" ? "Needs review — handle later" : t.status === "superseded" ? "Paired transfer leg — excluded from ledger" : "Posted / recorded";
+  const bankStatus = String(t.bankStatus || "").trim().toLowerCase();
+  const transactionStatus = String(t.status || "").trim().toLowerCase();
+  $("transactionDetailStatus").textContent = bankStatus === "pending" ? "Pending at provider — not included in available balance" : bankStatus === "failed" ? "Failed at provider — no balance movement" : bankStatus === "reversed" ? "Reversed by provider — excluded from financial totals" : transactionStatus === "needs_review" ? "Needs review — handle later" : transactionStatus === "superseded" ? "Paired transfer leg — excluded from ledger" : "Posted / recorded";
   const suggestionWrap = $("transactionSuggestionSection");
   const suggestionBox = $("transactionSuggestion");
   const suggestionButton = $("transactionAcceptSuggestion");
@@ -1423,14 +1425,17 @@ function renderFullViews() {
   const activitySearch = reviewOnly ? "" : search;
   const activityEl = $("activityFullList");
   if (activityEl) activityEl.innerHTML = state.transactions.slice().sort((a,b)=>b.createdAt-a.createdAt).filter(t => {
-    const s = `${transactionLabel(t)} ${t.note} ${t.date} ${t.status} ${t.type} ${account(t.sourceAccountId)?.name || ""} ${account(t.destinationAccountId)?.name || ""}`.toLowerCase();
+    const s = `${transactionLabel(t)} ${t.note} ${t.date} ${t.status} ${t.bankStatus || ""} ${t.type} ${account(t.sourceAccountId)?.name || ""} ${account(t.destinationAccountId)?.name || ""}`.toLowerCase();
     return reviewOnly ? t.status === "needs_review" : t.status !== "superseded" && s.includes(activitySearch);
   }).map(t => {
     const source = account(t.sourceAccountId), dest = account(t.destinationAccountId);
     const direction = transactionDirection(t);
     const sign = direction === "out" ? "−" : direction === "in" ? "+" : "";
     const detail = t.type === "transfer" ? `${source?.name || "Unknown"} → ${dest?.name || "Unknown"}` : source?.name || "Unknown";
-    return `<div class="activity-row interactive-row" data-transaction-id="${escapeHtml(t.id)}" tabindex="0" role="button"><div><strong>${escapeHtml(transactionLabel(t))}</strong><div class="muted">${escapeHtml(t.date)} · ${escapeHtml(detail)}${t.note ? " · "+escapeHtml(t.note) : ""}</div></div><div class="activity-value"><strong data-financial-value>${sign}${escapeHtml(state.settings.privacyHidden ? "••••••" : money(t.amount,t.currency))}</strong><span class="muted">${escapeHtml(t.status === "needs_review" ? "Handle later" : "Recorded")}${t.external?.provider ? " · " + escapeHtml(t.external.provider) : ""}</span></div></div>`;
+     const bankStatus = String(t.bankStatus || "").trim().toLowerCase();
+     const transactionStatus = String(t.status || "").trim().toLowerCase();
+     const lifecycleLabel = bankStatus === "pending" ? "Pending at bank · excluded" : bankStatus === "failed" ? "Failed · excluded" : bankStatus === "reversed" ? "Reversed · excluded" : transactionStatus === "needs_review" ? "Handle later" : transactionStatus === "superseded" ? "Paired leg · excluded" : "Recorded";
+    return `<div class="activity-row interactive-row" data-transaction-id="${escapeHtml(t.id)}" tabindex="0" role="button"><div><strong>${escapeHtml(transactionLabel(t))}</strong><div class="muted">${escapeHtml(t.date)} · ${escapeHtml(detail)}${t.note ? " · "+escapeHtml(t.note) : ""}</div></div><div class="activity-value"><strong data-financial-value>${sign}${escapeHtml(state.settings.privacyHidden ? "••••••" : money(t.amount,t.currency))}</strong><span class="muted">${escapeHtml(lifecycleLabel)}${t.external?.provider ? " · " + escapeHtml(t.external.provider) : ""}</span></div></div>`;
   }).join("") || '<div class="empty-state">No matching activity.</div>';
 
   document.querySelectorAll("[data-reconcile]").forEach(button => {
