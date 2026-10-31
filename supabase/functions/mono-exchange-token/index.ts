@@ -74,6 +74,14 @@ async function syncAccount(supabase: any, userId: string, monoAccountId: string,
   const txPayload = await mono(`/accounts/${encodeURIComponent(monoAccountId)}/transactions?paginate=false`, { headers: { "x-real-time": "true" } });
   const account = unwrapAccount(accountPayload);
   const transactions = unwrapTransactions(txPayload);
+  const transactionMeta = txPayload?.meta || txPayload?.data?.meta || txPayload?.data?.paging || txPayload?.paging || {};
+  const reportedTransactionTotal = Number(transactionMeta.total);
+  const hasReportedTransactionTotal = Number.isFinite(reportedTransactionTotal) && reportedTransactionTotal >= 0;
+  const hasNextTransactionPage = Boolean(transactionMeta.next);
+  const dataStatus = String(accountPayload?.data?.meta?.data_status || accountPayload?.data?.meta?.dataStatus || "").toUpperCase();
+  const transactionFeedComplete = !hasNextTransactionPage
+    && (!hasReportedTransactionTotal || reportedTransactionTotal === transactions?.length)
+    && !["PARTIAL", "UNAVAILABLE", "PROCESSING", "FAILED"].includes(dataStatus);
   if (!Array.isArray(transactions)) {
     const topLevelKeys = txPayload && typeof txPayload === "object" ? Object.keys(txPayload).slice(0, 12) : [];
     console.error("Mono transactions response had an unexpected shape", { topLevelKeys });
@@ -150,7 +158,8 @@ async function syncAccount(supabase: any, userId: string, monoAccountId: string,
   return {
     connection, account, transactionsImported: insertedCount, transactionsFetched: transactions.length,
     transactionsInserted: insertedCount, transactionsUpdated: updatedCount, transactionsSkipped: transactions.length - normalized.length,
-    transactions: normalized, dataStatus: row.data_status, amountUnit
+    transactions: normalized, dataStatus: row.data_status, amountUnit,
+    transactionFeedComplete, reportedTransactionTotal: hasReportedTransactionTotal ? reportedTransactionTotal : null
   };
 }
 
