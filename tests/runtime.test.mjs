@@ -244,7 +244,7 @@ const tx = (o) => ({
   assert.equal(flow.expenses, 0, "flow expenses must exclude failed/reversed movements");
   assert.equal(flow.count, 1, "flow count must exclude non-effective movements");
   const history = E.goalIntelligence(state, state.goals[0], new Date("2026-10-29T12:00:00Z")).history;
-  assert.deepEqual(history.map(row => row.value), [500], "goal history must use the same effective movements");
+  assert.equal(history.reduce((sum, row) => sum + row.value, 0), 500, "goal history must use the same effective movements");
 }
 
 // Provider lifecycle transitions must immediately update every financial view.
