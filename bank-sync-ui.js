@@ -3,16 +3,39 @@
 async function syncConnectedBankAccounts() {
   const connected = state.accounts.filter(a => !a.archived && a.connection?.status === "connected" && a.connection.provider);
   for (const a of connected) {
+    // Do not let an automatic refresh overwrite the lifecycle state of a
+    // manual or already-running refresh for this account.
+    if (a.connection.syncStatus === "syncing") continue;
+    const startedAt = Date.now();
+    a.connection.syncStatus = "syncing";
+    a.connection.lastSyncStartedAt = new Date(startedAt).toISOString();
+    a.connection.lastSyncError = "";
+    saveState();
     try {
       if (a.connection.provider === "mock") {
         await syncMockBankAccount(a.id);
       } else if (a.connection.provider === "mono" && a.connection.providerAccountId) {
         await syncMonoAccount(a.connection.providerAccountId, a.name, a.id);
+      } else {
+        continue;
       }
+      // Mono records its richer result (including warnings) itself. The mock
+      // adapter does not, so only fill lifecycle fields if still in progress.
+      if (a.connection.syncStatus === "syncing") {
+        const completedAt = new Date().toISOString();
+        a.connection.syncStatus = "healthy";
+        a.connection.lastSyncedAt = completedAt;
+        a.connection.lastSyncCompletedAt = completedAt;
+        a.connection.lastSyncDurationMs = Date.now() - startedAt;
+        a.connection.lastSyncError = "";
+      }
+      saveState();
     } catch (error) {
       console.warn("Bank sync failed for " + a.name, error);
       a.connection.syncStatus = "error";
-      a.connection.lastSyncError = error.message || "Sync failed";
+      a.connection.lastSyncError = error?.message || "Sync failed";
+      a.connection.lastSyncCompletedAt = new Date().toISOString();
+      a.connection.lastSyncDurationMs = Date.now() - startedAt;
       saveState();
     }
   }
