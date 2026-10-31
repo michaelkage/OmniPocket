@@ -153,6 +153,7 @@ function migrateState(raw) {
     external: t.external && typeof t.external === "object" ? {
       provider: t.external.provider || null,
       providerTransactionId: t.external.providerTransactionId || null,
+      providerAccountId: t.external.providerAccountId || null,
       importedAt: t.external.importedAt || null,
       lastSeenAt: t.external.lastSeenAt || null,
       manualEdits: Array.isArray(t.external.manualEdits) ? [...new Set(t.external.manualEdits.filter(field => ["type", "amount", "currency", "date"].includes(field)))] : []
@@ -528,7 +529,7 @@ function deleteTransaction(id) {
   const t = state.transactions[index];
   if (!confirm("Delete this transaction? The account balance will be recalculated.")) return;
   if (t.external?.provider && t.external?.providerTransactionId) {
-    const providerAccountId = account(t.sourceAccountId)?.connection?.providerAccountId || null;
+    const providerAccountId = t.external.providerAccountId || account(t.sourceAccountId)?.connection?.providerAccountId || null;
     state.deletedExternalTransactions = Array.isArray(state.deletedExternalTransactions) ? state.deletedExternalTransactions : [];
     const tombstone = { provider: t.external.provider, providerAccountId, providerTransactionId: String(t.external.providerTransactionId), localAccountId: t.sourceAccountId || null, deletedAt: new Date().toISOString() };
     const duplicate = state.deletedExternalTransactions.some(item => item.provider === tombstone.provider && item.providerAccountId === tombstone.providerAccountId && item.providerTransactionId === tombstone.providerTransactionId);
