@@ -17,7 +17,7 @@ async function syncConnectedBankAccounts() {
       } else if (a.connection.provider === "mono" && a.connection.providerAccountId) {
         await syncMonoAccount(a.connection.providerAccountId, a.name, a.id);
       } else {
-        continue;
+        throw new Error("Unsupported or incomplete bank provider connection.");
       }
       // Mono records its richer result (including warnings) itself. The mock
       // adapter does not, so only fill lifecycle fields if still in progress.
