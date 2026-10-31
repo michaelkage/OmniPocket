@@ -127,3 +127,7 @@ assert.match(app, /state\.deletedExternalTransactions\.push\(tombstone\)/);
 assert.match(bankConnection, /deletedExternally=\(state\.deletedExternalTransactions\|\|\[\]\)\.some/);
 assert.match(bankConnection, /if\(deletedExternally\)continue/);
 assert.match(bankConnection, /state\.accounts\.find\(item => item\.connection\?\.provider === "mono" && item\.connection\.providerAccountId === data\.monoAccountId\)/);
+
+assert.match(app, /providerAccountId: t\.external\.providerAccountId \|\| null/);
+assert.match(app, /t\.external\.providerAccountId \|\| account\(t\.sourceAccountId\)/);
+assert.match(bankConnection, /external:\{provider:"mono",providerAccountId:String\(monoAccountId\),providerTransactionId:String\(pid\)/);
