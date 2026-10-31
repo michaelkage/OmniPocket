@@ -17,6 +17,8 @@ assert.match(exchange, /bank_status: \["pending", "posted", "reversed", "failed"
 assert.match(exchange, /function unwrapTransactions\(payload: any\): any\[\] \| null/);
 assert.match(exchange, /if \(!Array\.isArray\(transactions\)\)/);
 assert.match(sync, /provider_balance_minor/);
+assert.match(sync, /normalizedById\.has\(tx\.mono_transaction_id\)\) duplicateTransactionCount\+\+/);
+assert.match(sync, /duplicateTransactionCount, transactions: normalized/);
 assert.match(sync, /bank_sync_events/);
 assert.match(sync, /function unwrapTransactions\(payload: any\): any\[\] \| null/);
 assert.match(sync, /if \(transactions === null\)/);
@@ -32,6 +34,8 @@ assert.equal(Number(fixture.data[1].balance) / 100, 243320, "Fixture balance nor
 const bankConnection = fs.readFileSync("bank-connection.js","utf8");
 assert.match(bankConnection, /const isFirstProviderSync=!local\.connection\?\.lastSyncedAt/);
 assert.match(bankConnection, /transactionFeedComplete=payload\?\.transactionFeedComplete===true/);
+assert.match(bankConnection, /seenProviderIds\.has\(providerId\)\)\{duplicateTransactionCount\+\+;continue;\}/);
+assert.match(bankConnection, /duplicateTransactionCount,balanceMismatch,balanceDifference/);
 assert.match(bankConnection, /if\(\(isFirstProviderSync\|\|openingBalanceReconciliationPending\)&&transactionFeedComplete\)\{local\.openingBalance=currentBalance-importedNet;\}/);
 assert.match(bankConnection, /openingBalanceReconciliationPending:\(isFirstProviderSync\|\|openingBalanceReconciliationPending\)&&!transactionFeedComplete/);
 assert.match(bankConnection, /Opening-balance reconciliation is deferred until a complete feed is available/);
@@ -77,6 +81,8 @@ assert.match(accounts, /h\.status==="warning"\?"Sync completed with warnings"/);
 assert.match(accounts, /h\.ownershipConflictCount/);
 assert.match(accounts, /h\.currencyMismatchCount/);
 assert.match(accounts, /h\.invalidTransactionCount/);
+assert.match(accounts, /h\.duplicateTransactionCount/);
+assert.match(accounts, /duplicate provider record\(s\)/);
 assert.match(accounts, /sync-history-diagnostics/);
 assert.match(accounts, /sync-history-skipped/);
 assert.match(accounts, /window\.OmniPocketBank\?\.freshness/);
