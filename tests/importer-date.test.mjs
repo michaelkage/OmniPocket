@@ -13,7 +13,7 @@ const localDateStart = appSource.indexOf("const localDateString = (date = new Da
 const localDateEnd = appSource.indexOf("\nconst today =", localDateStart);
 assert(localDateStart >= 0 && localDateEnd > localDateStart);
 vm.runInContext(appSource.slice(localDateStart, localDateEnd), context);
-assert.equal(context.localDateString(new Date(2026, 9, 29, 0, 15)), "2026-10-29", "local calendar dates must not be shifted through UTC");
+assert.equal(vm.runInContext("localDateString(new Date(2026, 9, 29, 0, 15))", context), "2026-10-29", "local calendar dates must not be shifted through UTC");
 
 const dateStart = appSource.indexOf("function normalizeStatementDate(value) {");
 const dateEnd = appSource.indexOf("\n}\n\nfunction parseStatementAmount", dateStart) + 2;
