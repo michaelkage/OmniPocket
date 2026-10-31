@@ -91,3 +91,8 @@ assert.doesNotMatch(sync, /Access-Control-Allow-Origin": "\*"/);
 assert.doesNotMatch(exchange, /Access-Control-Allow-Origin": "\*"/);
 
 console.log("OmniPocket bank pipeline contract tests passed");
+
+assert.match(bankConnection, /async function syncMonoAccountUnlocked\(/);
+assert.match(bankConnection, /window\.__omnipocketMonoSyncLocks[\s\S]*keys\.some\(key => locks\.has\(key\)\)/);
+assert.match(bankConnection, /A sync for this bank account is already in progress/);
+assert.match(bankConnection, /try \{\s*return await syncMonoAccountUnlocked[\s\S]*finally \{\s*keys\.forEach\(key => locks\.delete\(key\)\)/);
