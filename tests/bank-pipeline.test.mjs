@@ -121,3 +121,9 @@ assert.match(syncAllBody, /a\.connection\.lastSyncStartedAt = new Date\(startedA
 assert.match(syncAllBody, /a\.connection\.lastSyncCompletedAt = completedAt/);
 assert.match(syncAllBody, /a\.connection\.lastSyncDurationMs = Date\.now\(\) - startedAt/);
 assert.match(syncAllBody, /catch \(error\)[\s\S]*a\.connection\.syncStatus = "error"/);
+
+assert.match(app, /deletedExternalTransactions = Array\.isArray\(raw\.deletedExternalTransactions\)/);
+assert.match(app, /state\.deletedExternalTransactions\.push\(tombstone\)/);
+assert.match(bankConnection, /deletedExternally=\(state\.deletedExternalTransactions\|\|\[\]\)\.some/);
+assert.match(bankConnection, /if\(deletedExternally\)continue/);
+assert.match(bankConnection, /state\.accounts\.find\(item => item\.connection\?\.provider === "mono" && item\.connection\.providerAccountId === data\.monoAccountId\)/);
