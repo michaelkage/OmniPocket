@@ -69,9 +69,11 @@
   // Keep every financial summary aligned with the balance engine: unposted,
   // failed, reversed, and superseded bank movements must not affect totals.
   function isFinanciallyEffective(tx) {
-    return tx?.status !== "needs_review" &&
-      tx?.status !== "superseded" &&
-      !["pending", "failed", "reversed"].includes(tx?.bankStatus);
+    const status = String(tx?.status || "").trim().toLowerCase();
+    const bankStatus = String(tx?.bankStatus || "").trim().toLowerCase();
+    return status !== "needs_review" &&
+      status !== "superseded" &&
+      !["pending", "failed", "reversed"].includes(bankStatus);
   }
 
   function adjustmentDelta(tx) {
