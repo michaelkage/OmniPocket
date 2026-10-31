@@ -37,6 +37,7 @@ assert.match(bankConnection, /if\(existing\.sourceAccountId&&existing\.sourceAcc
 assert.match(bankConnection, /Array\.isArray\(transactionPayload\?\.data\)\?transactionPayload\.data:null/);
 assert.match(bankConnection, /if\(!rawTransactions\)throw new Error\("Mono returned an unexpected transaction feed/);
 assert.match(bankConnection, /Mono returned an invalid account balance; the account was not updated/);
+assert.match(bankConnection, /const currency=String\(rawAccount\.currency\|\|"NGN"\)\.toUpperCase\(\);if\(!CURRENCIES\.includes\(currency\)\)throw new Error\("Mono returned an unsupported account currency; the account was not updated\."\)/);
 assert.match(bankConnection, /!\["credit","debit"\]\.includes\(direction\)\|\|rawAmount==null\|\|!Number\.isFinite\(amount\)\|\|amount<0/);
 assert.match(bankConnection, /const txCurrency=String\(tx\.currency\|\|currency\)\.toUpperCase\(\);if\(!CURRENCIES\.includes\(txCurrency\)\)\{invalidTransactionCount\+\+;continue;\}/);
 assert.match(bankConnection, /if\(txCurrency!==currency\)\{currencyMismatchCount\+\+;continue;\}/);
