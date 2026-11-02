@@ -69,6 +69,13 @@ function normalizeTransaction(tx: any, amountUnit: string) {
 }
 
 async function syncAccount(supabase: any, userId: string, monoAccountId: string, connectionId?: string) {
+  if (connectionId) {
+    const { data: linked, error } = await supabase.from("bank_connections")
+      .select("id, status, mono_account_id").eq("id", connectionId).eq("user_id", userId).maybeSingle();
+    if (error) throw error;
+    if (!linked || linked.status !== "active") throw new Error("This bank connection is disconnected. Reconnect it before syncing.");
+    if (String(linked.mono_account_id) !== String(monoAccountId)) throw new Error("The requested Mono account does not match this connection.");
+  }
   const amountUnit = Deno.env.get("MONO_AMOUNT_UNIT") || "minor";
   const startedAt = new Date().toISOString();
   const accountPayload = await mono(`/accounts/${encodeURIComponent(monoAccountId)}`, { headers: { "x-real-time": "true" } });
@@ -119,6 +126,13 @@ async function syncAccount(supabase: any, userId: string, monoAccountId: string,
       if (error) throw error;
       connection = data;
     }
+  }
+
+  if (connectionId) {
+    const { data: stillLinked, error } = await supabase.from("bank_connections")
+      .select("status").eq("id", connection.id).eq("user_id", userId).maybeSingle();
+    if (error) throw error;
+    if (!stillLinked || stillLinked.status !== "active") throw new Error("Bank connection was disconnected during sync; imported data was not updated.");
   }
 
   if (connectionId) {
