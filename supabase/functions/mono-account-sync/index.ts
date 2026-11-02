@@ -105,8 +105,8 @@ async function syncAccount(supabase: any, userId: string, monoAccountId: string,
     account_number_last4: account?.account_number ? String(account.account_number).slice(-4) : null,
     currency: String(account?.currency || "NGN").toUpperCase(), account_type: account?.type || null,
     balance_minor: providerBalanceMinor, data_status: accountPayload?.data?.meta?.data_status || accountPayload?.data?.meta?.dataStatus || null,
-    sync_status: "healthy", provider_balance_minor: providerBalanceMinor, provider_balance_at: now,
-    last_synced_at: now, last_sync_error: null,
+    sync_status: transactionFeedComplete ? "healthy" : "warning", provider_balance_minor: providerBalanceMinor, provider_balance_at: now,
+    last_synced_at: now, last_sync_error: transactionFeedComplete ? null : "Mono transaction history is incomplete; balance reconciliation is deferred.",
   };
 
   let connection: any;
@@ -183,8 +183,8 @@ async function syncAccount(supabase: any, userId: string, monoAccountId: string,
   const completedAt = new Date().toISOString();
   const { error: eventError } = await supabase.from("bank_sync_events").insert({
     user_id: userId, connection_id: connection.id, provider: "mono",
-    event_type: "account_sync", status: "success", started_at: startedAt, completed_at: completedAt,
-    imported_count: insertedCount, metadata: { data_status: row.data_status, amount_unit: amountUnit, fetched_count: transactions.length, inserted_count: insertedCount, updated_count: updatedCount, skipped_count: transactions.length - normalized.length, duplicate_count: duplicateTransactionCount }
+    event_type: "account_sync", status: transactionFeedComplete ? "success" : "warning", started_at: startedAt, completed_at: completedAt,
+    imported_count: insertedCount, metadata: { transaction_feed_complete: transactionFeedComplete, data_status: row.data_status, amount_unit: amountUnit, fetched_count: transactions.length, inserted_count: insertedCount, updated_count: updatedCount, skipped_count: transactions.length - normalized.length, duplicate_count: duplicateTransactionCount }
   });
   if (eventError) console.warn("Could not record bank sync event:", eventError.message);
 
