@@ -121,6 +121,13 @@ async function syncAccount(supabase: any, userId: string, monoAccountId: string,
     }
   }
 
+  if (connectionId) {
+    const { data: stillLinked, error } = await supabase.from("bank_connections")
+      .select("status").eq("id", connection.id).eq("user_id", userId).maybeSingle();
+    if (error) throw error;
+    if (!stillLinked || stillLinked.status !== "active") throw new Error("Bank connection was disconnected during sync; imported data was not updated.");
+  }
+
   const normalizedById = new Map<string, any>();
   let duplicateTransactionCount = 0;
   for (const tx of transactions.map((item: any) => normalizeTransaction(item, amountUnit))) {
