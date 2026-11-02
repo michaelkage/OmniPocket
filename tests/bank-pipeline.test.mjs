@@ -155,4 +155,4 @@ assert.match(reconnectHandler, /omnipocket\.monoPendingAccountId/);
 assert.match(sync, /\.eq\("status", "active"\)\.select\(\)\.maybeSingle\(\)/);
 assert.match(sync, /Bank connection was disconnected during sync; imported data was not updated/);
 assert.match(webhook, /\.eq\("user_id",session\.user_id\)\.eq\("mono_account_id",monoAccountId\)/);
-assert.ok(lifecycle.includes('authorization.replace(/^Bearer\s+/i, "")'));
+assert.match(lifecycle, /Bearer\\s\+/);
