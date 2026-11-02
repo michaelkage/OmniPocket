@@ -19,6 +19,12 @@ assert.match(exchange, /const normalized = \[\.\.\.normalizedById\.values\(\)\]/
 assert.match(exchange, /duplicateTransactionCount, transactions: normalized/);
 assert.match(exchange, /duplicate_count: duplicateTransactionCount/);
 assert.match(sync, /bank_status: \["pending", "posted", "reversed", "failed"\]/);
+assert.match(sync, /const \{ bank_status, \.\.\.databaseTransaction \} = tx/);
+assert.match(sync, /\.\.\.databaseTransaction, provider_status: bank_status/);
+assert.match(exchange, /const \{ bank_status, \.\.\.databaseTransaction \} = tx/);
+assert.match(exchange, /\.\.\.databaseTransaction, provider_status: bank_status/);
+assert.doesNotMatch(sync, /\.\.\.tx, provenance: "bank_sync"/);
+assert.doesNotMatch(exchange, /\.\.\.tx, provenance: "bank_sync"/);
 assert.match(exchange, /bank_status: \["pending", "posted", "reversed", "failed"\]/);
 assert.match(exchange, /function unwrapTransactions\(payload: any\): any\[\] \| null/);
 assert.match(exchange, /if \(!Array\.isArray\(transactions\)\)/);
