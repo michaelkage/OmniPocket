@@ -165,8 +165,11 @@ async function syncAccount(supabase: any, userId: string, monoAccountId: string,
     if (!stillLinked || stillLinked.status !== "active") throw new Error("Bank connection was disconnected during sync; imported data was not updated.");
   }
   for (const tx of normalized) {
+    // The provider schema calls this field provider_status; keep bank_status
+    // in the response contract consumed by the local PWA ledger.
+    const { bank_status, ...databaseTransaction } = tx;
     const { error } = await supabase.from("bank_transactions").upsert(
-      { user_id: userId, connection_id: connection.id, ...tx, provenance: "bank_sync" },
+      { user_id: userId, connection_id: connection.id, ...databaseTransaction, provider_status: bank_status, provenance: "bank_sync" },
       { onConflict: "connection_id,mono_transaction_id" }
     );
     if (error) throw error;
