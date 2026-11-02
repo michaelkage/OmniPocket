@@ -140,7 +140,7 @@ assert.ok(lifecycle.includes('.eq("user_id", user.id)'));
 assert.ok(lifecycle.includes('status: "disconnected", sync_status: "paused"'));
 assert.ok(sync.includes("linked.status !== \"active\""));
 assert.ok(sync.includes("stillLinked.status !== \"active\""));
-assert.ok(bankConnection.includes('preferred?.connection?.status!=="connected"'));
+assert.ok(bankConnection.includes('preferred&&!["connected","reconnecting"].includes(preferred.connection?.status)'));
 assert.ok(app.includes("server connection reference is missing"));
 
 const reconnectHandler = app.slice(app.indexOf("async function handleMonoLinkReturn"), app.indexOf("async function refreshFxRates"));
