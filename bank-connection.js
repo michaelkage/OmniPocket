@@ -138,5 +138,7 @@ async function connectBankAccount() {
   localStorage.setItem("omnipocket.monoPendingAccountId", window.__omnipocketReconnectAccountId || "");
   const opened = window.open(linkUrl, "_blank", "noopener");
   if (!opened) throw new Error("Your browser blocked the Mono link. Allow pop-ups for OmniPocket and try again.");
+  try { opened.opener = null; } catch {}
   localStorage.setItem("omnipocket.monoEmail", email);
+  return true;
 }
