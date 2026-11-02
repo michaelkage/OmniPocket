@@ -13,7 +13,11 @@ const fixture = JSON.parse(fs.readFileSync("tests/fixtures/mono-transactions.jso
 assert.match(sync, /const amountUnit = Deno\.env\.get\("MONO_AMOUNT_UNIT"\) \|\| "minor"/);
 assert.match(sync, /transactions\s*\.map\(\(item: any\) => normalizeTransaction\(item, amountUnit\)\)/);
 assert.match(exchange, /const amountUnit = Deno\.env\.get\("MONO_AMOUNT_UNIT"\) \|\| "minor"/);
-assert.match(exchange, /transactions\s*\.map\(\(tx: any\) => normalizeTransaction\(tx, amountUnit\)\)/);
+assert.match(exchange, /transactions\.map\(\(item: any\) => normalizeTransaction\(item, amountUnit\)\)/);
+assert.match(exchange, /normalizedById\.has\(tx\.mono_transaction_id\)\) duplicateTransactionCount\+\+/);
+assert.match(exchange, /const normalized = \[\.\.\.normalizedById\.values\(\)\]/);
+assert.match(exchange, /duplicateTransactionCount, transactions: normalized/);
+assert.match(exchange, /duplicate_count: duplicateTransactionCount/);
 assert.match(sync, /bank_status: \["pending", "posted", "reversed", "failed"\]/);
 assert.match(exchange, /bank_status: \["pending", "posted", "reversed", "failed"\]/);
 assert.match(exchange, /function unwrapTransactions\(payload: any\): any\[\] \| null/);
