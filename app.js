@@ -970,6 +970,7 @@ async function handleMonoLinkReturn(){
   if(!reference)return false;
 
   const accountName=localStorage.getItem("omnipocket.monoPendingAccountName")||"Connected bank";
+  const pendingAccountId=localStorage.getItem("omnipocket.monoPendingAccountId")||null;
   const maxAttempts=15;
   let lastSession=null;
 
@@ -979,11 +980,18 @@ async function handleMonoLinkReturn(){
       lastSession=result?.session||null;
 
       if(result?.connection?.mono_account_id){
-        const monoAccountId=String(result.connection.mono_account_id);
-        const clientAccountId=result.connection.client_account_id||null;
+        const connection=result.connection;
+        const monoAccountId=String(connection.mono_account_id);
+        const clientAccountId=connection.client_account_id||pendingAccountId||null;
+        const local=clientAccountId?account(clientAccountId):null;
+        if(local){
+          local.connection={...(local.connection||{}),provider:"mono",providerAccountId:monoAccountId,serverConnectionId:connection.id,status:"connected",syncStatus:"syncing",lastSyncError:""};
+          saveState();
+        }
         await syncMonoAccount(monoAccountId,accountName,clientAccountId);
         localStorage.removeItem("omnipocket.monoPendingRef");
         localStorage.removeItem("omnipocket.monoPendingAccountName");
+        localStorage.removeItem("omnipocket.monoPendingAccountId");
         const cleanUrl=location.origin+location.pathname;
         window.history.replaceState({},document.title,cleanUrl);
         alert("Bank connected. Balance and transactions have been imported.");
@@ -1000,9 +1008,17 @@ async function handleMonoLinkReturn(){
     throw new Error("The bank link is still being processed. OmniPocket will finish the connection when Mono sends the account confirmation.");
   }catch(error){
     console.error("Mono Connect Link return handling failed",error);
+    const local=pendingAccountId?account(pendingAccountId):null;
+    if(local?.connection?.provider==="mono"){
+      local.connection.status="disconnected";
+      local.connection.syncStatus="error";
+      local.connection.lastSyncError=error.message||"Bank reconnection failed";
+      saveState();
+    }
     if(lastSession?.status==="failed"||lastSession?.status==="expired"){
       localStorage.removeItem("omnipocket.monoPendingRef");
       localStorage.removeItem("omnipocket.monoPendingAccountName");
+      localStorage.removeItem("omnipocket.monoPendingAccountId");
     }
     alert(error.message||"Bank connection is still processing.");
     return false;
