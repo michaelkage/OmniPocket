@@ -86,6 +86,8 @@ assert.match(bankConnection, /state\.transactions\.some\(tx => tx\.id === id\)/)
 assert.match(bankConnection, /state\.accounts\.find\(a => a\.id === preferredAccountId && a\.connection\?\.provider === "mock"\)/);
 assert.match(bankConnection, /existing\.bankStatus=bankStatus/);
 assert.match(bankConnection, /if\(existing\.sourceAccountId&&existing\.sourceAccountId!==local\.id\)\{ownershipConflictCount\+\+;continue;\}/);
+assert.match(bankConnection, /t\.external\.providerTransactionId===String\(pid\)&&\(t\.external\.providerAccountId===String\(monoAccountId\)\|\|\(!t\.external\.providerAccountId&&t\.sourceAccountId===local\.id\)\)/);
+
 assert.match(bankConnection, /syncStatus:syncWarning\?"warning":"healthy"/);
 assert.match(bankConnection, /status:syncWarning\?"warning":"success"/);
 assert.match(bankConnection, /if\(!manualEdits\.has\("type"\)\)existing\.type=credit\?"income":"expense";if\(!manualEdits\.has\("amount"\)\)existing\.amount=amount/);
