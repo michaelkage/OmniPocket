@@ -93,7 +93,7 @@ assert.match(bankConnection, /status:syncWarning\?"warning":"success"/);
 assert.match(bankConnection, /if\(!manualEdits\.has\("type"\)\)existing\.type=credit\?"income":"expense";if\(!manualEdits\.has\("amount"\)\)existing\.amount=amount/);
 assert.match(bankConnection, /if\(!manualEdits\.has\("date"\)\)existing\.date=txDate/);
 assert.match(bankConnection, /rebuildBalances\(\);local\.connection=\{/);
-assert.match(bankConnection, /balanceMismatch=!Number\.isFinite\(balanceDifference\)\|\|Math\.abs\(balanceDifference\)>=0\.005/);
+assert.match(bankConnection, /const balanceDifference=transactionFeedComplete\?currentBalance-Number\(local\.balance\):null,balanceMismatch=transactionFeedComplete&&\(!Number\.isFinite\(balanceDifference\)\|\|Math\.abs\(balanceDifference\)>=0\.005\)/);
 assert.match(bankConnection, /syncStatus:syncWarning\?"warning":"healthy"/);
 assert.match(bankConnection, /status:syncWarning\?"warning":"success"/);
 assert.match(app, /const bankStatus = String\(t\.bankStatus \|\| ""\)\.trim\(\)\.toLowerCase\(\)/);
