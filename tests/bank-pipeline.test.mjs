@@ -170,3 +170,10 @@ assert.match(webhook, /\.eq\("user_id",session\.user_id\)\.eq\("mono_account_id"
 assert.match(lifecycle, /Bearer\\s\+/);
 
 assert.match(bankConnection, /const balanceDifference=transactionFeedComplete\?currentBalance-Number\(local\.balance\):null,balanceMismatch=transactionFeedComplete&&\(!Number\.isFinite\(balanceDifference\)\|\|Math\.abs\(balanceDifference\)>=0\.005\)/);
+
+assert.match(sync, /sync_status: transactionFeedComplete \? "healthy" : "warning"/);
+assert.match(sync, /status: transactionFeedComplete \? "success" : "warning"/);
+assert.match(sync, /transaction_feed_complete: transactionFeedComplete/);
+assert.match(exchange, /sync_status: transactionFeedComplete \? "healthy" : "warning"/);
+assert.match(exchange, /status: transactionFeedComplete \? "success" : "warning"/);
+assert.match(exchange, /transaction_feed_complete: transactionFeedComplete/);
