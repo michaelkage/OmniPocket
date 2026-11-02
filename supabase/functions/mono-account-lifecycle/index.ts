@@ -18,7 +18,7 @@ async function requireUser(req: Request) {
   const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
     global: { headers: { Authorization: authorization } },
   });
-  const token = authorization.replace(/^Bearer\\s+/i, "");
+  const token = authorization.replace(/^Bearer\s+/i, "");
   const { data: { user }, error } = await supabase.auth.getUser(token);
   if (error || !user) throw new Error("Invalid Supabase session");
   return { supabase, user };

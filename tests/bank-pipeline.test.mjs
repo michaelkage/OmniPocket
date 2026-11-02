@@ -7,6 +7,7 @@ const app = fs.readFileSync("app.js","utf8");
 const accounts = fs.readFileSync("accounts-ui.js","utf8");
 const bankSyncUi = fs.readFileSync("bank-sync-ui.js","utf8");
 const config = fs.readFileSync("supabase/config.toml","utf8");
+const webhook = fs.readFileSync("supabase/functions/mono-webhook/index.ts","utf8");
 const fixture = JSON.parse(fs.readFileSync("tests/fixtures/mono-transactions.json","utf8"));
 
 assert.match(sync, /const amountUnit = Deno\.env\.get\("MONO_AMOUNT_UNIT"\) \|\| "minor"/);
@@ -140,5 +141,18 @@ assert.ok(lifecycle.includes('.eq("user_id", user.id)'));
 assert.ok(lifecycle.includes('status: "disconnected", sync_status: "paused"'));
 assert.ok(sync.includes("linked.status !== \"active\""));
 assert.ok(sync.includes("stillLinked.status !== \"active\""));
-assert.ok(bankConnection.includes('preferred?.connection?.status!=="connected"'));
+assert.ok(bankConnection.includes('preferred&&!["connected","reconnecting"].includes(preferred.connection?.status)'));
 assert.ok(app.includes("server connection reference is missing"));
+
+const reconnectHandler = app.slice(app.indexOf("async function handleMonoLinkReturn"), app.indexOf("async function refreshFxRates"));
+assert.match(bankConnection, /result\?\.monoUrl \|\| result\?\.mono_url/);
+assert.match(bankConnection, /omnipocket\.monoPendingRef/);
+assert.match(bankConnection, /omnipocket\.monoPendingAccountId/);
+assert.match(bankConnection, /\["connected","reconnecting"\]\.includes\(preferred\.connection\?\.status\)/);
+assert.match(reconnectHandler, /serverConnectionId:connection\.id/);
+assert.match(reconnectHandler, /await syncMonoAccount\(monoAccountId,accountName,clientAccountId\)/);
+assert.match(reconnectHandler, /omnipocket\.monoPendingAccountId/);
+assert.match(sync, /\.eq\("status", "active"\)\.select\(\)\.maybeSingle\(\)/);
+assert.match(sync, /Bank connection was disconnected during sync; imported data was not updated/);
+assert.match(webhook, /\.eq\("user_id",session\.user_id\)\.eq\("mono_account_id",monoAccountId\)/);
+assert.match(lifecycle, /Bearer\\s\+/);

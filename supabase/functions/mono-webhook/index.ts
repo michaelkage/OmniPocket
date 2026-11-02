@@ -62,7 +62,7 @@ Deno.serve(async (req) => {
       linkedSessionId=session.id;
 
       const existing=await supabase.from("bank_connections").select("id")
-        .eq("mono_account_id",monoAccountId).maybeSingle();
+        .eq("user_id",session.user_id).eq("mono_account_id",monoAccountId).maybeSingle();
 
       if (existing.error) {
         console.error("Existing connection lookup failed",existing.error);
