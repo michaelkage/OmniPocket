@@ -168,3 +168,5 @@ assert.match(sync, /\.eq\("status", "active"\)\.select\(\)\.maybeSingle\(\)/);
 assert.match(sync, /Bank connection was disconnected during sync; imported data was not updated/);
 assert.match(webhook, /\.eq\("user_id",session\.user_id\)\.eq\("mono_account_id",monoAccountId\)/);
 assert.match(lifecycle, /Bearer\\s\+/);
+
+assert.match(bankConnection, /const balanceDifference=transactionFeedComplete\?currentBalance-Number\(local\.balance\):null,balanceMismatch=transactionFeedComplete&&\(!Number\.isFinite\(balanceDifference\)\|\|Math\.abs\(balanceDifference\)>=0\.005\)/);
