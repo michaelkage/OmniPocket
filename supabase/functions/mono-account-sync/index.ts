@@ -111,8 +111,12 @@ async function syncAccount(supabase: any, userId: string, monoAccountId: string,
 
   let connection: any;
   if (connectionId) {
-    const { data, error } = await supabase.from("bank_connections").update(row).eq("id", connectionId).eq("user_id", userId).select().single();
+    const activeConnectionUpdate = { ...row };
+    delete (activeConnectionUpdate as any).status;
+    const { data, error } = await supabase.from("bank_connections").update(activeConnectionUpdate)
+      .eq("id", connectionId).eq("user_id", userId).eq("status", "active").select().maybeSingle();
     if (error) throw error;
+    if (!data) throw new Error("This bank connection was disconnected before sync could update it. Reconnect it before syncing.");
     connection = data;
   } else {
     const { data: existing, error: existingError } = await supabase.from("bank_connections").select("id").eq("user_id", userId).eq("mono_account_id", monoAccountId).maybeSingle();
@@ -126,13 +130,6 @@ async function syncAccount(supabase: any, userId: string, monoAccountId: string,
       if (error) throw error;
       connection = data;
     }
-  }
-
-  if (connectionId) {
-    const { data: stillLinked, error } = await supabase.from("bank_connections")
-      .select("status").eq("id", connection.id).eq("user_id", userId).maybeSingle();
-    if (error) throw error;
-    if (!stillLinked || stillLinked.status !== "active") throw new Error("Bank connection was disconnected during sync; imported data was not updated.");
   }
 
   if (connectionId) {
@@ -161,6 +158,12 @@ async function syncAccount(supabase: any, userId: string, monoAccountId: string,
   const existingIds = new Set((existingRows || []).map((row: any) => row.mono_transaction_id));
   let insertedCount = 0;
   let updatedCount = 0;
+  if (connectionId) {
+    const { data: stillLinked, error } = await supabase.from("bank_connections")
+      .select("status").eq("id", connection.id).eq("user_id", userId).maybeSingle();
+    if (error) throw error;
+    if (!stillLinked || stillLinked.status !== "active") throw new Error("Bank connection was disconnected during sync; imported data was not updated.");
+  }
   for (const tx of normalized) {
     const { error } = await supabase.from("bank_transactions").upsert(
       { user_id: userId, connection_id: connection.id, ...tx, provenance: "bank_sync" },
