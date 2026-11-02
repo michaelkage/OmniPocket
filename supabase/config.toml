@@ -12,3 +12,4 @@ verify_jwt = true
 
 [functions.fx-rates]
 verify_jwt = false
+\n[functions.mono-account-lifecycle]\nverify_jwt = true\n
