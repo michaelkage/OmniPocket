@@ -93,7 +93,7 @@ assert.match(bankConnection, /status:syncWarning\?"warning":"success"/);
 assert.match(bankConnection, /if\(!manualEdits\.has\("type"\)\)existing\.type=credit\?"income":"expense";if\(!manualEdits\.has\("amount"\)\)existing\.amount=amount/);
 assert.match(bankConnection, /if\(!manualEdits\.has\("date"\)\)existing\.date=txDate/);
 assert.match(bankConnection, /rebuildBalances\(\);local\.connection=\{/);
-assert.match(bankConnection, /balanceMismatch=!Number\.isFinite\(balanceDifference\)\|\|Math\.abs\(balanceDifference\)>=0\.005/);
+assert.match(bankConnection, /const balanceDifference=transactionFeedComplete\?currentBalance-Number\(local\.balance\):null,balanceMismatch=transactionFeedComplete&&\(!Number\.isFinite\(balanceDifference\)\|\|Math\.abs\(balanceDifference\)>=0\.005\)/);
 assert.match(bankConnection, /syncStatus:syncWarning\?"warning":"healthy"/);
 assert.match(bankConnection, /status:syncWarning\?"warning":"success"/);
 assert.match(app, /const bankStatus = String\(t\.bankStatus \|\| ""\)\.trim\(\)\.toLowerCase\(\)/);
@@ -168,3 +168,5 @@ assert.match(sync, /\.eq\("status", "active"\)\.select\(\)\.maybeSingle\(\)/);
 assert.match(sync, /Bank connection was disconnected during sync; imported data was not updated/);
 assert.match(webhook, /\.eq\("user_id",session\.user_id\)\.eq\("mono_account_id",monoAccountId\)/);
 assert.match(lifecycle, /Bearer\\s\+/);
+
+assert.match(bankConnection, /const balanceDifference=transactionFeedComplete\?currentBalance-Number\(local\.balance\):null,balanceMismatch=transactionFeedComplete&&\(!Number\.isFinite\(balanceDifference\)\|\|Math\.abs\(balanceDifference\)>=0\.005\)/);
