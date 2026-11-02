@@ -131,3 +131,13 @@ assert.match(bankConnection, /state\.accounts\.find\(item => item\.connection\?\
 assert.match(app, /providerAccountId: t\.external\.providerAccountId \|\| null/);
 assert.match(app, /t\.external\.providerAccountId \|\| account\(t\.sourceAccountId\)/);
 assert.match(bankConnection, /external:\{provider:"mono",providerAccountId:String\(monoAccountId\),providerTransactionId:String\(pid\)/);
+
+assert.match(config, /\\[functions\\.mono-account-lifecycle\\]\\s*verify_jwt = true/);
+const lifecycle = fs.readFileSync("supabase/functions/mono-account-lifecycle/index.ts","utf8");
+assert.match(lifecycle, /body\\?\\.action !== "unlink"/);
+assert.match(lifecycle, /\\.eq\\("id", body\\.connectionId\\)\\s*\\.eq\\("user_id", user\\.id\\)/);
+assert.match(lifecycle, /status: "disconnected", sync_status: "paused"/);
+assert.match(sync, /linked\\.status !== "active"/);
+assert.match(sync, /stillLinked\\.status !== "active"/);
+assert.match(bankConnection, /preferred\\?\\.connection\\?\\.status!=="connected"/);
+assert.match(app, /server connection reference is missing/);
