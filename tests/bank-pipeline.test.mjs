@@ -142,3 +142,16 @@ assert.ok(sync.includes("linked.status !== \"active\""));
 assert.ok(sync.includes("stillLinked.status !== \"active\""));
 assert.ok(bankConnection.includes('preferred?.connection?.status!=="connected"'));
 assert.ok(app.includes("server connection reference is missing"));
+
+const reconnectHandler = app.slice(app.indexOf("async function handleMonoLinkReturn"), app.indexOf("async function refreshFxRates"));
+assert.match(bankConnection, /result\?\.monoUrl \|\| result\?\.mono_url/);
+assert.match(bankConnection, /omnipocket\.monoPendingRef/);
+assert.match(bankConnection, /omnipocket\.monoPendingAccountId/);
+assert.match(bankConnection, /\["connected","reconnecting"\]\.includes\(preferred\.connection\?\.status\)/);
+assert.match(reconnectHandler, /serverConnectionId:connection\.id/);
+assert.match(reconnectHandler, /await syncMonoAccount\(monoAccountId,accountName,clientAccountId\)/);
+assert.match(reconnectHandler, /omnipocket\.monoPendingAccountId/);
+assert.match(sync, /\.eq\("status", "active"\)\.select\(\)\.maybeSingle\(\)/);
+assert.match(sync, /Bank connection was disconnected during sync; imported data was not updated/);
+assert.match(webhook, /\.eq\("user_id",session\.user_id\)\.eq\("mono_account_id",monoAccountId\)/);
+assert.match(lifecycle, /authorization\.replace\(\/\^Bearer\\\\s\+\/i, ""\)/);
