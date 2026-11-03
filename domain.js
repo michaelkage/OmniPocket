@@ -25,7 +25,7 @@
       if (sourceToBase && baseToTarget) return sourceToBase * baseToTarget;
       const baseToSource = positive(table?.[baseCurrency]?.[from]);
       const targetToBase = positive(table?.[to]?.[baseCurrency]);
-      if (baseToSource && targetToBase) return targetToBase / baseToSource;
+      if (baseToSource && targetToBase) return 1 / (baseToSource * targetToBase);
     }
     return null;
   }
