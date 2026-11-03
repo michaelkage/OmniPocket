@@ -34,7 +34,15 @@ assert.match(sync, /duplicateTransactionCount, invalidTransactionCount: invalidD
 assert.match(sync, /bank_sync_events/);
 assert.match(sync, /function unwrapTransactions\(payload: any\): any\[\] \| null/);
 assert.match(sync, /if \(transactions === null\)/);
-assert.match(sync, /transactionFeedComplete = !hasNextTransactionPage\s*&&\s*\(!hasReportedTransactionTotal \|\| reportedTransactionTotal === transactions\?\.length\)\s*&&\s*!\["PARTIAL", "UNAVAILABLE", "PROCESSING", "FAILED"\]\.includes\(dataStatus\)/);
+assert.match(sync, /function transactionFeedState\(payload: any, transactionCount: number, dataStatus: string\)/);
+assert.match(sync, /const feedState = transactionFeedState\(txPayload, transactions\?\.length \?\? 0, dataStatus\)/);
+assert.match(sync, /transactionFeedComplete = transactions !== null && feedState.complete/);
+assert.match(sync, /const hasNextPage = hasNext \|\| explicitHasNext === true \|\| \(page != null && pages != null && page < pages\)/);
+assert.match(sync, /invalidPageMetadata/);
+assert.match(sync, /reported_transaction_total: reportedTransactionTotal/);
+assert.match(sync, /pagination_incomplete: feedState.hasNextPage/);
+assert.match(sync, /transactionFeedIncompleteReason: feedState.reason/);
+assert.match(sync, /last_sync_error: transactionFeedComplete \? null : \(feedState.reason \|\| "Mono transaction history is incomplete; balance reconciliation is deferred."\)/);
 assert.match(sync, /\["PARTIAL", "UNAVAILABLE", "PROCESSING", "FAILED"\]\.includes\(dataStatus\)/);
 assert.match(exchange, /transactionFeedComplete,/);
 assert.match(exchange, /reportedTransactionTotal: hasReportedTransactionTotal \? reportedTransactionTotal : null/);
