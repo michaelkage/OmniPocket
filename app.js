@@ -161,6 +161,11 @@ function migrateState(raw) {
     external: t.external && typeof t.external === "object" ? {
       provider: t.external.provider || null,
       providerTransactionId: t.external.providerTransactionId || null,
+      providerReference: String(t.external.providerReference || "").slice(0, 180) || null,
+      providerUpdatedAt: t.external.providerUpdatedAt || null,
+      providerTransactionAt: t.external.providerTransactionAt || null,
+      providerReversalReference: String(t.external.providerReversalReference || "").slice(0, 180) || null,
+      providerStatus: ["pending", "posted", "reversed", "failed"].includes(String(t.external.providerStatus || "").toLowerCase()) ? String(t.external.providerStatus).toLowerCase() : null,
       providerAccountId: t.external.providerAccountId || null,
       merchantName: String(t.external.merchantName || "").trim().slice(0, 160) || null,
       importedAt: t.external.importedAt || null,
@@ -468,7 +473,7 @@ function openTransactionDetail(id) {
   const displayAmount = t.receivedAmount != null && t.type !== "expense" && dest ? t.receivedAmount : t.amount;
   const displayCurrency = t.receivedAmount != null && t.type !== "expense" && dest ? (t.receivedCurrency || t.currency) : t.currency;
   $("transactionDetailTitle").textContent = transactionLabel(t);
-  $("transactionDetailMeta").textContent = t.date + " · " + t.type + (t.external?.provider ? " · Imported from " + t.external.provider : "");
+  $("transactionDetailMeta").textContent = t.date + " · " + t.type + (t.external?.provider ? " · Imported from " + t.external.provider : "") + (t.external?.providerReference ? " · Bank ref " + t.external.providerReference : "") + (t.external?.providerTransactionId ? " · Provider ID " + t.external.providerTransactionId : "");
   $("transactionDetailAmount").textContent = state.settings.privacyHidden ? "••••••" : money(displayAmount, displayCurrency);
   $("transactionDetailContext").textContent = t.type === "transfer" || t.type === "withdrawal"
     ? (source?.name || "Unknown") + " → " + (dest?.name || "Unknown")
