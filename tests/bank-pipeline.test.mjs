@@ -167,6 +167,8 @@ assert.match(reconnectHandler, /omnipocket\.monoPendingAccountId/);
 assert.match(sync, /\.eq\("status", "active"\)\.select\(\)\.maybeSingle\(\)/);
 assert.match(sync, /Bank connection was disconnected during sync; imported data was not updated/);
 assert.match(webhook, /\.eq\("user_id",session\.user_id\)\.eq\("mono_account_id",monoAccountId\)/);
+assert.match(webhook, /if \(r\.error\) \{[\s\S]*Webhook bank connection lookup failed[\s\S]*Bank connection lookup failed/);
+assert.doesNotMatch(webhook, /if \(!r\.error\) connectionId=r\.data\?\.id/);
 assert.match(lifecycle, /Bearer\\s\+/);
 
 assert.match(bankConnection, /const balanceDifference=transactionFeedComplete\?currentBalance-Number\(local\.balance\):null,balanceMismatch=transactionFeedComplete&&\(!Number\.isFinite\(balanceDifference\)\|\|Math\.abs\(balanceDifference\)>=0\.005\)/);
