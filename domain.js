@@ -163,7 +163,7 @@
     const asOfDate = dateKey(new Date(asOf));
     const result = { income: 0, expenses: 0, transfers: 0, withdrawals: 0, adjustments: 0, count: 0 };
     for (const tx of state.transactions || []) {
-      if (String(tx.date) < cutoffDate || !isFinanciallyEffective(tx)) continue;
+      if (String(tx.date) < cutoffDate || String(tx.date) > asOfDate || !isFinanciallyEffective(tx)) continue;
       const rawAmount = Math.abs(Number(tx.amount) || 0);
       const amount = convert(state, rawAmount, tx.currency, state.settings.baseCurrency, tx.fxRate);
       result.count++;
