@@ -70,6 +70,7 @@ assert(build.includes("OMNIPOCKET_CONFIG"), "_build.js must define the runtime c
 assert(!/areyxlydzqzlzmgzavpi\.supabase\.co/.test(app), "Supabase URL must not be hardcoded in app.js");
 assert(!/sb_publishable_/.test(app), "Supabase publishable key must not be hardcoded in app.js");
 assert(app.includes('merchantName: String(t.external.merchantName || "").trim().slice(0, 160) || null'), "transaction migration must preserve bounded external merchant names for learned categorisation");
+assert(app.includes('if (!CURRENCIES.includes(next.settings.baseCurrency)) next.settings.baseCurrency = "NGN";'), "migration must replace unsupported persisted base currencies with NGN");
 // The prompt's help text may mention the test_pk_ prefix; a real key may not be inlined.
 assert(!/["']test_pk_\w{8,}["']/.test(app), "Mono public key must not be hardcoded in app.js");
 assert(/window\.OMNIPOCKET_CONFIG/.test(app), "app.js must read the runtime config");
