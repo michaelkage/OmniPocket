@@ -68,7 +68,13 @@ Deno.serve(async (req) => {
       // Mono normally delivers account_connected through the webhook. As a
       // recovery path, also reconcile against Mono's linked-account list so
       // a delayed/misconfigured webhook cannot leave a successful link stuck.
-      if (!session.mono_account_id) {
+      // Recovery may only complete a genuinely pending, unexpired link.
+      // Polling an old linked/expired session must never reactivate an unlinked bank.
+      const recoveryEligible = session.status === "initiated"
+        && Number.isFinite(Date.parse(session.expires_at))
+        && Date.parse(session.expires_at) > Date.now();
+
+      if (!session.mono_account_id && recoveryEligible) {
         try {
           const accountsResult = await mono("/accounts");
           const rawAccounts = accountsResult?.data || accountsResult?.accounts || [];
