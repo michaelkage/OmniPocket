@@ -32,7 +32,7 @@ assert.match(sync, /function providerBalanceMinor\(value: any, unit: string\): n
 assert.match(sync, /if \(!\["minor", "major"\]\.includes\(amountUnit\)\)/);
 assert.match(sync, /const providerBalance = account\?\.balance == null \? null : providerBalanceMinor\(account\.balance, amountUnit\)/);
 assert.match(sync, /account\?\.balance != null && providerBalance == null/);
-assert.match(sync, /provider_balance_at: providerBalance == null \? null : now/);
+assert.match(sync, /\.\.\.\(providerBalance == null \? \{\} : \{ balance_minor: providerBalance, provider_balance_minor: providerBalance, provider_balance_at: now \}\)/);
 assert.match(sync, /balance_minor: providerBalanceMinor\(tx\?\.balance, amountUnit\)/);
 assert.doesNotMatch(sync, /function amountFromProvider/);
 assert.match(sync, /provider_balance_minor/);
