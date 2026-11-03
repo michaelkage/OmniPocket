@@ -473,7 +473,7 @@ function openTransactionDetail(id) {
   const displayAmount = t.receivedAmount != null && t.type !== "expense" && dest ? t.receivedAmount : t.amount;
   const displayCurrency = t.receivedAmount != null && t.type !== "expense" && dest ? (t.receivedCurrency || t.currency) : t.currency;
   $("transactionDetailTitle").textContent = transactionLabel(t);
-  $("transactionDetailMeta").textContent = t.date + " · " + t.type + (t.external?.provider ? " · Imported from " + t.external.provider : "") + (t.external?.providerReference ? " · Bank ref " + t.external.providerReference : "") + (t.external?.providerTransactionId ? " · Provider ID " + t.external.providerTransactionId : "");
+  $("transactionDetailMeta").textContent = t.date + " · " + t.type + (t.external?.provider ? " · Imported from " + t.external.provider : "") + (t.external?.providerReference ? " · Bank ref " + t.external.providerReference : "") + (t.external?.providerTransactionId ? " · Provider ID " + t.external.providerTransactionId : "") + (t.external?.providerReversalReference ? " · Reversal ref " + t.external.providerReversalReference : "");
   $("transactionDetailAmount").textContent = state.settings.privacyHidden ? "••••••" : money(displayAmount, displayCurrency);
   $("transactionDetailContext").textContent = t.type === "transfer" || t.type === "withdrawal"
     ? (source?.name || "Unknown") + " → " + (dest?.name || "Unknown")
