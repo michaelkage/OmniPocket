@@ -138,11 +138,12 @@
     cutoff.setHours(0, 0, 0, 0);
     cutoff.setDate(cutoff.getDate() - days + 1);
     const cutoffDate = dateKey(cutoff);
+    const asOfDate = dateKey(new Date(asOf));
     const totals = {};
     let total = 0;
     let income = 0;
     for (const tx of state.transactions || []) {
-      if (String(tx.date) < cutoffDate || !isFinanciallyEffective(tx)) continue;
+      if (String(tx.date) < cutoffDate || String(tx.date) > asOfDate || !isFinanciallyEffective(tx)) continue;
       if (tx.type === "expense") {
         const value = convert(state, Math.abs(Number(tx.amount) || 0), tx.currency, state.settings.baseCurrency, tx.fxRate);
         const key = tx.category || "Other";
@@ -159,6 +160,7 @@
     const cutoff = new Date(asOf);
     cutoff.setDate(cutoff.getDate() - days + 1);
     const cutoffDate = dateKey(cutoff);
+    const asOfDate = dateKey(new Date(asOf));
     const result = { income: 0, expenses: 0, transfers: 0, withdrawals: 0, adjustments: 0, count: 0 };
     for (const tx of state.transactions || []) {
       if (String(tx.date) < cutoffDate || !isFinanciallyEffective(tx)) continue;
