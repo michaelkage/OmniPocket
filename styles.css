@@ -1894,3 +1894,42 @@ button { touch-action: manipulation; }
   .unusual-spending-row { gap: 8px; }
   .unusual-spending-side strong { font-size: .86rem; }
 }
+
+
+/* Unified financial intelligence feed */
+.financial-signal {
+  padding: 13px 0;
+  border-bottom: 1px solid var(--md-sys-color-outline-variant, #d5d1c8);
+  min-width: 0;
+}
+.financial-signal:last-child { border-bottom: 0; }
+.financial-signal-top {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+.financial-signal-top strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.financial-signal-type {
+  flex: 0 0 auto;
+  font-size: .64rem;
+  font-weight: 800;
+  letter-spacing: .09em;
+  color: var(--md-sys-color-primary);
+}
+.financial-signal-detail {
+  margin-top: 5px;
+  font-size: .88rem;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+.financial-signal p {
+  margin: 5px 0 0;
+  color: var(--md-sys-color-on-surface-variant);
+  font-size: .78rem;
+  line-height: 1.45;
+}
