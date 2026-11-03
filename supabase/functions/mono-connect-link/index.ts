@@ -68,7 +68,13 @@ Deno.serve(async (req) => {
       // Mono normally delivers account_connected through the webhook. As a
       // recovery path, also reconcile against Mono's linked-account list so
       // a delayed/misconfigured webhook cannot leave a successful link stuck.
-      if (!session.mono_account_id) {
+      // Recovery may only complete a genuinely pending, unexpired link.
+      // Polling an old linked/expired session must never reactivate an unlinked bank.
+      const recoveryEligible = session.status === "initiated"
+        && Number.isFinite(Date.parse(session.expires_at))
+        && Date.parse(session.expires_at) > Date.now();
+
+      if (!session.mono_account_id && recoveryEligible) {
         try {
           const accountsResult = await mono("/accounts");
           const rawAccounts = accountsResult?.data || accountsResult?.accounts || [];
@@ -89,6 +95,17 @@ Deno.serve(async (req) => {
           });
 
           if (match) {
+            // Re-check after the provider round-trip so a session that expires
+            // while Mono is responding cannot trigger connection reactivation.
+            const { data: stillPending, error: pendingError } = await supabase
+              .from("mono_link_sessions").select("id")
+              .eq("id", session.id).eq("user_id", user.id)
+              .eq("status", "initiated")
+              .gt("expires_at", new Date().toISOString())
+              .maybeSingle();
+            if (pendingError) throw pendingError;
+            if (!stillPending) return json({ error: "Link session is no longer active" }, 409);
+
             const account = match?.account || match;
             const monoAccountId = String(
               account?.id || account?._id || match?.id || match?._id || "",
