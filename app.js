@@ -959,6 +959,18 @@ function renderIntelligence() {
     }).join("") : '<div class="empty-state">Record expenses to see your spending mix.</div>';
   }
 
+  const forecastEl = $("cashFlowForecastContent");
+  if (forecastEl && window.OmniPocketEngine?.monthEndForecast) {
+    const forecast = OmniPocketEngine.monthEndForecast(state, new Date());
+    const hidden = state.settings.privacyHidden;
+    const display = value => hidden ? "••••" : money(value, forecast.currency);
+    const monthLabel = new Date().toLocaleDateString(undefined, { month: "long" });
+    forecastEl.innerHTML =
+      '<div class="forecast-primary"><span class="muted">Estimated balance · ' + escapeHtml(monthLabel) + ' 30</span><strong>' + escapeHtml(display(forecast.projectedBalance)) + '</strong><small>' + escapeHtml((forecast.projectedNet >= 0 ? "+" : "−") + display(Math.abs(forecast.projectedNet)) + " projected net change") + '</small></div>' +
+      '<div class="forecast-breakdown"><div><span>Current balance</span><strong>' + escapeHtml(display(forecast.currentBalance)) + '</strong></div><div><span>Income left to month-end</span><strong>' + escapeHtml(display(forecast.projectedIncome)) + '</strong></div><div><span>Spending left to month-end</span><strong>' + escapeHtml(display(forecast.projectedExpenses)) + '</strong></div></div>' +
+      '<div class="forecast-confidence"><span>Confidence: ' + escapeHtml(forecast.confidence) + '</span><small>' + escapeHtml(forecast.sampleTransactions + " transactions across " + forecast.activeDays + " active days · " + forecast.daysElapsed + " days observed") + '</small></div>';
+  }
+
   const unusualEl = $("unusualSpendingContent");
   if (unusualEl && window.OmniPocketEngine?.unusualSpending) {
     const alerts = OmniPocketEngine.unusualSpending(state, new Date()).slice(0, 5);
@@ -987,9 +999,9 @@ function renderDashboard() {
   if(!root) return;
   const widgets={
     networth:$("widgetNetWorth"), trend:$("widgetTrend"), goals:$("widgetGoals"), accounts:$("widgetAccounts"),
-    activity:$("widgetActivity"), quick:$("widgetQuick"), fx:$("widgetFx"), relations:$("widgetRelations"), insights:$("widgetInsights"), spending:$("widgetSpending"), upcoming:$("widgetUpcomingPayments"), unusual:$("widgetUnusualSpending")
+    activity:$("widgetActivity"), quick:$("widgetQuick"), fx:$("widgetFx"), relations:$("widgetRelations"), insights:$("widgetInsights"), spending:$("widgetSpending"), upcoming:$("widgetUpcomingPayments"), unusual:$("widgetUnusualSpending"), forecast:$("widgetCashFlowForecast")
   };
-  const defaultOrder=["networth","trend","goals","accounts","activity","quick","fx","relations","insights","spending","upcoming","unusual"];
+  const defaultOrder=["networth","trend","goals","accounts","activity","quick","fx","relations","insights","spending","upcoming","unusual","forecast"];
   const order=[...(state.settings.dashboard.order || [])];
   defaultOrder.forEach(id=>{ if(!order.includes(id)) order.push(id); });
   root.innerHTML="";
