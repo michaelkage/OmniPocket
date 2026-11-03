@@ -765,12 +765,24 @@ function refreshTransferPairSuggestions() {
   return changed;
 }
 
+function normalizeStatementFingerprintText(value) {
+  return String(value || "").normalize("NFKC").toLowerCase()
+    .replace(/[’‘]/g, "'")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
 function importStatementRows(rows) {
   let imported = 0, duplicates = 0, invalid = 0;
   for (const row of rows) {
     if (row.invalid) { invalid++; continue; }
-    const fingerprint = [row.accountId, row.date, row.signedAmount.toFixed(2), row.description.toLowerCase().replace(/\s+/g," ").trim(), row.reference.toLowerCase().trim()].join("|");
-    const existing = state.transactions.find(t => (t.external?.provider === "statement_import" || t.external?.provider === "statement_csv") && t.external.providerTransactionId === fingerprint);
+    const legacyFingerprint = [row.accountId, row.date, row.signedAmount.toFixed(2), row.description.toLowerCase().replace(/\s+/g," ").trim(), row.reference.toLowerCase().trim()].join("|");
+    const fingerprint = [row.accountId, row.date, row.signedAmount.toFixed(2), normalizeStatementFingerprintText(row.description), normalizeStatementFingerprintText(row.reference)].join("|");
+    const existing = state.transactions.find(t =>
+      (t.external?.provider === "statement_import" || t.external?.provider === "statement_csv") &&
+      (t.external.providerTransactionId === fingerprint || t.external.providerTransactionId === legacyFingerprint)
+    );
     if (existing) {
       existing.external.lastSeenAt = new Date().toISOString();
       duplicates++;
