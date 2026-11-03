@@ -74,6 +74,7 @@ function migrateState(raw) {
   if (!raw || typeof raw !== "object") return clone(DEFAULT_STATE);
 
   const next = clone(DEFAULT_STATE);
+  const finiteOrZero = value => Number.isFinite(Number(value)) ? Number(value) : 0;
   next.settings = { ...next.settings, ...(raw.settings || {}) };
   // Keep persisted preferences inside the currencies the ledger can actually format and convert.
   if (!CURRENCIES.includes(next.settings.baseCurrency)) next.settings.baseCurrency = "NGN";
@@ -97,8 +98,8 @@ function migrateState(raw) {
     currency: CURRENCIES.includes(a.currency) ? a.currency : "NGN",
     openingBalance: Number.isFinite(Number(a.openingBalance))
       ? Number(a.openingBalance)
-      : Number(a.balance) || 0,
-    balance: Number(a.balance) || 0,
+      : finiteOrZero(a.balance),
+    balance: finiteOrZero(a.balance),
     archived: Boolean(a.archived),
     createdAt: Number(a.createdAt) || Date.now(),
     connection: a.connection && typeof a.connection === "object" ? {
@@ -128,11 +129,11 @@ function migrateState(raw) {
     createdAt: Number(t.createdAt) || Date.now(),
     sourceAccountId: t.sourceAccountId || t.accountId || null,
     destinationAccountId: t.destinationAccountId || null,
-    amount: Math.abs(Number(t.amount) || 0),
+    amount: Math.abs(finiteOrZero(t.amount)),
     currency: CURRENCIES.includes(t.currency) ? t.currency : "NGN",
-    receivedAmount: t.receivedAmount == null ? null : Math.abs(Number(t.receivedAmount) || 0),
+    receivedAmount: t.receivedAmount == null ? null : Math.abs(finiteOrZero(t.receivedAmount)),
     receivedCurrency: t.receivedCurrency && CURRENCIES.includes(t.receivedCurrency) ? t.receivedCurrency : null,
-    fxRate: t.fxRate == null ? null : Number(t.fxRate),
+    fxRate: t.fxRate == null ? null : (Number.isFinite(Number(t.fxRate)) && Number(t.fxRate) > 0 ? Number(t.fxRate) : null),
     fxSource: t.fxSource || null,
     category: String(t.category || ""),
     description: String(t.description || t.note || ""),
@@ -181,7 +182,7 @@ function migrateState(raw) {
     createdAt: Number(g.createdAt) || Date.now()
   })) : [];
 
-  next.snapshots = Array.isArray(raw.snapshots) ? raw.snapshots.filter(s => s && s.date).map(s => ({ id: String(s.id || `${s.date}:${s.baseCurrency || next.settings.baseCurrency}`), date: String(s.date), capturedAt: Number(s.capturedAt) || Date.now(), baseCurrency: CURRENCIES.includes(s.baseCurrency) ? s.baseCurrency : next.settings.baseCurrency, value: Number(s.value) || 0, balances: Array.isArray(s.balances) ? s.balances.map(b => ({ accountId: b.accountId, balance: Number(b.balance) || 0, currency: CURRENCIES.includes(b.currency) ? b.currency : "NGN" })) : [], rates: s.rates && typeof s.rates === "object" ? s.rates : clone(DEFAULT_RATES) })).slice(-730) : [];
+  next.snapshots = Array.isArray(raw.snapshots) ? raw.snapshots.filter(s => s && s.date).map(s => ({ id: String(s.id || `${s.date}:${s.baseCurrency || next.settings.baseCurrency}`), date: String(s.date), capturedAt: Number(s.capturedAt) || Date.now(), baseCurrency: CURRENCIES.includes(s.baseCurrency) ? s.baseCurrency : next.settings.baseCurrency, value: finiteOrZero(s.value), balances: Array.isArray(s.balances) ? s.balances.map(b => ({ accountId: b.accountId, balance: finiteOrZero(b.balance), currency: CURRENCIES.includes(b.currency) ? b.currency : "NGN" })) : [], rates: s.rates && typeof s.rates === "object" ? s.rates : clone(DEFAULT_RATES) })).slice(-730) : [];
 
   next.schemaVersion = SCHEMA_VERSION;
   return next;
