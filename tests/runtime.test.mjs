@@ -200,6 +200,17 @@ const tx = (o) => ({
   const state = makeState({ accounts: [{ id: "a", currency: "NGN", openingBalance: 0, archived: false }] });
   assert.equal(E.rate(state, "USD", "NGN"), 1500);
   assert.equal(E.convert(state, 1500, "NGN", "USD"), 1);
+  const sparse = makeState({
+    settings: { baseCurrency: "NGN", fx: { rates: {
+      NGN: { NGN: 1, USD: 1 / 1500, EUR: 1 / 1750 },
+      USD: { NGN: 1500, USD: 1 },
+      EUR: { NGN: 1750, EUR: 1 },
+    } } },
+  });
+  assert.equal(E.rate(sparse, "USD", "EUR"), 1750 / 1500, "missing direct pair should resolve through base currency");
+  assert.equal(E.rate(sparse, "EUR", "USD"), 1500 / 1750, "cross rate should work in the reverse direction");
+  const inverseOnly = makeState({ settings: { baseCurrency: "NGN", fx: { rates: { USD: { NGN: 1500 } } } } });
+  assert.equal(E.rate(inverseOnly, "NGN", "USD"), 1 / 1500, "inverse-only pair should be usable");
   assert.equal(E.convert(state, 1500, "NGN", "USD", 1 / 2000), 0.75, "override rate must win");
   assert.equal(E.convert(state, 0, "NGN", "USD"), 0);
 
