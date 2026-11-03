@@ -1581,7 +1581,7 @@ button { touch-action: manipulation; }
 .widget-fx { grid-column: span 6; }
 .widget-relations { grid-column: span 6; }
 .widget-insights { grid-column: span 6; }
-.widget-spending, .widget-upcoming-payments, .widget-unusual-spending, .widget-cash-flow-forecast { grid-column: span 6; }
+.widget-spending, .widget-upcoming-payments, .widget-unusual-spending, .widget-cash-flow-forecast, .widget-financial-runway { grid-column: span 6; }
 .dashboard-widget .widget-head { margin-bottom: 14px; }
 .dashboard-widget .eyebrow { font-size: 10px; letter-spacing: .12em; }
 .galaxy-networth { margin: 14px 0 8px; font-size: clamp(30px, 4.1vw, 52px); line-height: 1.05; }
@@ -1596,7 +1596,7 @@ button { touch-action: manipulation; }
 @media (min-width: 761px) and (max-width: 1050px) {
   .dashboard-galaxy { grid-template-columns: repeat(6, minmax(0, 1fr)); }
   .widget-networth, .widget-goals, .widget-fx, .widget-relations,
-  .widget-insights, .widget-spending, .widget-upcoming-payments, .widget-unusual-spending, .widget-cash-flow-forecast { grid-column: span 3; }
+  .widget-insights, .widget-spending, .widget-upcoming-payments, .widget-unusual-spending, .widget-cash-flow-forecast, .widget-financial-runway { grid-column: span 3; }
   .widget-trend, .widget-accounts, .widget-activity, .widget-quick { grid-column: span 6; }
 }
 @media (max-width: 760px) {
@@ -1607,7 +1607,7 @@ button { touch-action: manipulation; }
   .dashboard-toolbar > button { flex: 0 0 auto; width: auto; }
   .widget-networth, .widget-trend, .widget-goals, .widget-accounts,
   .widget-activity, .widget-quick, .widget-fx, .widget-relations,
-  .widget-insights, .widget-spending, .widget-upcoming-payments, .widget-unusual-spending, .widget-cash-flow-forecast { grid-column: 1 / -1; }
+  .widget-insights, .widget-spending, .widget-upcoming-payments, .widget-unusual-spending, .widget-cash-flow-forecast, .widget-financial-runway { grid-column: 1 / -1; }
 }
 @media (prefers-reduced-motion: reduce) {
   .dashboard-widget { animation: none !important; }
