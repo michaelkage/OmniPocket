@@ -1635,7 +1635,7 @@ function renderFullViews() {
   const rawSearch = ($("activitySearch")?.value || "").trim().toLowerCase();
   const reviewOnly = rawSearch === "__review__";
   const query = reviewOnly ? "" : rawSearch;
-  const tokens = query.split(/\\s+/).filter(Boolean);
+  const tokens = query.split(/\s+/).filter(Boolean);
   const typeFilter = $("activityTypeFilter")?.value || "all";
   const statusFilter = $("activityStatusFilter")?.value || "all";
   const categoryFilter = $("activityCategoryFilter")?.value || "all";
@@ -1645,7 +1645,7 @@ function renderFullViews() {
   if (categorySelect) {
     const selectedCategory = categorySelect.value || "all";
     const categories = [...new Set(state.transactions.map(t => String(t.category || "").trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
-    categorySelect.innerHTML = '<option value="all">All categories</option>' + categories.map(category => '<option value="${escapeHtml(category)}">${escapeHtml(category)}</option>').join("");
+    categorySelect.innerHTML = '<option value="all">All categories</option>' + categories.map(category => `<option value="${escapeHtml(category)}">${escapeHtml(category)}</option>`).join("");
     categorySelect.value = categories.includes(selectedCategory) ? selectedCategory : "all";
   }
   const activityEl = $("activityFullList");
