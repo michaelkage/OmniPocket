@@ -71,6 +71,12 @@ assert(!/areyxlydzqzlzmgzavpi\.supabase\.co/.test(app), "Supabase URL must not b
 assert(!/sb_publishable_/.test(app), "Supabase publishable key must not be hardcoded in app.js");
 assert(app.includes('merchantName: String(t.external.merchantName || "").trim().slice(0, 160) || null'), "transaction migration must preserve bounded external merchant names for learned categorisation");
 assert(app.includes('if (!CURRENCIES.includes(next.settings.baseCurrency)) next.settings.baseCurrency = "NGN";'), "migration must replace unsupported persisted base currencies with NGN");
+assert(app.includes("const finiteOrZero = value => Number.isFinite(Number(value)) ? Number(value) : 0;"), "migration must normalize non-finite financial values");
+assert(app.includes("balance: finiteOrZero(a.balance)"), "account balances must not retain Infinity or NaN from persisted state");
+assert(app.includes("amount: Math.abs(finiteOrZero(t.amount))"), "transaction amounts must be finite after migration");
+assert(app.includes("Math.abs(finiteOrZero(t.receivedAmount))"), "received amounts must be finite after migration");
+assert(app.includes("Number.isFinite(Number(t.fxRate)) && Number(t.fxRate) > 0"), "invalid or non-positive FX rates must be discarded during migration");
+assert(app.includes("value: finiteOrZero(s.value)"), "snapshot values must be finite after migration");
 // The prompt's help text may mention the test_pk_ prefix; a real key may not be inlined.
 assert(!/["']test_pk_\w{8,}["']/.test(app), "Mono public key must not be hardcoded in app.js");
 assert(/window\.OMNIPOCKET_CONFIG/.test(app), "app.js must read the runtime config");
