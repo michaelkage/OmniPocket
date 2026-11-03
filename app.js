@@ -1505,18 +1505,33 @@ function applyTransaction(tx) {
 function renderReviewQueue() {
   const host = $("activityReviewQueue");
   if (!host) return;
-  const review = state.transactions.filter(t => t.status === "needs_review").sort((a,b) => {
-    const ad = new Date(a.date || 0).getTime(), bd = new Date(b.date || 0).getTime();
-    return bd - ad || b.createdAt - a.createdAt;
-  });
-  host.hidden = !review.length;
-  if (!review.length) return;
-  host.innerHTML = '<div class="review-queue-head"><div><span class="eyebrow">ACTION NEEDED</span><strong>' + review.length + ' transaction' + (review.length === 1 ? "" : "s") + ' to review</strong><span class="muted">Check imported or deferred activity before treating it as settled.</span></div><button id="reviewQueueOpen" type="button">Review all</button></div>' +
-    '<div class="review-queue-list">' + review.slice(0,3).map(t => {
+  const needsReview = state.transactions.filter(t => t.status === "needs_review");
+  const lowConfidence = state.transactions.filter(t =>
+    t.external?.provider && t.suggestedCategory &&
+    Number.isFinite(Number(t.categoryConfidence)) && Number(t.categoryConfidence) < 0.8 &&
+    t.status !== "superseded"
+  );
+  const flagged = [...new Map([...needsReview, ...lowConfidence].map(t => [t.id, t])).values()]
+    .sort((a,b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime() || b.createdAt - a.createdAt);
+  host.hidden = !flagged.length;
+  if (!flagged.length) { host.innerHTML = ""; return; }
+  const reviewCount = needsReview.length;
+  const categoryCount = lowConfidence.length;
+  host.innerHTML =
+    '<div class="review-queue-head"><div><span class="eyebrow">LEDGER CHECK</span><strong>' + flagged.length + ' item' + (flagged.length === 1 ? "" : "s") + ' worth checking</strong><span class="muted">' +
+    reviewCount + ' awaiting confirmation · ' + categoryCount + ' low-confidence categorisation' +
+    '</span></div><button id="reviewQueueOpen" type="button">Open review desk</button></div>' +
+    '<div class="review-queue-list">' + flagged.slice(0,4).map(t => {
       const source = account(t.sourceAccountId);
-      return '<button class="review-queue-item" data-review-transaction="' + escapeHtml(t.id) + '"><span><strong>' + escapeHtml(transactionLabel(t)) + '</strong><small>' + escapeHtml(t.date) + ' · ' + escapeHtml(source?.name || "Unknown account") + '</small></span><strong>' + escapeHtml(money(t.amount,t.currency)) + '</strong></button>';
+      const lowCategory = t.external?.provider && t.suggestedCategory && Number(t.categoryConfidence) < 0.8;
+      const reason = t.status === "needs_review" ? "Needs confirmation" : "Check category · " + Math.round((Number(t.categoryConfidence) || 0) * 100) + "% confidence";
+      return '<button class="review-queue-item" data-review-transaction="' + escapeHtml(t.id) + '"><span><strong>' + escapeHtml(transactionLabel(t)) + '</strong><small>' + escapeHtml(t.date) + ' · ' + escapeHtml(source?.name || "Unknown account") + ' · ' + escapeHtml(reason) + '</small></span><strong>' + escapeHtml(state.settings.privacyHidden ? "••••••" : money(t.amount,t.currency)) + '</strong></button>';
     }).join("") + '</div>' +
-    (review.length > 3 ? '<div class="muted review-queue-more">+' + (review.length - 3) + ' more waiting</div>' : "");
+    (flagged.length > 4 ? '<div class="muted review-queue-more">+' + (flagged.length - 4) + ' more in the review desk</div>' : "");
+  host.querySelector("#reviewQueueOpen")?.addEventListener("click", () => {
+    $("activitySearch").value = "__review__";
+    renderFullViews();
+  });
   host.querySelectorAll("[data-review-transaction]").forEach(button => {
     button.addEventListener("click", () => openTransactionDetail(button.dataset.reviewTransaction));
   });
@@ -1543,7 +1558,9 @@ function renderFullViews() {
   const activityEl = $("activityFullList");
   if (activityEl) activityEl.innerHTML = state.transactions.slice().sort((a,b)=>b.createdAt-a.createdAt).filter(t => {
     const s = `${transactionLabel(t)} ${t.note} ${t.date} ${t.status} ${t.bankStatus || ""} ${t.type} ${account(t.sourceAccountId)?.name || ""} ${account(t.destinationAccountId)?.name || ""}`.toLowerCase();
-    return reviewOnly ? t.status === "needs_review" : t.status !== "superseded" && s.includes(activitySearch);
+    return reviewOnly
+      ? t.status === "needs_review" || (t.external?.provider && t.suggestedCategory && Number.isFinite(Number(t.categoryConfidence)) && Number(t.categoryConfidence) < 0.8)
+      : t.status !== "superseded" && s.includes(activitySearch);
   }).map(t => {
     const source = account(t.sourceAccountId), dest = account(t.destinationAccountId);
     const direction = transactionDirection(t);
