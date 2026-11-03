@@ -138,6 +138,8 @@ function migrateState(raw) {
     suggestedCategory: String(t.suggestedCategory || "") || null,
     categoryConfidence: Number.isFinite(Number(t.categoryConfidence)) ? Number(t.categoryConfidence) : null,
     categoryReason: String(t.categoryReason || ""),
+    potentialDuplicateOf: t.potentialDuplicateOf ? String(t.potentialDuplicateOf) : null,
+    potentialDuplicateStatus: t.potentialDuplicateStatus === "needs_review" ? "needs_review" : null,
     suggestedType: ["income","expense","transfer","withdrawal","adjustment"].includes(t.suggestedType) ? t.suggestedType : null,
     suggestedSourceAccountId: t.suggestedSourceAccountId || null,
     suggestedPairTransactionId: t.suggestedPairTransactionId || null,
@@ -393,6 +395,16 @@ function openTransactionDetail(id) {
     categoryCorrectionInput.value = t.category || "";
     categoryCorrectionInput.placeholder = t.suggestedCategory || "Enter the correct category";
     categoryCorrectionButton.disabled = !t.external?.provider;
+  }
+  const duplicateWrap = $("transactionDuplicateSection");
+  const duplicateInfo = $("transactionDuplicateInfo");
+  const duplicateKeepButton = $("transactionDuplicateKeepBoth");
+  if (duplicateWrap && duplicateInfo && duplicateKeepButton) {
+    const possibleMatch = state.transactions.find(item => item.id === t.potentialDuplicateOf);
+    duplicateWrap.hidden = t.potentialDuplicateStatus !== "needs_review" || !possibleMatch;
+    duplicateInfo.textContent = possibleMatch
+      ? "Possible match: " + transactionLabel(possibleMatch) + " · " + possibleMatch.date + " · " + money(possibleMatch.amount, possibleMatch.currency) + ". Compare both entries before deciding."
+      : "A possible matching transaction needs review.";
   }
   const suggestionWrap = $("transactionSuggestionSection");
   const suggestionBox = $("transactionSuggestion");
@@ -773,6 +785,20 @@ function normalizeStatementFingerprintText(value) {
     .replace(/\s+/g, " ");
 }
 
+function findPossibleStatementDuplicate(row) {
+  const description = normalizeStatementFingerprintText(row.description);
+  if (description.length < 8) return null;
+  return state.transactions.find(t => {
+    if (t.status === "superseded" || t.date !== row.date || t.sourceAccountId !== row.accountId) return false;
+    if (t.currency !== row.currency || Math.abs(Number(t.amount) - Math.abs(row.signedAmount)) > 0.009) return false;
+    const existingDescription = normalizeStatementFingerprintText(t.description || t.note);
+    return existingDescription.length >= 8 &&
+      (existingDescription === description ||
+       (Math.min(existingDescription.length, description.length) >= 12 &&
+        (existingDescription.includes(description) || description.includes(existingDescription))));
+  }) || null;
+}
+
 function importStatementRows(rows) {
   let imported = 0, duplicates = 0, invalid = 0;
   for (const row of rows) {
@@ -788,7 +814,8 @@ function importStatementRows(rows) {
       duplicates++;
       continue;
     }
-    importTransaction({
+    const possibleDuplicate = findPossibleStatementDuplicate(row);
+    const importResult = importTransaction({
       type: row.type,
       sourceAccountId: row.accountId,
       amount: Math.abs(row.signedAmount),
@@ -811,6 +838,10 @@ function importStatementRows(rows) {
       date: row.date,
       external: { provider: "statement_import", providerTransactionId: fingerprint }
     });
+    if (possibleDuplicate && importResult.transaction) {
+      importResult.transaction.potentialDuplicateOf = possibleDuplicate.id;
+      importResult.transaction.potentialDuplicateStatus = "needs_review";
+    }
     imported++;
   }
   refreshTransferPairSuggestions();
@@ -1483,6 +1514,8 @@ function addTransaction(input) {
     suggestedCategory: input.suggestedCategory || null,
     categoryConfidence: Number.isFinite(Number(input.categoryConfidence)) ? Number(input.categoryConfidence) : null,
     categoryReason: input.categoryReason || "",
+    potentialDuplicateOf: input.potentialDuplicateOf || null,
+    potentialDuplicateStatus: input.potentialDuplicateStatus === "needs_review" ? "needs_review" : null,
     suggestedType: ["income","expense","transfer","withdrawal","adjustment"].includes(input.suggestedType) ? input.suggestedType : null,
     suggestedSourceAccountId: input.suggestedSourceAccountId || null,
     suggestedPairTransactionId: input.suggestedPairTransactionId || null,
@@ -1534,6 +1567,7 @@ function applyTransaction(tx) {
 
 function reviewDeskTransactions() {
   return state.transactions.filter(t =>
+    t.potentialDuplicateStatus === "needs_review" ||
     t.status === "needs_review" ||
     (t.external?.provider && t.suggestedCategory &&
       Number.isFinite(Number(t.categoryConfidence)) && Number(t.categoryConfidence) < 0.8 &&
@@ -1802,6 +1836,18 @@ $("transactionCategoryCorrectionSave")?.addEventListener("click", () => {
   t.suggestedCategory = null;
   t.categoryConfidence = null;
   t.categoryReason = "";
+  saveState();
+  openTransactionDetail(t.id);
+});
+$("transactionDuplicateOpenMatch")?.addEventListener("click", () => {
+  const t = state.transactions.find(x => x.id === $("transactionDialog").dataset.transactionId);
+  if (t?.potentialDuplicateOf) openTransactionDetail(t.potentialDuplicateOf);
+});
+$("transactionDuplicateKeepBoth")?.addEventListener("click", () => {
+  const t = state.transactions.find(x => x.id === $("transactionDialog").dataset.transactionId);
+  if (!t || t.potentialDuplicateStatus !== "needs_review") return;
+  t.potentialDuplicateOf = null;
+  t.potentialDuplicateStatus = null;
   saveState();
   openTransactionDetail(t.id);
 });
