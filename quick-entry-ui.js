@@ -60,6 +60,8 @@ function handleQuickSubmit(event) {
       $("reconcileMeta").textContent = source.name + " · " + source.currency + " · Current " + money(source.balance, source.currency);
       $("reconcileAmount").value = source.balance;
       $("reconcileNote").value = note;
+      $("reconcileStatementDate").value = today();
+      $("reconcileResult").hidden = true;
       $("reconcileDialog").dataset.accountId = source.id;
       $("reconcileDialog").showModal();
       return;
