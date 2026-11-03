@@ -179,6 +179,60 @@
     return result;
   }
 
+  // Linear month-end cash-flow estimate from effective month-to-date activity.
+  // This is a run-rate projection, not a promise or a scheduled-payment ledger.
+  function monthEndForecast(state, asOf = new Date()) {
+    const today = new Date(asOf);
+    today.setHours(0, 0, 0, 0);
+    const todayKey = dateKey(today);
+    const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+    const monthStartKey = dateKey(monthStart);
+    const daysElapsed = today.getDate();
+    const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+    const daysRemaining = Math.max(0, daysInMonth - daysElapsed);
+    const totals = { income: 0, expenses: 0 };
+    const activeDates = new Set();
+    let sampleTransactions = 0;
+
+    for (const tx of state.transactions || []) {
+      const date = String(tx.date || "");
+      if (date < monthStartKey || date > todayKey || !isFinanciallyEffective(tx)) continue;
+      if (tx.type !== "income" && tx.type !== "expense") continue;
+      const amount = convert(state, Math.abs(Number(tx.amount) || 0), tx.currency, state.settings.baseCurrency, tx.fxRate);
+      if (!amount) continue;
+      totals[tx.type === "income" ? "income" : "expenses"] += amount;
+      activeDates.add(date);
+      sampleTransactions++;
+    }
+
+    const currentBalance = netWorth(state, balancesAt(state, today), state.settings.baseCurrency);
+    const dailyIncome = totals.income / daysElapsed;
+    const dailyExpenses = totals.expenses / daysElapsed;
+    const projectedIncome = dailyIncome * daysRemaining;
+    const projectedExpenses = dailyExpenses * daysRemaining;
+    const projectedNet = projectedIncome - projectedExpenses;
+    const activeDays = activeDates.size;
+    const confidence = sampleTransactions >= 12 && activeDays >= 15 ? "High"
+      : sampleTransactions >= 5 && activeDays >= 7 ? "Moderate" : "Low";
+
+    return {
+      currency: state.settings.baseCurrency,
+      currentBalance,
+      incomeToDate: totals.income,
+      expensesToDate: totals.expenses,
+      projectedIncome,
+      projectedExpenses,
+      projectedNet,
+      projectedBalance: currentBalance + projectedNet,
+      daysElapsed,
+      daysRemaining,
+      activeDays,
+      sampleTransactions,
+      confidence,
+      method: "month-to-date daily run rate"
+    };
+  }
+
   function goalContributionHistory(state, goal) {
     const accountIds = new Set(goal.accountIds || []);
     const rows = [];
@@ -590,7 +644,7 @@
 
   window.OmniPocketEngine = {
     DAY, rate, convert, balancesAt, netWorth, goalProgress,
-    spendingSummary, flowSummary, recurringExpenses, unusualSpending, goalProjection, goalContributionHistory, snapshot,
+    spendingSummary, flowSummary, recurringExpenses, unusualSpending, monthEndForecast, goalProjection, goalContributionHistory, snapshot,
     recordDailySnapshot, historicalNetWorth, fxHistory, recordFxSnapshot, wealthChange,
     relatedAccounts, relatedGoals, relatedTransactions, accountExposure,
     goalNetwork, transactionNetwork, goalIntelligence, goalTrajectory, goalHealth
