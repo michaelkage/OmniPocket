@@ -288,7 +288,7 @@ const tx = (o) => ({
   assert.equal(forecast.expensesToDate, 1000);
   assert.equal(forecast.projectedIncome, 8000 / 3 * 27);
   assert.equal(forecast.projectedExpenses, 1000 / 3 * 27);
-  assert.equal(forecast.projectedBalance, 17000 + (7000 / 3 * 27));
+  assert.ok(Math.abs(forecast.projectedBalance - (17000 + (7000 / 3 * 27))) < 1e-8, "projected balance should combine current balance and remaining net run rate");
   assert.equal(forecast.daysElapsed, 3);
   assert.equal(forecast.daysRemaining, 27);
   assert.equal(forecast.sampleTransactions, 3);
