@@ -200,6 +200,10 @@ async function syncAccount(supabase: any, userId: string, monoAccountId: string,
   const transactionMeta = collectedFeed.finalMeta || transactionPageMeta(txPayload);
   const dataStatus = String(accountPayload?.data?.meta?.data_status || accountPayload?.data?.meta?.dataStatus || transactionMeta?.data_status || transactionMeta?.dataStatus || "").toUpperCase();
   const feedState = transactionFeedState({ meta: transactionMeta }, transactions?.length ?? 0, dataStatus);
+  if (collectedFeed.reportedTotal != null && collectedFeed.reportedTotal !== (transactions?.length ?? 0)) {
+    feedState.complete = false;
+    feedState.reason = [feedState.reason, `Mono reported ${collectedFeed.reportedTotal} transactions but ${transactions?.length ?? 0} were retrieved across pages.`].filter(Boolean).join(" ");
+  }
   if (collectedFeed.reason) {
     feedState.complete = false;
     feedState.reason = [feedState.reason, collectedFeed.reason].filter(Boolean).join(" ");
