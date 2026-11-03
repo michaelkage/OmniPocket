@@ -13,6 +13,12 @@ const fixture = JSON.parse(fs.readFileSync("tests/fixtures/mono-transactions.jso
 assert.match(sync, /const amountUnit = Deno\.env\.get\("MONO_AMOUNT_UNIT"\) \|\| "minor"/);
 assert.match(sync, /transactions\s*\.map\(\(item: any\) => normalizeTransaction\(item, amountUnit\)\)/);
 assert.match(exchange, /const amountUnit = Deno\.env\.get\("MONO_AMOUNT_UNIT"\) \|\| "minor"/);
+assert.match(exchange, /function providerBalanceMinor\(value: any, unit: string\): number \| null/);
+assert.match(exchange, /if \(!\["minor", "major"\]\.includes\(amountUnit\)\)/);
+assert.match(exchange, /account\?\.balance != null && providerBalance == null/);
+assert.match(exchange, /\.\.\.\(providerBalance == null \? \{\} : \{ balance_minor: providerBalance, provider_balance_minor: providerBalance, provider_balance_at: now \}\)/);
+assert.match(exchange, /balance_minor: providerBalanceMinor\(tx\?\.balance, amountUnit\)/);
+assert.doesNotMatch(exchange, /function amountFromProvider/);
 assert.match(exchange, /transactions\.map\(\(item: any\) => normalizeTransaction\(item, amountUnit\)\)/);
 assert.match(exchange, /normalizedById\.has\(tx\.mono_transaction_id\)\) duplicateTransactionCount\+\+/);
 assert.match(exchange, /const normalized = \[\.\.\.normalizedById\.values\(\)\]/);
