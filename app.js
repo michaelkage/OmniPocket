@@ -133,6 +133,7 @@ function migrateState(raw) {
     fxRate: t.fxRate == null ? null : Number(t.fxRate),
     fxSource: t.fxSource || null,
     category: String(t.category || ""),
+    categorySource: t.categorySource === "user" ? "user" : null,
     suggestedCategory: String(t.suggestedCategory || "") || null,
     categoryConfidence: Number.isFinite(Number(t.categoryConfidence)) ? Number(t.categoryConfidence) : null,
     categoryReason: String(t.categoryReason || ""),
@@ -292,6 +293,8 @@ function suggestTransactionCategory(input = {}) {
     { pattern: /\b(RENT|LANDLORD|PROPERTY|ESTATE)\b/i, category: "Housing", confidence: 0.91 },
     { pattern: /\b(BET9JA|SPORTYBET|BETKING|BETWAY)\b/i, category: "Gambling", confidence: 0.99 }
   ];
+  const learned = window.OmniPocketEngine?.learnedCategorySuggestion(state.transactions, input);
+  if (learned) return learned;
   const match = rules.find(rule => rule.pattern.test(text));
   if (!match) return null;
   const matched = text.match(match.pattern)?.[0] || "transaction narration";
@@ -1443,6 +1446,7 @@ function addTransaction(input) {
     fxRate: input.fxRate == null ? null : Number(input.fxRate),
     fxSource: input.fxSource || null,
     category: input.category || "",
+    categorySource: input.categorySource === "user" ? "user" : null,
     suggestedCategory: input.suggestedCategory || null,
     categoryConfidence: Number.isFinite(Number(input.categoryConfidence)) ? Number(input.categoryConfidence) : null,
     categoryReason: input.categoryReason || "",
@@ -1876,6 +1880,7 @@ $("editTransactionForm")?.addEventListener("submit", event => {
   t.fxSource = t.fxRate ? "manual" : (type === "transfer" || type === "withdrawal" ? "snapshot" : null);
   t.date = $("editTxDate").value || t.date;
 t.category = $("editTxCategory").value.trim();
+  t.categorySource = "user";
   t.suggestedCategory = null;
   t.categoryConfidence = null;
   t.categoryReason = "";
