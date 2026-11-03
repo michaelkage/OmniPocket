@@ -2045,3 +2045,19 @@ button { touch-action: manipulation; }
   .category-correction-controls { grid-template-columns: 1fr; }
   .category-correction-controls button { width: 100%; }
 }
+
+
+/* Possible duplicate review */
+.duplicate-review-section .detail-callout {
+  border-left: 3px solid var(--op-warning, #c28a35);
+}
+.duplicate-review-section .dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+@media (max-width: 480px) {
+  .duplicate-review-section .dialog-actions button {
+    flex: 1 1 100%;
+  }
+}
