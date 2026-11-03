@@ -651,14 +651,14 @@ const tx = (o) => ({
   });
   const before = JSON.stringify(state);
   const runway = E.financialRunway(state, new Date("2026-11-03T12:00:00"), 90);
-  assert.equal(runway.availableBalance, 90000, "archived and credit liabilities must not count as spendable cash");
+  assert.equal(runway.availableBalance, 36000, "available funds must reflect current cash after posted expenses and exclude credit liabilities and archived accounts");
   assert.equal(runway.essentialSpend, 45000);
   assert.equal(runway.discretionarySpend, 9000);
   assert.equal(runway.unclassifiedSpend, 0);
   assert.equal(runway.totalSpend, 54000);
   assert.equal(runway.dailySpend, 600);
-  assert.equal(runway.totalRunwayDays, 150);
-  assert.equal(runway.essentialOnlyRunwayDays, 180);
+  assert.equal(runway.totalRunwayDays, 60);
+  assert.equal(runway.essentialOnlyRunwayDays, 72);
   assert.equal(runway.sampleTransactions, 3);
   assert.equal(runway.confidence, "Low");
   assert.equal(JSON.stringify(state), before, "runway analysis must not mutate financial state");
