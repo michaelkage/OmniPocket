@@ -52,11 +52,18 @@ function amountFromProvider(value: any, unit: string) {
   if (!Number.isFinite(n)) return 0;
   return unit === "major" ? n : n / 100;
 }
+function transactionAmountMinor(value: any, unit: string) {
+  if (value == null || (typeof value === "string" && !value.trim())) return null;
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 0) return null;
+  const minor = Math.round((unit === "major" ? n : n / 100) * 100);
+  return Number.isSafeInteger(minor) ? minor : null;
+}
 function normalizeTransaction(tx: any, amountUnit: string) {
   return {
     mono_transaction_id: tx?._id || tx?.id || tx?.transaction_id ? String(tx._id || tx.id || tx.transaction_id) : null,
     type: String(tx?.type || "").toLowerCase(),
-    amount_minor: Math.round(amountFromProvider(tx?.amount, amountUnit) * 100),
+    amount_minor: transactionAmountMinor(tx?.amount, amountUnit),
     currency: String(tx?.currency || "NGN").toUpperCase(),
     narration: tx?.narration || tx?.description || tx?.remark || null,
     category: tx?.category || null,
@@ -142,7 +149,12 @@ async function syncAccount(supabase: any, userId: string, monoAccountId: string,
   const normalizedById = new Map<string, any>();
   let duplicateTransactionCount = 0;
   let invalidDirectionCount = 0;
+  let invalidAmountCount = 0;
   for (const tx of transactions.map((item: any) => normalizeTransaction(item, amountUnit))) {
+    if (tx.amount_minor == null) {
+      invalidAmountCount++;
+      continue;
+    }
     if (!["credit", "debit"].includes(tx.type)) {
       invalidDirectionCount++;
       continue;
@@ -189,14 +201,14 @@ async function syncAccount(supabase: any, userId: string, monoAccountId: string,
   const { error: eventError } = await supabase.from("bank_sync_events").insert({
     user_id: userId, connection_id: connection.id, provider: "mono",
     event_type: "account_sync", status: transactionFeedComplete ? "success" : "warning", started_at: startedAt, completed_at: completedAt,
-    imported_count: insertedCount, metadata: { transaction_feed_complete: transactionFeedComplete, data_status: row.data_status, amount_unit: amountUnit, fetched_count: transactions.length, inserted_count: insertedCount, updated_count: updatedCount, skipped_count: transactions.length - normalized.length, duplicate_count: duplicateTransactionCount, invalid_direction_count: invalidDirectionCount }
+    imported_count: insertedCount, metadata: { transaction_feed_complete: transactionFeedComplete, data_status: row.data_status, amount_unit: amountUnit, fetched_count: transactions.length, inserted_count: insertedCount, updated_count: updatedCount, skipped_count: transactions.length - normalized.length, duplicate_count: duplicateTransactionCount, invalid_direction_count: invalidDirectionCount, invalid_amount_count: invalidAmountCount }
   });
   if (eventError) console.warn("Could not record bank sync event:", eventError.message);
 
   return {
     connection, account, transactionsImported: insertedCount, transactionsFetched: transactions.length,
     transactionsInserted: insertedCount, transactionsUpdated: updatedCount, transactionsSkipped: transactions.length - normalized.length,
-    duplicateTransactionCount, invalidTransactionCount: invalidDirectionCount, transactions: normalized, dataStatus: row.data_status, amountUnit,
+    duplicateTransactionCount, invalidTransactionCount: invalidDirectionCount + invalidAmountCount, transactions: normalized, dataStatus: row.data_status, amountUnit,
     transactionFeedComplete, reportedTransactionTotal: hasReportedTransactionTotal ? reportedTransactionTotal : null
   };
 }
