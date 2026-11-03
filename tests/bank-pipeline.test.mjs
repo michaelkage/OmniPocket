@@ -181,3 +181,9 @@ assert.match(exchange, /transaction_feed_complete: transactionFeedComplete/);
 assert.match(webhook, /\.eq\("status","initiated"\)\.gt\("expires_at",new Date\(\)\.toISOString\(\)\)/);
 assert.match(webhook, /\.update\(\{\s*sync_status:"syncing",last_sync_error:null\s*\}\)\.eq\("id",connectionId\)\.eq\("status","active"\)/);
 assert.doesNotMatch(webhook, /sync_status:"syncing",status:"active",last_sync_error:null\}\)\.eq\("id",connectionId\)\);/);
+const connectLink = fs.readFileSync("supabase/functions/mono-connect-link/index.ts","utf8");
+assert.match(connectLink, /session\.status === "initiated"/);
+assert.match(connectLink, /Date\.parse\(session\.expires_at\) > Date\.now\(\)/);
+assert.match(connectLink, /\.eq\("status", "initiated"\)[\s\S]*\.gt\("expires_at", new Date\(\)\.toISOString\(\)\)/);
+assert.match(connectLink, /Link session is no longer active/);
+
