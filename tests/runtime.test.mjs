@@ -226,6 +226,26 @@ const tx = (o) => ({
   assert.equal(over.pct, 100, "goal progress must clamp at 100");
 }
 
+// Future-dated entries must not leak into current-period spending or cash-flow summaries.
+{
+  const state = makeState({
+    accounts: [{ id: "a", currency: "NGN", openingBalance: 1000, archived: false }],
+    transactions: [
+      tx({ id: "today", type: "expense", amount: 100, bankStatus: "posted", sourceAccountId: "a", date: "2026-10-29", createdAt: 1, category: "Food" }),
+      tx({ id: "future-expense", type: "expense", amount: 9000, bankStatus: "posted", sourceAccountId: "a", date: "2026-10-30", createdAt: 2, category: "Rent" }),
+      tx({ id: "future-income", type: "income", amount: 5000, bankStatus: "posted", sourceAccountId: "a", date: "2026-10-31", createdAt: 3 }),
+    ],
+  });
+  const asOf = new Date("2026-10-29T12:00:00");
+  const spending = E.spendingSummary(state, 30, asOf);
+  const flow = E.flowSummary(state, 30, asOf);
+  assert.equal(spending.total, 100, "future expenses must not inflate current spending");
+  assert.deepEqual(Object.keys(spending.totals), ["Food"], "future categories must not appear in current spending mix");
+  assert.equal(flow.expenses, 100, "future expenses must not enter cash-flow totals");
+  assert.equal(flow.income, 0, "future income must not enter current cash-flow totals");
+  assert.equal(flow.count, 1, "future-dated movements must not enter current-period counts");
+}
+
 // Financial summaries must exclude non-effective bank movements consistently.
 {
   const state = makeState({
