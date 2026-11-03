@@ -177,6 +177,12 @@ assert.match(lifecycle, /Bearer\\s\+/);
 assert.match(bankConnection, /const balanceDifference=transactionFeedComplete\?currentBalance-Number\(local\.balance\):null,balanceMismatch=transactionFeedComplete&&\(!Number\.isFinite\(balanceDifference\)\|\|Math\.abs\(balanceDifference\)>=0\.005\)/);
 
 assert.match(sync, /sync_status: transactionFeedComplete \? "healthy" : "warning"/);
+assert.match(sync, /type: String\(tx\?\.type \|\| ""\)\.toLowerCase\(\)/);
+assert.match(sync, /if \(!\["credit", "debit"\]\.includes\(tx\.type\)\) \{[\s\S]*invalidDirectionCount\+\+/);
+assert.match(sync, /invalid_direction_count: invalidDirectionCount/);
+assert.match(exchange, /type: String\(tx\?\.type \|\| ""\)\.toLowerCase\(\)/);
+assert.match(exchange, /invalidTransactionCount: invalidDirectionCount/);
+assert.match(bankConnection, /invalidTransactionCount=Number\(payload\?\.invalidTransactionCount\)\|\|0/);
 assert.match(sync, /status: transactionFeedComplete \? "success" : "warning"/);
 assert.match(sync, /transaction_feed_complete: transactionFeedComplete/);
 assert.match(exchange, /sync_status: transactionFeedComplete \? "healthy" : "warning"/);
