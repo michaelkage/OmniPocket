@@ -970,6 +970,18 @@ function renderIntelligence() {
       '<div class="forecast-confidence"><span>Confidence: ' + escapeHtml(forecast.confidence) + '</span><small>' + escapeHtml(forecast.sampleTransactions + " transactions across " + forecast.activeDays + " active days · " + forecast.daysElapsed + " days observed") + '</small></div>';
   }
 
+  const runwayEl = $("financialRunwayContent");
+  if (runwayEl && window.OmniPocketEngine?.financialRunway) {
+    const runway = OmniPocketEngine.financialRunway(state, new Date(), 90);
+    const hidden = state.settings.privacyHidden;
+    const display = value => hidden ? "••••" : money(value, runway.currency);
+    const days = value => value == null ? "—" : Math.floor(value).toLocaleString() + " days";
+    runwayEl.innerHTML =
+      '<div class="runway-primary"><span>Estimated spending runway</span><strong>' + escapeHtml(days(runway.totalRunwayDays)) + '</strong><small>' + escapeHtml(display(runway.availableBalance)) + ' available · ' + escapeHtml(runway.confidence + " confidence") + '</small></div>' +
+      '<div class="runway-breakdown"><div><span>Essential pace</span><strong>' + escapeHtml(display(runway.dailyEssential)) + '<small>/ day</small></strong></div><div><span>Other spending</span><strong>' + escapeHtml(display(runway.dailyDiscretionary + runway.dailyUnclassified)) + '<small>/ day</small></strong></div><div><span>Essentials only</span><strong>' + escapeHtml(days(runway.essentialOnlyRunwayDays)) + '</strong></div></div>' +
+      '<p class="runway-meta">' + escapeHtml(runway.sampleTransactions + " expenses across " + runway.activeDays + " active days · " + runway.lookbackDays + "-day history") + '</p>';
+  }
+
   const unusualEl = $("unusualSpendingContent");
   if (unusualEl && window.OmniPocketEngine?.unusualSpending) {
     const alerts = OmniPocketEngine.unusualSpending(state, new Date()).slice(0, 5);
@@ -998,9 +1010,9 @@ function renderDashboard() {
   if(!root) return;
   const widgets={
     networth:$("widgetNetWorth"), trend:$("widgetTrend"), goals:$("widgetGoals"), accounts:$("widgetAccounts"),
-    activity:$("widgetActivity"), quick:$("widgetQuick"), fx:$("widgetFx"), relations:$("widgetRelations"), insights:$("widgetInsights"), spending:$("widgetSpending"), upcoming:$("widgetUpcomingPayments"), unusual:$("widgetUnusualSpending"), forecast:$("widgetCashFlowForecast")
+    activity:$("widgetActivity"), quick:$("widgetQuick"), fx:$("widgetFx"), relations:$("widgetRelations"), insights:$("widgetInsights"), spending:$("widgetSpending"), upcoming:$("widgetUpcomingPayments"), unusual:$("widgetUnusualSpending"), forecast:$("widgetCashFlowForecast"), runway:$("widgetFinancialRunway")
   };
-  const defaultOrder=["networth","trend","goals","accounts","activity","quick","fx","relations","insights","spending","upcoming","unusual","forecast"];
+  const defaultOrder=["networth","trend","goals","accounts","activity","quick","fx","relations","insights","spending","upcoming","unusual","forecast","runway"];
   const order=[...(state.settings.dashboard.order || [])];
   defaultOrder.forEach(id=>{ if(!order.includes(id)) order.push(id); });
   root.innerHTML="";
