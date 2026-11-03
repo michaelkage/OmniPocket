@@ -214,6 +214,27 @@ const tx = (o) => ({
   assert.equal(E.convert(state, 1500, "NGN", "USD", 1 / 2000), 0.75, "override rate must win");
   assert.equal(E.convert(state, 0, "NGN", "USD"), 0);
 
+  const freshnessState = makeState({ settings: { fx: { provider: "live", source: "open.er-api.com", updatedAt: 1000 } } });
+  assert.equal(E.fxFreshness(freshnessState, 1000 + 12 * 60 * 60 * 1000).status, "current");
+  assert.equal(E.fxFreshness(freshnessState, 1000 + 3 * 86400000).status, "aging");
+  assert.equal(E.fxFreshness(freshnessState, 1000 + 8 * 86400000).status, "stale");
+  assert.equal(E.fxFreshness(makeState({ settings: { fx: { provider: "cached", source: "bundled", updatedAt: null } } })).status, "bundled");
+  const coverageState = makeState({
+    accounts: [
+      { id: "ngn", name: "Local", currency: "NGN", archived: false },
+      { id: "usd", name: "Dollar", currency: "USD", archived: false },
+      { id: "zzz", name: "Unknown", currency: "ZZZ", archived: false },
+      { id: "old", name: "Archived", currency: "ZZZ", archived: true },
+    ],
+    settings: { baseCurrency: "NGN", fx: { rates: { NGN: { NGN: 1 }, USD: { NGN: 1500 } } } },
+  });
+  const coverage = E.valuationCoverage(coverageState);
+  assert.equal(coverage.totalCount, 3);
+  assert.equal(coverage.valuedCount, 2);
+  assert.equal(coverage.unvaluedCount, 1);
+  assert.equal(coverage.unvalued[0].id, "zzz");
+  assert.equal(E.valuationCoverage(makeState({ accounts: [] })).complete, true);
+
   E.recordFxSnapshot(state, { NGN: { NGN: 1, USD: 1 / 1500 } }, { updatedAt: 1000, source: "live" });
   E.recordFxSnapshot(state, { NGN: { NGN: 1, USD: 1 / 1400 } }, { updatedAt: 1000, source: "live" });
   assert.equal(state.settings.fx.history.length, 1, "snapshots within 60s must dedupe");
