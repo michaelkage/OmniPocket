@@ -37,6 +37,28 @@
     return rateFromTable(table, from, to, state.settings?.baseCurrency) ?? 1;
   }
 
+  function fxFreshness(state, now = Date.now()) {
+    const fx = state.settings?.fx || {};
+    const updatedAt = Number(fx.updatedAt);
+    if (!Number.isFinite(updatedAt) || updatedAt <= 0) {
+      return { status: fx.source === "bundled" || fx.provider === "cached" ? "bundled" : "unknown", updatedAt: null, ageMs: null };
+    }
+    const ageMs = Number(now) - updatedAt;
+    if (ageMs < -5 * 60000) return { status: "clock_skew", updatedAt, ageMs };
+    if (ageMs <= DAY) return { status: "current", updatedAt, ageMs: Math.max(0, ageMs) };
+    if (ageMs <= 7 * DAY) return { status: "aging", updatedAt, ageMs };
+    return { status: "stale", updatedAt, ageMs };
+  }
+
+  function valuationCoverage(state, accounts = null) {
+    const rows = (accounts || state.accounts || []).filter(account => !account.archived);
+    const base = state.settings?.baseCurrency;
+    const rates = state.settings?.fx?.rates || {};
+    const unvalued = rows.filter(account => !base || rateFromTable(rates, account.currency || base, base, base) == null)
+      .map(account => ({ id: account.id, name: account.name || "Unnamed account", currency: account.currency || null }));
+    return { totalCount: rows.length, valuedCount: rows.length - unvalued.length, unvaluedCount: unvalued.length, complete: unvalued.length === 0, unvalued };
+  }
+
   function convertAtRates(value, from, to, rates, fallbackState) {
     const amount = Number(value) || 0;
     if (from === to) return amount;
@@ -755,7 +777,7 @@
   }
 
   window.OmniPocketEngine = {
-    DAY, rate, convert, balancesAt, netWorth, goalProgress,
+    DAY, rate, convert, fxFreshness, valuationCoverage, balancesAt, netWorth, goalProgress,
     spendingSummary, flowSummary, recurringExpenses, unusualSpending, learnedCategorySuggestion, financialRunway, monthEndForecast, goalProjection, goalContributionHistory, snapshot,
     recordDailySnapshot, historicalNetWorth, fxHistory, recordFxSnapshot, wealthChange,
     relatedAccounts, relatedGoals, relatedTransactions, accountExposure,
