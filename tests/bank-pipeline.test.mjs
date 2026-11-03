@@ -194,4 +194,5 @@ assert.match(connectLink, /session\.status === "initiated"/);
 assert.match(connectLink, /Date\.parse\(session\.expires_at\) > Date\.now\(\)/);
 assert.match(connectLink, /\.eq\("status", "initiated"\)[\s\S]*\.gt\("expires_at", new Date\(\)\.toISOString\(\)\)/);
 assert.match(connectLink, /Link session is no longer active/);
+assert.match(connectLink, /const \{ data: existing, error: existingError \} = await supabase[\s\S]*if \(existingError\) throw existingError;/);
 
