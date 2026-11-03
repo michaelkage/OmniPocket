@@ -11,15 +11,16 @@ async function exchangeMonoCode(code, accountName, preferredAccountId = null) {
 }
 
 function monoTransactionReferences(tx) {
+  const source = tx?.raw && typeof tx.raw === "object" ? tx.raw : tx;
   const pick = (...values) => {
     const value = values.find(item => item != null && String(item).trim());
     return value == null ? null : String(value).trim().slice(0, 180);
   };
   return {
-    providerReference: pick(tx?.reference, tx?.transaction_reference, tx?.payment_reference, tx?.ref),
-    providerUpdatedAt: pick(tx?.updated_at, tx?.updatedAt),
-    providerTransactionAt: pick(tx?.transaction_at, tx?.date, tx?.created_at),
-    providerReversalReference: pick(tx?.reversal_reference, tx?.reversalReference, tx?.original_transaction_id, tx?.parent_transaction_id)
+    providerReference: pick(source?.reference, source?.transaction_reference, source?.payment_reference, source?.ref),
+    providerUpdatedAt: pick(source?.updated_at, source?.updatedAt),
+    providerTransactionAt: pick(source?.transaction_at, source?.date, source?.created_at),
+    providerReversalReference: pick(source?.reversal_reference, source?.reversalReference, source?.original_transaction_id, source?.parent_transaction_id)
   };
 }
 
