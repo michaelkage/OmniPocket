@@ -2033,6 +2033,18 @@ button { touch-action: manipulation; }
 
 /* Sequential transaction review controls */
 
+
+.transaction-audit-trail { display: grid; gap: 10px; }
+.audit-entry { border-left: 2px solid var(--md-sys-color-outline-variant); padding: 2px 0 4px 12px; min-width: 0; }
+.audit-entry-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.audit-entry-head strong { font-size: 13px; }
+.audit-entry-head time, .audit-entry-meta { color: var(--md-sys-color-on-surface-variant); font-size: 11px; }
+.audit-entry-meta { margin-top: 3px; }
+.audit-change { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; margin-top: 6px; font-size: 12px; }
+.audit-change > span { color: var(--md-sys-color-on-surface-variant); }
+.audit-change small { overflow-wrap: anywhere; text-align: right; }
+.audit-change b { color: var(--md-sys-color-primary); font-weight: 600; }
+@media (max-width: 480px) { .audit-entry-head { align-items: flex-start; flex-direction: column; gap: 2px; } .audit-change { flex-direction: column; gap: 1px; } .audit-change small { text-align: left; } }
 .transaction-review-navigation {
   display: flex;
   align-items: center;
