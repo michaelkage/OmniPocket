@@ -63,6 +63,32 @@ const tx = (o) => ({
   assert.equal(E.balancesAt(state).find(a => a.id === "a").balance, 900, "only posted expense should apply");
 }
 
+// Statement reconciliation is date-bounded, account-currency-only and read-only.
+{
+  const state = makeState({
+    accounts: [{ id: "a", currency: "NGN", openingBalance: 1000, archived: false }],
+    transactions: [
+      tx({ id: "posted", type: "expense", amount: 100, bankStatus: "posted", sourceAccountId: "a", date: "2026-01-02", createdAt: 1 }),
+      tx({ id: "pending", type: "expense", amount: 50, bankStatus: "pending", sourceAccountId: "a", date: "2026-01-03", createdAt: 2 }),
+      tx({ id: "review", type: "income", amount: 200, status: "needs_review", sourceAccountId: "a", date: "2026-01-03", createdAt: 3 }),
+      tx({ id: "later", type: "income", amount: 500, bankStatus: "posted", sourceAccountId: "a", date: "2026-01-05", createdAt: 4 }),
+    ],
+  });
+  const before = JSON.stringify(state);
+  const result = E.reconcileAccount(state, "a", 900, "2026-01-03");
+  assert.equal(result.status, "matched");
+  assert.equal(result.ledgerBalance, 900, "only posted activity through the statement date affects comparison");
+  assert.equal(result.difference, 0);
+  assert.equal(result.counts.included, 1);
+  assert.equal(result.counts.pending, 1);
+  assert.equal(result.counts.needsReview, 1);
+  assert.equal(result.counts.afterStatementDate, 1);
+  assert.equal(result.readOnly, true);
+  assert.equal(JSON.stringify(state), before, "reconciliation must not mutate ledger data");
+  assert.equal(E.reconcileAccount(state, "missing", 900, "2026-01-03").status, "unknown");
+  assert.equal(E.reconcileAccount(state, "a", 900, "not-a-date").status, "unknown");
+}
+
 // Income adds, expense subtracts. Amounts are sign-normalised via Math.abs, so a
 // negative amount is still treated as an expense/withdrawal of that magnitude.
 {
