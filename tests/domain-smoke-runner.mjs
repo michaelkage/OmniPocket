@@ -30,5 +30,26 @@ const materialized = E.balancesAt(state);
 state.accounts = materialized;
 assert.equal(E.netWorth(state), 900);
 assert.equal(E.convert(state, 1500, "NGN", "USD"), 1);
+
+// A transfer FX rate is source → received currency, never source → goal currency.
+const fxGoalState = {
+  settings: { baseCurrency: "NGN", fx: { rates: { NGN: { USD: 1 / 1500 }, USD: { NGN: 1500 } } } },
+  accounts: [
+    { id: "ngn", currency: "NGN", openingBalance: 0, balance: 0 },
+    { id: "usd", currency: "USD", openingBalance: 0, balance: 0 }
+  ],
+  transactions: [{
+    id: "fx-transfer", type: "transfer", date: "2026-09-25", status: "recorded",
+    sourceAccountId: "ngn", destinationAccountId: "usd",
+    amount: 1500, currency: "NGN", receivedAmount: 0.9, receivedCurrency: "USD", fxRate: 0.0006
+  }]
+};
+const bothAccountsGoal = { currency: "USD", accountIds: ["ngn", "usd"] };
+const sourceOnlyGoal = { currency: "USD", accountIds: ["ngn"] };
+const destinationOnlyGoal = { currency: "USD", accountIds: ["usd"] };
+assert.equal(E.goalContributionHistory(fxGoalState, bothAccountsGoal)[0].value, -0.1);
+assert.equal(E.goalContributionHistory(fxGoalState, sourceOnlyGoal)[0].value, -1);
+assert.equal(E.goalContributionHistory(fxGoalState, destinationOnlyGoal)[0].value, 0.9);
+
 assert.equal(E.recordDailySnapshot(state, new Date("2026-09-25T12:00:00Z")).value, 900);
 console.log("OmniPocket domain smoke tests passed");
