@@ -1186,7 +1186,23 @@ function renderDashboard() {
   renderContextBar();
   renderDashboardContextWidgets();
   const count=$("reviewCount"); if(count) count.textContent=state.transactions.filter(t=>t.status==="needs_review").length+" review";
-  const fxStatus=$("fxCacheStatus"); if(fxStatus) fxStatus.textContent=state.settings.fx.updatedAt ? "Cached "+new Date(state.settings.fx.updatedAt).toLocaleString() : "Bundled rates";
+  const fxStatus=$("fxCacheStatus");
+  if(fxStatus) {
+    const freshness = OmniPocketEngine.fxFreshness(state);
+    const coverage = OmniPocketEngine.valuationCoverage(state);
+    const updated = freshness.updatedAt ? new Date(freshness.updatedAt).toLocaleString() : null;
+    const labels = {
+      current: "Live rates · Updated "+updated,
+      aging: "Cached rates · Last updated "+updated,
+      stale: "Stale rates · Last updated "+updated,
+      bundled: "Bundled estimates · Not live",
+      clock_skew: "Rate timestamp is ahead of this device clock",
+      unknown: "Rate update time unavailable"
+    };
+    let status = labels[freshness.status] || labels.unknown;
+    if(!coverage.complete) status += " · "+coverage.unvaluedCount+" account currency "+(coverage.unvaluedCount===1?"is":"are")+" not valued";
+    fxStatus.textContent = status;
+  }
 }
 
 function integrationSettings() {
@@ -1289,8 +1305,9 @@ async function refreshFxRates() {
         if(from===to) rates[from][to]=1;
         else if(from===base && data.rates[to]) rates[from][to]=Number(data.rates[to]);
         else if(to===base && data.rates[from]) rates[from][to]=1/Number(data.rates[from]);
-        else if(data.rates[from] && data.rates[to]) rates[from][to]=Number(data.rates[to])/Number(data.rates[from]);
-        else rates[from][to]=DEFAULT_RATES[from][to];
+        else if(data.rates[from] && data.rates[to] && Number(data.rates[from]) > 0 && Number(data.rates[to]) > 0) rates[from][to]=Number(data.rates[to])/Number(data.rates[from]);
+        // Do not silently fill missing live pairs with bundled estimates.
+        // The domain engine can resolve valid cross-rates through the base currency.
       }
     }
     state.settings.fx={...(state.settings.fx||{}),provider:"live",updatedAt:Date.now(),rates,source:"open.er-api.com",base}; if(window.OmniPocketEngine?.recordFxSnapshot) OmniPocketEngine.recordFxSnapshot(state,rates,{source:"open.er-api.com",updatedAt:Date.now()});
