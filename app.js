@@ -1028,12 +1028,13 @@ function renderNetWorthTrend() {
     rows=t?[{date:t.date,value:convert(t.receivedAmount??t.amount,t.receivedCurrency||t.currency,state.settings.baseCurrency)}]:[];
   }
   if(rows.length<2){el.innerHTML='<div class="empty-state">'+escapeHtml(context.scope==="global"?"Log transactions across different days to build your wealth trend.":"Not enough history in this context to draw a trend yet.")+'</div>';return;}
+  const fxNeutralTrend=context.scope==="global"&&rows.every(row=>row.valuationBasis==="current_rates");
   const unique=rows.reduce((acc,p)=>{const last=acc[acc.length-1];if(last&&last.date===p.date)last.value=p.value;else acc.push({date:p.date,value:p.value});return acc;},[]).slice(-30);
   const width=720,height=240,pad=28,values=unique.map(p=>p.value),min=Math.min(...values,0),max=Math.max(...values,1),range=max-min||1;
   const coords=unique.map((p,i)=>[unique.length===1?width/2:pad+i*(width-pad*2)/(unique.length-1),height-pad-(p.value-min)/range*(height-pad*2)]);
   const path=coords.map((p,i)=>(i?"L":"M")+p[0].toFixed(1)+" "+p[1].toFixed(1)).join(" ");
   const scopeLabel=context.scope==="global"?"Global wealth":context.scope==="account"?(account(context.accountId)?.name||"Account")+" balance":context.scope==="goal"?(state.goals.find(g=>g.id===context.goalId)?.name||"Goal")+" contributions":transactionLabel(state.transactions.find(t=>t.id===context.transactionId)||{type:"activity"});
-  el.innerHTML='<div class="muted context-value-label">'+escapeHtml(scopeLabel)+'</div><svg viewBox="0 0 '+width+" "+height+'" role="img" aria-label="'+escapeHtml(scopeLabel)+' trend"><path class="trend-line" d="'+path+'"></path>'+coords.map(p=>'<circle class="trend-dot" cx="'+p[0]+'" cy="'+p[1]+'" r="3"></circle>').join("")+'</svg><div class="trend-meta"><span>'+escapeHtml(unique[0].date)+'</span><strong>'+escapeHtml(state.settings.privacyHidden?"••••••":money(unique[unique.length-1].value))+'</strong><span>'+escapeHtml(unique[unique.length-1].date)+'</span></div>';
+  el.innerHTML='<div class="muted context-value-label">'+escapeHtml(scopeLabel)+'</div>'+(fxNeutralTrend?'<div class="muted context-value-label">Historical balances revalued at current FX rates · isolates balance changes from FX movements</div>':'')+'<svg viewBox="0 '+width+" "+height+'" role="img" aria-label="'+escapeHtml(scopeLabel)+' trend"><path class="trend-line" d="'+path+'"></path>'+coords.map(p=>'<circle class="trend-dot" cx="'+p[0]+'" cy="'+p[1]+'" r="3"></circle>').join("")+'</svg><div class="trend-meta"><span>'+escapeHtml(unique[0].date)+'</span><strong>'+escapeHtml(state.settings.privacyHidden?"••••••":money(unique[unique.length-1].value))+'</strong><span>'+escapeHtml(unique[unique.length-1].date)+'</span></div>';
 }
 
 function spendingSummary(days=30,context=getAppContext()) {
