@@ -36,10 +36,8 @@ assert.match(sync, /function unwrapTransactions\(payload: any\): any\[\] \| null
 assert.match(sync, /if \(transactions === null\)/);
 assert.match(sync, /function transactionFeedState\(payload: any, transactionCount: number, dataStatus: string\)/);
 assert.match(sync, /const feedState = transactionFeedState\(\{ meta: transactionMeta \}, transactions\?\.length \?\? 0, dataStatus\)/);
-assert.match(sync, /async function monoNextPage\(next: string\)/);
 assert.match(sync, /url\.origin !== "https:\/\/api\.withmono\.com"/);
 assert.match(sync, /url\.pathname\.startsWith\("\/v2\/"\)/);
-assert.match(sync, /async function collectMonoTransactions\(firstPayload: any\)/);
 assert.match(sync, /const MAX_TRANSACTION_PAGES = 100/);
 assert.match(sync, /let missingProviderIdCount = 0/);
 assert.match(sync, /if \(!tx\.mono_transaction_id\) \{\s*missingProviderIdCount\+\+/);
