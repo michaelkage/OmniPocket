@@ -49,7 +49,7 @@ Deno.serve(async (req) => {
 
     if (!session && monoCustomerId) {
       const r=await supabase.from("mono_link_sessions").select("*")
-        .eq("mono_customer_id",monoCustomerId).in("status",["initiated","linked"])
+        .eq("mono_customer_id",monoCustomerId).eq("status","initiated").gt("expires_at",new Date().toISOString())
         .order("created_at",{ascending:false}).limit(1).maybeSingle();
       if (r.error) {
         console.error("Connect Link customer lookup failed",r.error);
@@ -120,13 +120,19 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({error:"Webhook persistence failed"}),{status:500,headers:responseHeaders});
   }
 
+  let syncRequired=false;
   if (connectionId) {
-    await supabase.from("bank_connections").update({
-      sync_status:"syncing",status:"active",last_sync_error:null
-    }).eq("id",connectionId);
+    const activeUpdate=await supabase.from("bank_connections").update({
+      sync_status:"syncing",last_sync_error:null
+    }).eq("id",connectionId).eq("status","active").select("id").maybeSingle();
+    if (activeUpdate.error) {
+      console.error("Active bank connection update failed",activeUpdate.error);
+      return new Response(JSON.stringify({error:"Bank connection update failed"}),{status:500,headers:responseHeaders});
+    }
+    syncRequired=Boolean(activeUpdate.data);
   }
 
   return new Response(JSON.stringify({
-    received:true,eventId,eventType,connectionId,linkedSessionId,syncRequired:Boolean(connectionId)
+    received:true,eventId,eventType,connectionId,linkedSessionId,syncRequired
   }),{headers:responseHeaders});
 });
