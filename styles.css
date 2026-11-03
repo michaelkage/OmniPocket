@@ -485,6 +485,43 @@ body {
   padding: 14px;
   outline: none;
 }
+.activity-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) repeat(2, minmax(0, .8fr));
+  gap: 9px;
+  margin-top: 9px;
+}
+.activity-filter-grid select,
+.activity-date-filter {
+  min-width: 0;
+  width: 100%;
+  border: 1px solid var(--md-sys-color-outline-variant);
+  background: color-mix(in srgb, var(--md-sys-color-surface), var(--md-sys-color-surface) 90%);
+  color: var(--md-sys-color-on-surface);
+  border-radius: 13px;
+  padding: 10px 11px;
+  font: inherit;
+  font-size: 12px;
+}
+.activity-date-filter {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--md-sys-color-on-surface-variant);
+}
+.activity-date-filter input {
+  min-width: 0;
+  width: 100%;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--md-sys-color-on-surface);
+  font: inherit;
+}
+@media (max-width: 640px) {
+  .activity-filter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .activity-date-filter { font-size: 11px; }
+}
 
 .settings-list {
   display: grid;
