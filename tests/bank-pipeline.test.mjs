@@ -55,7 +55,9 @@ assert.match(bankConnection, /duplicateTransactionCount,balanceMismatch,balanceD
 assert.match(bankConnection, /if\(\(isFirstProviderSync\|\|openingBalanceReconciliationPending\)&&transactionFeedComplete\)\{local\.openingBalance=currentBalance-importedNet;\}/);
 assert.match(bankConnection, /openingBalanceReconciliationPending:\(isFirstProviderSync\|\|openingBalanceReconciliationPending\)&&!transactionFeedComplete/);
 assert.match(bankConnection, /Opening-balance reconciliation is deferred until a complete feed is available/);
-assert.match(bankConnection, /bankStatus=String\(tx\.bank_status\|\|tx\.bankStatus\|\|"posted"\)\.toLowerCase\(\)/);
+assert.match(bankConnection, /rawProviderStatus=tx\.raw\?\.status\?\?tx\.status\?\?tx\.bank_status\?\?tx\.bankStatus/);
+assert.match(bankConnection, /rawProviderStatus==null\|\|String\(rawProviderStatus\)\.trim\(\)===""\?"posted":String\(rawProviderStatus\)\.trim\(\)\.toLowerCase\(\)/);
+assert.match(bankConnection, /if\(!\["pending","posted","failed","reversed"\]\.includes\(bankStatus\)\)\{invalidTransactionCount\+\+;continue;\}/);
 assert.match(bankConnection, /if\(!\["pending","posted","failed","reversed"\]\.includes\(bankStatus\)\)\{invalidTransactionCount\+\+;continue;\}/);
 assert.equal((bankConnection.match(/if\(!\["pending","failed","reversed"\]\.includes\(bankStatus\)\)importedNet\+=credit\?amount:-amount/g)||[]).length,2,"Only safe same-account and new transactions contribute to first-sync opening balance");
 assert.match(bankConnection, /if\(existing\.sourceAccountId&&existing\.sourceAccountId!==local\.id\)\{ownershipConflictCount\+\+;continue;\}if\(!\["pending","failed","reversed"\]\.includes\(bankStatus\)\)importedNet\+=credit\?amount:-amount/);
