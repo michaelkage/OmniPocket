@@ -669,4 +669,23 @@ const tx = (o) => ({
   assert.equal(empty.essentialOnlyRunwayDays, null);
   assert.equal(empty.confidence, "Low");
 }
+// Merchant categorisation learns only from explicit user corrections.
+{
+  const history = [
+    tx({ id: "corrected-1", type: "expense", description: "POS PURCHASE ACME COFFEE IKEJA", note: "ACME COFFEE", category: "Food & dining", categorySource: "user" }),
+    tx({ id: "automatic", type: "expense", description: "ACME COFFEE ONLINE", category: "Shopping", categorySource: null }),
+  ];
+  const learned = E.learnedCategorySuggestion(history, { description: "POS ACME COFFEE LEKKI" });
+  assert.equal(learned.category, "Food & dining");
+  assert.ok(learned.confidence >= 0.82 && learned.confidence <= 0.94);
+  assert.match(learned.reason, /correction/);
+  assert.equal(E.learnedCategorySuggestion(history, { description: "UNKNOWN MERCHANT" }), null);
+  const conflict = [
+    ...history,
+    tx({ id: "corrected-2", type: "expense", description: "ACME COFFEE ONLINE", category: "Shopping", categorySource: "user" }),
+  ];
+  assert.equal(E.learnedCategorySuggestion(conflict, { description: "ACME COFFEE" }), null,
+    "conflicting user corrections should not produce an overconfident suggestion");
+  assert.equal(history[0].categorySource, "user", "learning must remain read-only");
+}
 console.log("OmniPocket runtime behaviour tests passed");
