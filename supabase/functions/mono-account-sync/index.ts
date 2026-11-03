@@ -47,6 +47,77 @@ function unwrapTransactions(payload: any): any[] | null {
   // A valid empty array is different from an unexpected API response shape.
   return null;
 }
+function transactionPageMeta(payload: any) {
+  return payload?.meta || payload?.data?.meta || payload?.data?.paging || payload?.paging || payload?.pagination || {};
+}
+
+async function monoNextPage(next: string) {
+  const secret = Deno.env.get("MONO_SECRET_KEY");
+  if (!secret) throw new Error("MONO_SECRET_KEY is not configured in Supabase.");
+  const url = new URL(next);
+  if (url.origin !== "https://api.withmono.com" || !url.pathname.startsWith("/v2/") || url.username || url.password || url.hash) {
+    throw new Error("Mono returned an unsafe transaction pagination URL.");
+  }
+  const response = await fetch(url.toString(), {
+    headers: { Accept: "application/json", "Content-Type": "application/json", "mono-sec-key": secret, "x-real-time": "true" },
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(body?.message || body?.error || `Mono transaction page failed (${response.status})`);
+  return body;
+}
+
+async function collectMonoTransactions(firstPayload: any) {
+  const first = unwrapTransactions(firstPayload);
+  if (first === null) return { transactions: null, reason: null, pagesFetched: 0, reportedTotal: null };
+  const transactions = [...first];
+  const seenPages = new Set<string>();
+  let meta = transactionPageMeta(firstPayload);
+  let reportedTotal: number | null = null;
+  let reason: string | null = null;
+  let pagesFetched = 1;
+  const MAX_TRANSACTION_PAGES = 100;
+  while (meta?.next != null && meta.next !== "") {
+    if (typeof meta.next !== "string") {
+      reason = "Mono returned an invalid transaction page link.";
+      break;
+    }
+    const next = meta.next.trim();
+    if (!next || seenPages.has(next)) {
+      reason = "Mono returned a repeated transaction page link.";
+      break;
+    }
+    if (pagesFetched >= MAX_TRANSACTION_PAGES) {
+      reason = `Mono transaction history exceeded the ${MAX_TRANSACTION_PAGES}-page safety limit.`;
+      break;
+    }
+    seenPages.add(next);
+    try {
+      const pagePayload = await monoNextPage(next);
+      const pageTransactions = unwrapTransactions(pagePayload);
+      if (pageTransactions === null) {
+        reason = "Mono returned an unexpected transaction page response.";
+        break;
+      }
+      const pageMeta = transactionPageMeta(pagePayload);
+      const pageTotalValue = pageMeta.total ?? pageMeta.total_count ?? pageMeta.totalCount;
+      if (pageTotalValue != null) {
+        const pageTotal = Number(pageTotalValue);
+        if (!Number.isSafeInteger(pageTotal) || pageTotal < 0 || (reportedTotal != null && reportedTotal !== pageTotal)) {
+          reason = "Mono returned inconsistent transaction totals across pages.";
+          break;
+        }
+        reportedTotal = pageTotal;
+      }
+      transactions.push(...pageTransactions);
+      pagesFetched++;
+      meta = pageMeta;
+    } catch (error) {
+      reason = error instanceof Error ? `Could not retrieve the next Mono transaction page: ${error.message}` : "Could not retrieve the next Mono transaction page.";
+      break;
+    }
+  }
+  return { transactions, reason, pagesFetched, reportedTotal };
+}
 function transactionFeedState(payload: any, transactionCount: number, dataStatus: string) {
   const meta = payload?.meta || payload?.data?.meta || payload?.data?.paging || payload?.paging || payload?.pagination || {};
   const totalValue = meta.total ?? meta.total_count ?? meta.totalCount ?? meta.count;
@@ -122,15 +193,17 @@ async function syncAccount(supabase: any, userId: string, monoAccountId: string,
   const accountPayload = await mono(`/accounts/${encodeURIComponent(monoAccountId)}`, { headers: { "x-real-time": "true" } });
   const txPayload = await mono(`/accounts/${encodeURIComponent(monoAccountId)}/transactions?paginate=false`, { headers: { "x-real-time": "true" } });
   const account = unwrapAccount(accountPayload);
-  const transactions = unwrapTransactions(txPayload);
-  const transactionMeta = txPayload?.meta || txPayload?.data?.meta || txPayload?.data?.paging || txPayload?.paging || txPayload?.pagination || {};
+  const collectedFeed = await collectMonoTransactions(txPayload);
+  const transactions = collectedFeed.transactions;
+  const transactionMeta = transactionPageMeta(txPayload);
   const dataStatus = String(accountPayload?.data?.meta?.data_status || accountPayload?.data?.meta?.dataStatus || transactionMeta?.data_status || transactionMeta?.dataStatus || "").toUpperCase();
-  // paginate=false is expected to return the full feed. If Mono still reports
-  // another page, inconsistent totals, or malformed pagination metadata, fail
-  // closed: import returned rows, but never reconcile opening balance as complete.
   const feedState = transactionFeedState(txPayload, transactions?.length ?? 0, dataStatus);
+  if (collectedFeed.reason) {
+    feedState.complete = false;
+    feedState.reason = [feedState.reason, collectedFeed.reason].filter(Boolean).join(" ");
+  }
   const transactionFeedComplete = transactions !== null && feedState.complete;
-  const reportedTransactionTotal = feedState.reportedTotal;
+  const reportedTransactionTotal = collectedFeed.reportedTotal ?? feedState.reportedTotal;
   if (transactions === null) {
     const topLevelKeys = txPayload && typeof txPayload === "object" ? Object.keys(txPayload).slice(0, 12) : [];
     console.error("Mono transactions response had an unexpected shape", { topLevelKeys });
@@ -233,7 +306,7 @@ async function syncAccount(supabase: any, userId: string, monoAccountId: string,
   const { error: eventError } = await supabase.from("bank_sync_events").insert({
     user_id: userId, connection_id: connection.id, provider: "mono",
     event_type: "account_sync", status: transactionFeedComplete ? "success" : "warning", started_at: startedAt, completed_at: completedAt,
-    imported_count: insertedCount, metadata: { transaction_feed_complete: transactionFeedComplete, data_status: row.data_status, amount_unit: amountUnit, fetched_count: transactions.length, inserted_count: insertedCount, updated_count: updatedCount, skipped_count: transactions.length - normalized.length, duplicate_count: duplicateTransactionCount, invalid_direction_count: invalidDirectionCount, invalid_amount_count: invalidAmountCount, reported_transaction_total: reportedTransactionTotal, pagination: feedState.metadata, pagination_incomplete: feedState.hasNextPage, feed_incomplete_reason: feedState.reason }
+    imported_count: insertedCount, metadata: { transaction_feed_complete: transactionFeedComplete, data_status: row.data_status, amount_unit: amountUnit, fetched_count: transactions.length, inserted_count: insertedCount, updated_count: updatedCount, skipped_count: transactions.length - normalized.length, duplicate_count: duplicateTransactionCount, invalid_direction_count: invalidDirectionCount, invalid_amount_count: invalidAmountCount, reported_transaction_total: reportedTransactionTotal, pagination: { ...feedState.metadata, pages_fetched: collectedFeed.pagesFetched }, pagination_incomplete: !transactionFeedComplete, feed_incomplete_reason: feedState.reason }
   });
   if (eventError) console.warn("Could not record bank sync event:", eventError.message);
 
@@ -241,7 +314,7 @@ async function syncAccount(supabase: any, userId: string, monoAccountId: string,
     connection, account, transactionsImported: insertedCount, transactionsFetched: transactions.length,
     transactionsInserted: insertedCount, transactionsUpdated: updatedCount, transactionsSkipped: transactions.length - normalized.length,
     duplicateTransactionCount, invalidTransactionCount: invalidDirectionCount + invalidAmountCount, transactions: normalized, dataStatus: row.data_status, amountUnit,
-    transactionFeedComplete, reportedTransactionTotal, transactionFeedIncompleteReason: feedState.reason, transactionPagination: feedState.metadata
+    transactionFeedComplete, reportedTransactionTotal, transactionFeedIncompleteReason: feedState.reason, transactionPagination: { ...feedState.metadata, pagesFetched: collectedFeed.pagesFetched }
   };
 }
 
