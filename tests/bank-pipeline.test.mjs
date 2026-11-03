@@ -16,7 +16,7 @@ assert.match(exchange, /const amountUnit = Deno\.env\.get\("MONO_AMOUNT_UNIT"\) 
 assert.match(exchange, /transactions\.map\(\(item: any\) => normalizeTransaction\(item, amountUnit\)\)/);
 assert.match(exchange, /normalizedById\.has\(tx\.mono_transaction_id\)\) duplicateTransactionCount\+\+/);
 assert.match(exchange, /const normalized = \[\.\.\.normalizedById\.values\(\)\]/);
-assert.match(exchange, /duplicateTransactionCount, invalidTransactionCount: invalidDirectionCount \\+ invalidAmountCount, transactions: normalized/);
+assert.match(exchange, /duplicateTransactionCount, invalidTransactionCount: invalidDirectionCount \+ invalidAmountCount, transactions: normalized/);
 assert.match(exchange, /duplicate_count: duplicateTransactionCount/);
 assert.match(sync, /bank_status: \["pending", "posted", "reversed", "failed"\]/);
 assert.match(sync, /const \{ bank_status, \.\.\.databaseTransaction \} = tx/);
@@ -30,7 +30,7 @@ assert.match(exchange, /function unwrapTransactions\(payload: any\): any\[\] \| 
 assert.match(exchange, /if \(!Array\.isArray\(transactions\)\)/);
 assert.match(sync, /provider_balance_minor/);
 assert.match(sync, /normalizedById\.has\(tx\.mono_transaction_id\)\) duplicateTransactionCount\+\+/);
-assert.match(sync, /duplicateTransactionCount, invalidTransactionCount: invalidDirectionCount \\+ invalidAmountCount, transactions: normalized/);
+assert.match(sync, /duplicateTransactionCount, invalidTransactionCount: invalidDirectionCount \+ invalidAmountCount, transactions: normalized/);
 assert.match(sync, /bank_sync_events/);
 assert.match(sync, /function unwrapTransactions\(payload: any\): any\[\] \| null/);
 assert.match(sync, /if \(transactions === null\)/);
