@@ -115,6 +115,16 @@ assert.match(config, /\[functions\.mono-webhook\][\s\S]*verify_jwt = false/);
 assert.doesNotMatch(sync, /Access-Control-Allow-Origin": "\*"/);
 assert.doesNotMatch(exchange, /Access-Control-Allow-Origin": "\*"/);
 
+// Account sync diagnostics must distinguish missing provider values from zero.
+assert.match(bankConnection, /providerBalanceAt:new Date\(\)\.toISOString\(\),transactionFeedComplete/);
+assert.match(bankConnection, /payload\?\.reportedTransactionTotal!=null&&Number\.isFinite\(Number\(payload\.reportedTransactionTotal\)\)/);
+const accountUi = fs.readFileSync("accounts-ui.js", "utf8");
+assert.match(accountUi, /connectionData\.providerBalance != null && Number\.isFinite\(Number\(connectionData\.providerBalance\)\)/);
+assert.match(accountUi, /Provider balance unavailable/);
+assert.match(accountUi, /This is not a zero balance/);
+assert.match(accountUi, /Transaction history incomplete/);
+assert.match(accountUi, /Provider balance observed/);
+assert.match(accountUi, /state\.settings\.privacyHidden\?"••••••":money\(Number\(h\.balanceDifference\),a\.currency\)/);
 console.log("OmniPocket bank pipeline contract tests passed");
 
 assert.match(bankConnection, /async function syncMonoAccountUnlocked\(/);
