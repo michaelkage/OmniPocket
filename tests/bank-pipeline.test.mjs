@@ -181,6 +181,7 @@ assert.match(exchange, /status: transactionFeedComplete \? "success" : "warning"
 assert.match(exchange, /transaction_feed_complete: transactionFeedComplete/);
 
 assert.match(webhook, /\.eq\("status","initiated"\)\.gt\("expires_at",new Date\(\)\.toISOString\(\)\)/);
+assert.match(webhook, /\.eq\("reference",reference\)[\s\S]*\.eq\("status","initiated"\)\.gt\("expires_at",new Date\(\)\.toISOString\(\)\)/);
 assert.match(webhook, /\.update\(\{\s*sync_status:"syncing",last_sync_error:null\s*\}\)\.eq\("id",connectionId\)\.eq\("status","active"\)/);
 assert.doesNotMatch(webhook, /sync_status:"syncing",status:"active",last_sync_error:null\}\)\.eq\("id",connectionId\)\);/);
 const connectLink = fs.readFileSync("supabase/functions/mono-connect-link/index.ts","utf8");
