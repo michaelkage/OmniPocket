@@ -125,9 +125,10 @@ Deno.serve(async (req) => {
                 balance: account?.balance,
               };
 
-              const { data: existing } = await supabase
+              const { data: existing, error: existingError } = await supabase
                 .from("bank_connections").select("id")
                 .eq("user_id", user.id).eq("mono_account_id", monoAccountId).maybeSingle();
+              if (existingError) throw existingError;
 
               let connectionId = existing?.id || null;
 
