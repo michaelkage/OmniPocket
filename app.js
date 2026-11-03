@@ -921,6 +921,17 @@ function renderIntelligence() {
       return '<div class="metric-row"><div class="metric-row-head"><strong>' + escapeHtml(label) + '</strong><span>' + escapeHtml(money(value)) + '</span></div><div class="metric-track"><div class="metric-fill" style="width:' + pct + '%"></div></div></div>';
     }).join("") : '<div class="empty-state">Record expenses to see your spending mix.</div>';
   }
+
+  const recurringEl = $("upcomingPaymentsContent");
+  if (recurringEl && window.OmniPocketEngine?.recurringExpenses) {
+    const patterns = OmniPocketEngine.recurringExpenses(state, new Date()).slice(0, 6);
+    recurringEl.innerHTML = patterns.length ? patterns.map(pattern => {
+      const accountName = account(pattern.accountId)?.name || "Account unavailable";
+      const amount = state.settings.privacyHidden ? "••••" : money(pattern.averageAmount, pattern.currency);
+      const dateLabel = new Date(pattern.nextDate + "T12:00:00").toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+      return '<div class="upcoming-payment-row"><div class="upcoming-payment-main"><strong>' + escapeHtml(pattern.label) + '</strong><small>' + escapeHtml(pattern.cadence + " · " + accountName + " · " + pattern.occurrences + " observations") + '</small></div><div class="upcoming-payment-side"><strong>' + escapeHtml(amount) + '</strong><small>Est. ' + escapeHtml(dateLabel) + '</small></div></div>';
+    }).join("") : '<div class="empty-state">No reliable recurring patterns yet. OmniPocket needs at least three consistent payments before estimating one.</div>';
+  }
 }
 
 function renderDashboard() {
@@ -928,9 +939,9 @@ function renderDashboard() {
   if(!root) return;
   const widgets={
     networth:$("widgetNetWorth"), trend:$("widgetTrend"), goals:$("widgetGoals"), accounts:$("widgetAccounts"),
-    activity:$("widgetActivity"), quick:$("widgetQuick"), fx:$("widgetFx"), relations:$("widgetRelations"), insights:$("widgetInsights"), spending:$("widgetSpending")
+    activity:$("widgetActivity"), quick:$("widgetQuick"), fx:$("widgetFx"), relations:$("widgetRelations"), insights:$("widgetInsights"), spending:$("widgetSpending"), upcoming:$("widgetUpcomingPayments")
   };
-  const defaultOrder=["networth","trend","goals","accounts","activity","quick","fx","relations","insights","spending"];
+  const defaultOrder=["networth","trend","goals","accounts","activity","quick","fx","relations","insights","spending","upcoming"];
   const order=[...(state.settings.dashboard.order || [])];
   defaultOrder.forEach(id=>{ if(!order.includes(id)) order.push(id); });
   root.innerHTML="";
