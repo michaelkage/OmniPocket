@@ -107,7 +107,11 @@ Deno.serve(async (req) => {
 
   if (!connectionId && monoAccountId) {
     const r=await supabase.from("bank_connections").select("id").eq("mono_account_id",monoAccountId).maybeSingle();
-    if (!r.error) connectionId=r.data?.id || null;
+    if (r.error) {
+      console.error("Webhook bank connection lookup failed",r.error);
+      return new Response(JSON.stringify({error:"Bank connection lookup failed"}),{status:500,headers:responseHeaders});
+    }
+    connectionId=r.data?.id || null;
   }
 
   const persisted=await supabase.from("bank_webhook_events").upsert({
