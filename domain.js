@@ -91,6 +91,35 @@
     return { current, previous, change: current - previous, pct: previous ? (current - previous) / Math.abs(previous) * 100 : null };
   }
 
+  function wealthMovementBreakdown(state, fromDate, toDate) {
+    const result = { income: 0, expenses: 0, withdrawals: 0, netCashFlow: 0, adjustments: 0, internalTransferDifference: 0, transactionCount: 0, unresolvedTransfers: 0 };
+    if (!fromDate || !toDate || String(fromDate) > String(toDate)) return result;
+    const accounts = accountMap(state);
+    for (const tx of state.transactions || []) {
+      const date = String(tx.date || "");
+      if (date <= String(fromDate) || date > String(toDate) || !isFinanciallyEffective(tx)) continue;
+      const amount = Math.abs(Number(tx.amount) || 0);
+      const currency = tx.currency || state.settings.baseCurrency;
+      if (tx.type === "income") result.income += convert(state, amount, currency, state.settings.baseCurrency, tx.fxRate);
+      else if (tx.type === "expense") result.expenses += convert(state, amount, currency, state.settings.baseCurrency, tx.fxRate);
+      else if (tx.type === "withdrawal") result.withdrawals += convert(state, amount, currency, state.settings.baseCurrency, tx.fxRate);
+      else if (tx.type === "adjustment") result.adjustments += convert(state, adjustmentDelta(tx), currency, state.settings.baseCurrency, tx.fxRate);
+      else if (tx.type === "transfer" && tx.sourceAccountId && tx.destinationAccountId) {
+        const source = accounts.get(tx.sourceAccountId);
+        const destination = accounts.get(tx.destinationAccountId);
+        if (!source || !destination) { result.unresolvedTransfers++; continue; }
+        const sentValue = convert(state, amount, currency, state.settings.baseCurrency, tx.fxRate);
+        const receivedCurrency = tx.receivedCurrency || destination.currency || currency;
+        const receivedAmount = tx.receivedAmount != null ? Math.abs(Number(tx.receivedAmount) || 0) : convert(state, amount, currency, receivedCurrency, tx.fxRate);
+        const receivedValue = convert(state, receivedAmount, receivedCurrency, state.settings.baseCurrency);
+        result.internalTransferDifference += receivedValue - sentValue;
+      }
+      result.transactionCount++;
+    }
+    result.netCashFlow = result.income - result.expenses - result.withdrawals;
+    return result;
+  }
+
   function convert(state, value, from, to, overrideRate = null) {
     const amount = Number(value) || 0;
     return amount * rate(state, from, to, overrideRate);
@@ -792,7 +821,7 @@
   window.OmniPocketEngine = {
     DAY, rate, convert, fxFreshness, valuationCoverage, balancesAt, netWorth, goalProgress,
     spendingSummary, flowSummary, recurringExpenses, unusualSpending, learnedCategorySuggestion, financialRunway, monthEndForecast, goalProjection, goalContributionHistory, snapshot,
-    recordDailySnapshot, historicalNetWorth, fxHistory, recordFxSnapshot, wealthChange,
+    recordDailySnapshot, historicalNetWorth, fxHistory, recordFxSnapshot, wealthChange, wealthMovementBreakdown,
     relatedAccounts, relatedGoals, relatedTransactions, accountExposure,
     goalNetwork, transactionNetwork, goalIntelligence, goalTrajectory, goalHealth
   };
