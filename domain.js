@@ -12,28 +12,36 @@
     return new Map((state.accounts || []).map(account => [account.id, account]));
   }
 
-  function rate(state, from, to, overrideRate = null) {
+  function rateFromTable(table, from, to, baseCurrency = null) {
     if (from === to) return 1;
-    if (Number(overrideRate) > 0) return Number(overrideRate);
-    const table = state.settings?.fx?.rates || {};
-    const direct = Number(table?.[from]?.[to]);
-    return direct > 0 ? direct : 1;
+    const positive = value => Number.isFinite(Number(value)) && Number(value) > 0 ? Number(value) : null;
+    const direct = positive(table?.[from]?.[to]);
+    if (direct) return direct;
+    const inverse = positive(table?.[to]?.[from]);
+    if (inverse) return 1 / inverse;
+    if (baseCurrency && from !== baseCurrency && to !== baseCurrency) {
+      const sourceToBase = positive(table?.[from]?.[baseCurrency]);
+      const baseToTarget = positive(table?.[baseCurrency]?.[to]);
+      if (sourceToBase && baseToTarget) return sourceToBase * baseToTarget;
+      const baseToSource = positive(table?.[baseCurrency]?.[from]);
+      const targetToBase = positive(table?.[to]?.[baseCurrency]);
+      if (baseToSource && targetToBase) return targetToBase / baseToSource;
+    }
+    return null;
   }
 
-
-
-  function rateFromTable(table, from, to) {
+  function rate(state, from, to, overrideRate = null) {
     if (from === to) return 1;
-    const direct = Number(table?.[from]?.[to]);
-    if (direct > 0) return direct;
-    return 1;
+    if (Number.isFinite(Number(overrideRate)) && Number(overrideRate) > 0) return Number(overrideRate);
+    const table = state.settings?.fx?.rates || {};
+    return rateFromTable(table, from, to, state.settings?.baseCurrency) ?? 1;
   }
 
   function convertAtRates(value, from, to, rates, fallbackState) {
     const amount = Number(value) || 0;
     if (from === to) return amount;
-    const direct = rateFromTable(rates, from, to);
-    if (direct !== 1 || (rates?.[from]?.[to] === 1)) return amount * direct;
+    const resolved = rateFromTable(rates, from, to, fallbackState?.settings?.baseCurrency);
+    if (resolved != null) return amount * resolved;
     return convert(fallbackState, amount, from, to);
   }
 
