@@ -72,8 +72,10 @@ async function collectMonoTransactions(firstPayload: any) {
   const transactions = [...first];
   const seenPages = new Set<string>();
   let meta = transactionPageMeta(firstPayload);
-  let reportedTotal: number | null = null;
-  let reason: string | null = null;
+  const firstTotalValue = meta.total ?? meta.total_count ?? meta.totalCount;
+  const firstTotal = firstTotalValue == null ? null : Number(firstTotalValue);
+  let reportedTotal: number | null = firstTotal != null && Number.isSafeInteger(firstTotal) && firstTotal >= 0 ? firstTotal : null;
+  let reason: string | null = firstTotalValue != null && reportedTotal == null ? "Mono returned invalid transaction total metadata." : null;
   let pagesFetched = 1;
   const MAX_TRANSACTION_PAGES = 100;
   while (meta?.next != null && meta.next !== "") {
@@ -116,7 +118,7 @@ async function collectMonoTransactions(firstPayload: any) {
       break;
     }
   }
-  return { transactions, reason, pagesFetched, reportedTotal };
+  return { transactions, reason, pagesFetched, reportedTotal, finalMeta: meta };
 }
 function transactionFeedState(payload: any, transactionCount: number, dataStatus: string) {
   const meta = payload?.meta || payload?.data?.meta || payload?.data?.paging || payload?.paging || payload?.pagination || {};
@@ -195,9 +197,9 @@ async function syncAccount(supabase: any, userId: string, monoAccountId: string,
   const account = unwrapAccount(accountPayload);
   const collectedFeed = await collectMonoTransactions(txPayload);
   const transactions = collectedFeed.transactions;
-  const transactionMeta = transactionPageMeta(txPayload);
+  const transactionMeta = collectedFeed.finalMeta || transactionPageMeta(txPayload);
   const dataStatus = String(accountPayload?.data?.meta?.data_status || accountPayload?.data?.meta?.dataStatus || transactionMeta?.data_status || transactionMeta?.dataStatus || "").toUpperCase();
-  const feedState = transactionFeedState(txPayload, transactions?.length ?? 0, dataStatus);
+  const feedState = transactionFeedState({ meta: transactionMeta }, transactions?.length ?? 0, dataStatus);
   if (collectedFeed.reason) {
     feedState.complete = false;
     feedState.reason = [feedState.reason, collectedFeed.reason].filter(Boolean).join(" ");
