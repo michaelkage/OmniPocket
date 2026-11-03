@@ -523,9 +523,74 @@
     return patterns.sort((a, b) => b.averageAmount - a.averageAmount);
   }
 
+  // Flag unusually large expenses against the user's own recent history.
+  // Requires four earlier comparable expenses; never mutates transaction data.
+  function unusualSpending(state, asOf = new Date(), lookbackDays = 30, baselineDays = 120) {
+    const end = new Date(asOf);
+    end.setHours(0, 0, 0, 0);
+    const endKey = dateKey(end);
+    const alertStart = new Date(end);
+    alertStart.setDate(alertStart.getDate() - Math.max(1, Number(lookbackDays) || 30));
+    const baselineStart = new Date(end);
+    baselineStart.setDate(baselineStart.getDate() - Math.max(30, Number(baselineDays) || 120));
+    const alertKey = dateKey(alertStart);
+    const baselineKey = dateKey(baselineStart);
+    const groups = new Map();
+    const expenses = [];
+
+    for (const tx of state.transactions || []) {
+      if (tx.type !== "expense" || !isFinanciallyEffective(tx)) continue;
+      const date = String(tx.date || "");
+      if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(date) || date < baselineKey || date > endKey) continue;
+      const amount = Math.abs(Number(tx.amount) || 0);
+      if (!amount) continue;
+      const category = String(tx.category || "Uncategorised").trim() || "Uncategorised";
+      const currency = tx.currency || state.settings.baseCurrency;
+      const accountId = tx.sourceAccountId || null;
+      const key = [category.toLowerCase(), accountId || "", currency].join("|");
+      const row = { id: tx.id, date, amount, category, currency, accountId, note: tx.note || "" };
+      expenses.push(row);
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(row);
+    }
+
+    const median = values => {
+      const sorted = values.slice().sort((a, b) => a - b);
+      const mid = Math.floor(sorted.length / 2);
+      return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+    };
+    const alerts = [];
+    for (const row of expenses) {
+      if (row.date < alertKey) continue;
+      const key = [row.category.toLowerCase(), row.accountId || "", row.currency].join("|");
+      const history = (groups.get(key) || []).filter(item =>
+        item.date < row.date && item.date >= baselineKey
+      );
+      if (history.length < 4) continue;
+      const typicalAmount = median(history.map(item => item.amount));
+      const deviations = history.map(item => Math.abs(item.amount - typicalAmount));
+      const medianDeviation = median(deviations);
+      const threshold = Math.max(typicalAmount * 2, typicalAmount + medianDeviation * 3);
+      if (row.amount < threshold) continue;
+      alerts.push({
+        transactionId: row.id || null,
+        date: row.date,
+        category: row.category,
+        note: row.note,
+        currency: row.currency,
+        accountId: row.accountId,
+        amount: row.amount,
+        typicalAmount,
+        multiple: typicalAmount ? row.amount / typicalAmount : null,
+        baselineCount: history.length
+      });
+    }
+    return alerts.sort((a, b) => b.date.localeCompare(a.date) || b.amount - a.amount);
+  }
+
   window.OmniPocketEngine = {
     DAY, rate, convert, balancesAt, netWorth, goalProgress,
-    spendingSummary, flowSummary, recurringExpenses, goalProjection, goalContributionHistory, snapshot,
+    spendingSummary, flowSummary, recurringExpenses, unusualSpending, goalProjection, goalContributionHistory, snapshot,
     recordDailySnapshot, historicalNetWorth, fxHistory, recordFxSnapshot, wealthChange,
     relatedAccounts, relatedGoals, relatedTransactions, accountExposure,
     goalNetwork, transactionNetwork, goalIntelligence, goalTrajectory, goalHealth
