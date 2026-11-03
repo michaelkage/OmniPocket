@@ -117,7 +117,7 @@ Deno.serve(async (req) => {
 
   const persisted=await supabase.from("bank_webhook_events").upsert({
     provider:"mono",event_id:eventId,event_type:eventType,signature_valid:true,
-    connection_id:connectionId,payload,processed_at:new Date().toISOString()
+    connection_id:connectionId,payload,processed_at:null
   },{onConflict:"provider,event_id"});
 
   if (persisted.error) {
@@ -135,6 +135,14 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({error:"Bank connection update failed"}),{status:500,headers:responseHeaders});
     }
     syncRequired=Boolean(activeUpdate.data);
+  }
+
+  const processed=await supabase.from("bank_webhook_events").update({
+    processed_at:new Date().toISOString()
+  }).eq("provider","mono").eq("event_id",eventId);
+  if (processed.error) {
+    console.error("Webhook event completion update failed",processed.error);
+    return new Response(JSON.stringify({error:"Webhook completion update failed"}),{status:500,headers:responseHeaders});
   }
 
   return new Response(JSON.stringify({

@@ -168,6 +168,9 @@ assert.match(sync, /\.eq\("status", "active"\)\.select\(\)\.maybeSingle\(\)/);
 assert.match(sync, /Bank connection was disconnected during sync; imported data was not updated/);
 assert.match(webhook, /\.eq\("user_id",session\.user_id\)\.eq\("mono_account_id",monoAccountId\)/);
 assert.match(webhook, /if \(r\.error\) \{[\s\S]*Webhook bank connection lookup failed[\s\S]*Bank connection lookup failed/);
+assert.match(webhook, /connection_id:connectionId,payload,processed_at:null/);
+assert.match(webhook, /bank_webhook_events"\)\.update\(\{[\s\S]*processed_at:new Date\(\)\.toISOString\(\)/);
+assert.match(webhook, /Webhook event completion update failed/);
 assert.doesNotMatch(webhook, /if \(!r\.error\) connectionId=r\.data\?\.id/);
 assert.match(lifecycle, /Bearer\\s\+/);
 
