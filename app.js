@@ -75,6 +75,8 @@ function migrateState(raw) {
 
   const next = clone(DEFAULT_STATE);
   next.settings = { ...next.settings, ...(raw.settings || {}) };
+  // Keep persisted preferences inside the currencies the ledger can actually format and convert.
+  if (!CURRENCIES.includes(next.settings.baseCurrency)) next.settings.baseCurrency = "NGN";
   next.settings.fx = {
     ...clone(DEFAULT_STATE.settings.fx),
     ...(raw.settings?.fx || {})
