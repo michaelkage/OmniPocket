@@ -789,7 +789,7 @@ function findPossibleStatementDuplicate(row) {
   const description = normalizeStatementFingerprintText(row.description);
   if (description.length < 8) return null;
   return state.transactions.find(t => {
-    if (t.status === "superseded" || t.date !== row.date || t.sourceAccountId !== row.accountId) return false;
+    if (t.status === "superseded" || t.type !== row.type || t.date !== row.date || t.sourceAccountId !== row.accountId) return false;
     if (t.currency !== row.currency || Math.abs(Number(t.amount) - Math.abs(row.signedAmount)) > 0.009) return false;
     const existingDescription = normalizeStatementFingerprintText(t.description || t.note);
     return existingDescription.length >= 8 &&
