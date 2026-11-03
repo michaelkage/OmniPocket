@@ -521,6 +521,7 @@ function editTransaction(id) {
   $("editTxStatus").value = t.status;
   populateTransactionGoals("editTxGoals", t.linkedGoalIds || []);
   $("editTransactionDialog").dataset.transactionId = id;
+  $("editTransactionDialog").dataset.originalCategory = t.category || "";
   syncEditTransactionFields();
   $("transactionDialog").close();
   $("editTransactionDialog").showModal();
@@ -1882,7 +1883,7 @@ $("editTransactionForm")?.addEventListener("submit", event => {
   t.fxSource = t.fxRate ? "manual" : (type === "transfer" || type === "withdrawal" ? "snapshot" : null);
   t.date = $("editTxDate").value || t.date;
 t.category = $("editTxCategory").value.trim();
-  t.categorySource = "user";
+  if (t.category !== ($("editTransactionDialog").dataset.originalCategory || "")) t.categorySource = "user";
   t.suggestedCategory = null;
   t.categoryConfidence = null;
   t.categoryReason = "";
