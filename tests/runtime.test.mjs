@@ -246,6 +246,30 @@ const tx = (o) => ({
   assert.equal(flow.count, 1, "future-dated movements must not enter current-period counts");
 }
 
+// Unusual spending compares a recent expense with the user's own prior category history.
+{
+  const state = makeState({
+    transactions: [
+      ...[1000, 1100, 900, 1050].map((amount, index) => tx({
+        id: "usual-" + index, type: "expense", amount, category: "Food",
+        sourceAccountId: "a", date: ["2026-07-01", "2026-07-20", "2026-08-10", "2026-09-02"][index],
+      })),
+      tx({ id: "spike", type: "expense", amount: 4500, category: "Food", sourceAccountId: "a", date: "2026-10-20", note: "Large dinner" }),
+      tx({ id: "future-spike", type: "expense", amount: 9000, category: "Food", sourceAccountId: "a", date: "2026-11-10" }),
+      tx({ id: "other-category", type: "expense", amount: 9000, category: "Travel", sourceAccountId: "a", date: "2026-10-21" }),
+      tx({ id: "pending-spike", type: "expense", amount: 9000, category: "Food", sourceAccountId: "a", date: "2026-10-22", bankStatus: "pending" }),
+    ],
+  });
+  const before = JSON.stringify(state.transactions);
+  const alerts = E.unusualSpending(state, new Date("2026-11-03T12:00:00"));
+  assert.equal(alerts.length, 1, "only an effective recent expense with enough comparable history should be flagged");
+  assert.equal(alerts[0].transactionId, "spike");
+  assert.equal(alerts[0].typicalAmount, 1025);
+  assert.equal(alerts[0].baselineCount, 4);
+  assert.equal(alerts[0].multiple, 4500 / 1025);
+  assert.equal(JSON.stringify(state.transactions), before, "unusual-spending analysis must not mutate transactions");
+}
+
 // Recurring expense detection is conservative, date-bounded, and read-only.
 {
   const state = makeState({
