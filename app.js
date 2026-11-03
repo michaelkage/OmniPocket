@@ -1523,7 +1523,6 @@ function renderReviewQueue() {
     '</span></div><button id="reviewQueueOpen" type="button">Open review desk</button></div>' +
     '<div class="review-queue-list">' + flagged.slice(0,4).map(t => {
       const source = account(t.sourceAccountId);
-      const lowCategory = t.external?.provider && t.suggestedCategory && Number(t.categoryConfidence) < 0.8;
       const reason = t.status === "needs_review" ? "Needs confirmation" : "Check category · " + Math.round((Number(t.categoryConfidence) || 0) * 100) + "% confidence";
       return '<button class="review-queue-item" data-review-transaction="' + escapeHtml(t.id) + '"><span><strong>' + escapeHtml(transactionLabel(t)) + '</strong><small>' + escapeHtml(t.date) + ' · ' + escapeHtml(source?.name || "Unknown account") + ' · ' + escapeHtml(reason) + '</small></span><strong>' + escapeHtml(state.settings.privacyHidden ? "••••••" : money(t.amount,t.currency)) + '</strong></button>';
     }).join("") + '</div>' +
@@ -1568,7 +1567,7 @@ function renderFullViews() {
     const detail = t.type === "transfer" ? `${source?.name || "Unknown"} → ${dest?.name || "Unknown"}` : source?.name || "Unknown";
      const bankStatus = String(t.bankStatus || "").trim().toLowerCase();
      const transactionStatus = String(t.status || "").trim().toLowerCase();
-     const lifecycleLabel = bankStatus === "pending" ? "Pending at bank · excluded" : bankStatus === "failed" ? "Failed · excluded" : bankStatus === "reversed" ? "Reversed · excluded" : transactionStatus === "needs_review" ? "Handle later" : transactionStatus === "superseded" ? "Paired leg · excluded" : "Recorded";
+     const lifecycleLabel = bankStatus === "pending" ? "Pending at bank · excluded" : bankStatus === "failed" ? "Failed · excluded" : bankStatus === "reversed" ? "Reversed · excluded" : transactionStatus === "needs_review" ? "Needs confirmation" : transactionStatus === "superseded" ? "Paired leg · excluded" : (t.external?.provider && t.suggestedCategory && Number.isFinite(Number(t.categoryConfidence)) && Number(t.categoryConfidence) < 0.8) ? "Check suggested category" : "Recorded";
     return `<div class="activity-row interactive-row" data-transaction-id="${escapeHtml(t.id)}" tabindex="0" role="button"><div><strong>${escapeHtml(transactionLabel(t))}</strong><div class="muted">${escapeHtml(t.date)} · ${escapeHtml(detail)}${t.note ? " · "+escapeHtml(t.note) : ""}</div></div><div class="activity-value"><strong data-financial-value>${sign}${escapeHtml(state.settings.privacyHidden ? "••••••" : money(t.amount,t.currency))}</strong><span class="muted">${escapeHtml(lifecycleLabel)}${t.external?.provider ? " · " + escapeHtml(t.external.provider) : ""}</span></div></div>`;
   }).join("") || '<div class="empty-state">No matching activity.</div>';
 
