@@ -156,7 +156,7 @@
   function reconcileAccount(state, accountId, statementBalance, statementDate) {
     const account = (state.accounts || []).find(row => row.id === accountId);
     const value = Number(statementBalance);
-    const validDate = /^\\d{4}-\\d{2}-\\d{2}$/.test(String(statementDate || ""));
+    const validDate = /^\d{4}-\d{2}-\d{2}$/.test(String(statementDate || ""));
     if (!account || !Number.isFinite(value) || !validDate) return { status: "unknown", reason: "Choose an account, a valid statement date and a finite balance." };
     const cutoff = { date: String(statementDate), createdAt: Number.MAX_SAFE_INTEGER };
     const ledgerAccount = balancesAt(state, cutoff).find(row => row.id === accountId);
