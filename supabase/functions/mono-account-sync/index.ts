@@ -219,7 +219,7 @@ async function syncAccount(supabase: any, userId: string, monoAccountId: string,
     feedState.complete = false;
     feedState.reason = [feedState.reason, collectedFeed.reason].filter(Boolean).join(" ");
   }
-  const transactionFeedComplete = transactions !== null && feedState.complete;
+  let transactionFeedComplete = transactions !== null && feedState.complete;
   const reportedTransactionTotal = collectedFeed.reportedTotal ?? feedState.reportedTotal;
   if (transactions === null) {
     const topLevelKeys = txPayload && typeof txPayload === "object" ? Object.keys(txPayload).slice(0, 12) : [];
@@ -272,6 +272,7 @@ async function syncAccount(supabase: any, userId: string, monoAccountId: string,
   let duplicateTransactionCount = 0;
   let invalidDirectionCount = 0;
   let invalidAmountCount = 0;
+  let missingProviderIdCount = 0;
   for (const tx of transactions.map((item: any) => normalizeTransaction(item, amountUnit))) {
     if (tx.amount_minor == null) {
       invalidAmountCount++;
@@ -282,6 +283,7 @@ async function syncAccount(supabase: any, userId: string, monoAccountId: string,
       continue;
     }
     if (!tx.mono_transaction_id) {
+      missingProviderIdCount++;
       console.warn("Skipping Mono transaction without a stable provider ID");
       continue;
     }
@@ -289,6 +291,22 @@ async function syncAccount(supabase: any, userId: string, monoAccountId: string,
     normalizedById.set(tx.mono_transaction_id, tx);
   }
   const normalized = [...normalizedById.values()];
+  const feedQualityIssues = [];
+  if (duplicateTransactionCount) feedQualityIssues.push(`${duplicateTransactionCount} duplicate provider transaction record(s) were returned.`);
+  if (invalidDirectionCount) feedQualityIssues.push(`${invalidDirectionCount} transaction(s) had an unsupported direction.`);
+  if (invalidAmountCount) feedQualityIssues.push(`${invalidAmountCount} transaction(s) had an invalid amount.`);
+  if (missingProviderIdCount) feedQualityIssues.push(`${missingProviderIdCount} transaction(s) had no stable provider ID.`);
+  if (feedQualityIssues.length) {
+    transactionFeedComplete = false;
+    feedState.complete = false;
+    feedState.reason = [feedState.reason, ...feedQualityIssues].filter(Boolean).join(" ");
+    row.sync_status = "warning";
+    row.last_sync_error = feedState.reason;
+    const { status: _status, ...connectionUpdate } = row;
+    const { error: qualityUpdateError } = await supabase.from("bank_connections").update(connectionUpdate)
+      .eq("id", connection.id).eq("user_id", userId).eq("status", "active");
+    if (qualityUpdateError) throw qualityUpdateError;
+  }
   const transactionIds = normalized.map((tx: any) => tx.mono_transaction_id);
   const { data: existingRows, error: existingRowsError } = transactionIds.length
     ? await supabase.from("bank_transactions").select("mono_transaction_id").eq("connection_id", connection.id).in("mono_transaction_id", transactionIds)
@@ -323,14 +341,14 @@ async function syncAccount(supabase: any, userId: string, monoAccountId: string,
   const { error: eventError } = await supabase.from("bank_sync_events").insert({
     user_id: userId, connection_id: connection.id, provider: "mono",
     event_type: "account_sync", status: transactionFeedComplete ? "success" : "warning", started_at: startedAt, completed_at: completedAt,
-    imported_count: insertedCount, metadata: { transaction_feed_complete: transactionFeedComplete, data_status: row.data_status, amount_unit: amountUnit, fetched_count: transactions.length, inserted_count: insertedCount, updated_count: updatedCount, skipped_count: transactions.length - normalized.length, duplicate_count: duplicateTransactionCount, invalid_direction_count: invalidDirectionCount, invalid_amount_count: invalidAmountCount, reported_transaction_total: reportedTransactionTotal, pagination: { ...feedState.metadata, pages_fetched: collectedFeed.pagesFetched }, pagination_incomplete: !transactionFeedComplete, feed_incomplete_reason: feedState.reason }
+    imported_count: insertedCount, metadata: { transaction_feed_complete: transactionFeedComplete, data_status: row.data_status, amount_unit: amountUnit, fetched_count: transactions.length, inserted_count: insertedCount, updated_count: updatedCount, skipped_count: transactions.length - normalized.length, duplicate_count: duplicateTransactionCount, invalid_direction_count: invalidDirectionCount, invalid_amount_count: invalidAmountCount, missing_provider_id_count: missingProviderIdCount, reported_transaction_total: reportedTransactionTotal, pagination: { ...feedState.metadata, pages_fetched: collectedFeed.pagesFetched }, pagination_incomplete: !transactionFeedComplete, feed_incomplete_reason: feedState.reason }
   });
   if (eventError) console.warn("Could not record bank sync event:", eventError.message);
 
   return {
     connection, account, transactionsImported: insertedCount, transactionsFetched: transactions.length,
     transactionsInserted: insertedCount, transactionsUpdated: updatedCount, transactionsSkipped: transactions.length - normalized.length,
-    duplicateTransactionCount, invalidTransactionCount: invalidDirectionCount + invalidAmountCount, transactions: normalized, dataStatus: row.data_status, amountUnit,
+    duplicateTransactionCount, invalidTransactionCount: invalidDirectionCount + invalidAmountCount + missingProviderIdCount, transactions: normalized, dataStatus: row.data_status, amountUnit,
     transactionFeedComplete, reportedTransactionTotal, transactionFeedIncompleteReason: feedState.reason, transactionPagination: { ...feedState.metadata, pagesFetched: collectedFeed.pagesFetched }
   };
 }
