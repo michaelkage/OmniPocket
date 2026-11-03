@@ -51,11 +51,13 @@ function transactionPageMeta(payload: any) {
   return payload?.meta || payload?.data?.meta || payload?.data?.paging || payload?.paging || payload?.pagination || {};
 }
 
-async function monoNextPage(next: string) {
+async function monoNextPage(next: string, monoAccountId: string) {
   const secret = Deno.env.get("MONO_SECRET_KEY");
   if (!secret) throw new Error("MONO_SECRET_KEY is not configured in Supabase.");
   const url = new URL(next);
-  if (url.origin !== "https://api.withmono.com" || !url.pathname.startsWith("/v2/") || url.username || url.password || url.hash) {
+  const accountPath = `/v2/${encodeURIComponent(monoAccountId)}/transactions`;
+  const legacyAccountPath = `/v2/accounts/${encodeURIComponent(monoAccountId)}/transactions`;
+  if (url.origin !== "https://api.withmono.com" || ![accountPath, legacyAccountPath].includes(url.pathname) || url.username || url.password || url.hash) {
     throw new Error("Mono returned an unsafe transaction pagination URL.");
   }
   const response = await fetch(url.toString(), {
@@ -66,7 +68,7 @@ async function monoNextPage(next: string) {
   return body;
 }
 
-async function collectMonoTransactions(firstPayload: any) {
+async function collectMonoTransactions(firstPayload: any, monoAccountId: string) {
   const first = unwrapTransactions(firstPayload);
   if (first === null) return { transactions: null, reason: null, pagesFetched: 0, reportedTotal: null };
   const transactions = [...first];
@@ -76,6 +78,10 @@ async function collectMonoTransactions(firstPayload: any) {
   const firstTotal = firstTotalValue == null ? null : Number(firstTotalValue);
   let reportedTotal: number | null = firstTotal != null && Number.isSafeInteger(firstTotal) && firstTotal >= 0 ? firstTotal : null;
   let reason: string | null = firstTotalValue != null && reportedTotal == null ? "Mono returned invalid transaction total metadata." : null;
+  const firstStatus = String(firstPayload?.status || "").toLowerCase();
+  if (firstStatus && !["successful", "success"].includes(firstStatus)) {
+    reason = [reason, `Mono transaction response status was ${firstStatus}.`].filter(Boolean).join(" ");
+  }
   let pagesFetched = 1;
   const MAX_TRANSACTION_PAGES = 100;
   while (meta?.next != null && meta.next !== "") {
@@ -94,10 +100,15 @@ async function collectMonoTransactions(firstPayload: any) {
     }
     seenPages.add(next);
     try {
-      const pagePayload = await monoNextPage(next);
+      const pagePayload = await monoNextPage(next, monoAccountId);
       const pageTransactions = unwrapTransactions(pagePayload);
       if (pageTransactions === null) {
         reason = "Mono returned an unexpected transaction page response.";
+        break;
+      }
+      const pageStatus = String(pagePayload?.status || "").toLowerCase();
+      if (pageStatus && !["successful", "success"].includes(pageStatus)) {
+        reason = `Mono transaction page status was ${pageStatus}.`;
         break;
       }
       const pageMeta = transactionPageMeta(pagePayload);
@@ -195,7 +206,7 @@ async function syncAccount(supabase: any, userId: string, monoAccountId: string,
   const accountPayload = await mono(`/accounts/${encodeURIComponent(monoAccountId)}`, { headers: { "x-real-time": "true" } });
   const txPayload = await mono(`/accounts/${encodeURIComponent(monoAccountId)}/transactions?paginate=false`, { headers: { "x-real-time": "true" } });
   const account = unwrapAccount(accountPayload);
-  const collectedFeed = await collectMonoTransactions(txPayload);
+  const collectedFeed = await collectMonoTransactions(txPayload, monoAccountId);
   const transactions = collectedFeed.transactions;
   const transactionMeta = collectedFeed.finalMeta || transactionPageMeta(txPayload);
   const dataStatus = String(accountPayload?.data?.meta?.data_status || accountPayload?.data?.meta?.dataStatus || transactionMeta?.data_status || transactionMeta?.dataStatus || "").toUpperCase();
