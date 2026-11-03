@@ -226,6 +226,7 @@
       projectedBalance: currentBalance + projectedNet,
       daysElapsed,
       daysRemaining,
+      monthEndDate: dateKey(new Date(today.getFullYear(), today.getMonth() + 1, 0)),
       activeDays,
       sampleTransactions,
       confidence,
