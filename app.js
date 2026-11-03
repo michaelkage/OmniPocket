@@ -140,6 +140,7 @@ function migrateState(raw) {
     categoryReason: String(t.categoryReason || ""),
     potentialDuplicateOf: t.potentialDuplicateOf ? String(t.potentialDuplicateOf) : null,
     potentialDuplicateStatus: t.potentialDuplicateStatus === "needs_review" ? "needs_review" : null,
+    auditTrail: Array.isArray(t.auditTrail) ? t.auditTrail.filter(item => item && item.at && item.action).slice(-40).map(item => ({ id: String(item.id || uid()), at: String(item.at), action: String(item.action), actor: item.actor === "system" ? "system" : "user", source: String(item.source || "manual"), summary: String(item.summary || item.action), changes: Array.isArray(item.changes) ? item.changes.slice(0, 12).map(change => ({ field: String(change.field || ""), before: String(change.before ?? "").slice(0, 120), after: String(change.after ?? "").slice(0, 120) })) : [] })) : [],
     suggestedType: ["income","expense","transfer","withdrawal","adjustment"].includes(t.suggestedType) ? t.suggestedType : null,
     suggestedSourceAccountId: t.suggestedSourceAccountId || null,
     suggestedPairTransactionId: t.suggestedPairTransactionId || null,
@@ -507,6 +508,14 @@ function openTransactionDetail(id) {
     ? linkedGoals.map(g => '<button class="link-row" data-goal-from-transaction="' + escapeHtml(g.id) + '"><strong>' + escapeHtml(g.name) + '</strong><span><span class="context-link-badge">Linked</span> ' + escapeHtml(money(goalProgress(g).current, g.currency)) + '</span></button>').join("")
     : '<div class="empty-state">No goals explicitly linked to this transaction.</div>';
   $("transactionDetailNote").textContent = t.note || "No note.";
+  const auditHost = $("transactionAuditTrail");
+  if (auditHost) {
+    const auditRows = Array.isArray(t.auditTrail) ? t.auditTrail.slice().reverse() : [];
+    auditHost.innerHTML = auditRows.length ? auditRows.map(entry => {
+      const changes = (entry.changes || []).map(change => '<div class="audit-change"><span>' + escapeHtml(change.field) + '</span><small>' + escapeHtml(change.before) + ' <b>→</b> ' + escapeHtml(change.after) + '</small></div>').join("");
+      return '<article class="audit-entry"><div class="audit-entry-head"><strong>' + escapeHtml(entry.summary || entry.action) + '</strong><time>' + escapeHtml(new Date(entry.at).toLocaleString()) + '</time></div><div class="audit-entry-meta">' + escapeHtml(entry.actor === "system" ? "System" : "You") + ' · ' + escapeHtml(entry.source || "manual") + '</div>' + changes + '</article>';
+    }).join("") : '<div class="muted">Earlier activity has no audit history. New changes will appear here.</div>';
+  }
   $("transactionReviewButton").textContent = t.status === "needs_review" ? "Mark recorded" : "Mark for review";
   $("transactionDialog").dataset.transactionId = id;
   const reviewQueue = reviewDeskTransactions();
@@ -1493,6 +1502,37 @@ function importTransaction(input, options = {}) {
   });
   return { transaction, duplicate: false };
 }
+function appendTransactionAudit(transaction, action, details = {}) {
+  if (!transaction) return;
+  const entry = {
+    id: uid(),
+    at: new Date().toISOString(),
+    action: String(action || "updated"),
+    actor: details.actor || "user",
+    source: details.source || "manual",
+    summary: String(details.summary || action || "Transaction updated"),
+    changes: Array.isArray(details.changes) ? details.changes.slice(0, 12).map(change => ({
+      field: String(change.field || ""),
+      before: String(change.before ?? "").slice(0, 120),
+      after: String(change.after ?? "").slice(0, 120)
+    })) : []
+  };
+  transaction.auditTrail = Array.isArray(transaction.auditTrail) ? transaction.auditTrail : [];
+  transaction.auditTrail.push(entry);
+  transaction.auditTrail = transaction.auditTrail.slice(-40);
+}
+
+function transactionAuditValue(value) {
+  if (value == null || value === "") return "—";
+  if (typeof value === "object") return JSON.stringify(value);
+  return String(value);
+}
+
+function transactionAuditChanges(before, after, fields) {
+  return fields.filter(([field]) => transactionAuditValue(before[field]) !== transactionAuditValue(after[field]))
+    .map(([field, label]) => ({ field: label, before: transactionAuditValue(before[field]), after: transactionAuditValue(after[field]) }));
+}
+
 function addTransaction(input) {
   const tx = {
     id: uid(),
@@ -1516,6 +1556,7 @@ function addTransaction(input) {
     categoryReason: input.categoryReason || "",
     potentialDuplicateOf: input.potentialDuplicateOf || null,
     potentialDuplicateStatus: input.potentialDuplicateStatus === "needs_review" ? "needs_review" : null,
+    auditTrail: [],
     suggestedType: ["income","expense","transfer","withdrawal","adjustment"].includes(input.suggestedType) ? input.suggestedType : null,
     suggestedSourceAccountId: input.suggestedSourceAccountId || null,
     suggestedPairTransactionId: input.suggestedPairTransactionId || null,
@@ -1537,6 +1578,7 @@ function addTransaction(input) {
       lastSeenAt: input.external.lastSeenAt || new Date().toISOString()
     } : null
   };
+  appendTransactionAudit(tx, "created", { source: external?.provider ? "bank import" : "manual entry", summary: external?.provider ? "Imported from " + external.provider : "Created manually" });
   state.transactions.push(tx);
   emitStateEvent("transaction:updated", { action: "created", transaction: tx });
   return tx;
@@ -1849,7 +1891,9 @@ $("transactionReviewButton")?.addEventListener("click", () => {
   if (!t) return;
   const wasInReviewDesk = reviewDeskTransactions().some(item => item.id === t.id);
   const priorIndex = reviewDeskTransactions().findIndex(item => item.id === t.id);
+  const previousStatus = t.status;
   t.status = t.status === "needs_review" ? "recorded" : "needs_review";
+  appendTransactionAudit(t, "status_changed", { summary: t.status === "recorded" ? "Marked as recorded" : "Sent to review", changes: [{ field: "Status", before: previousStatus, after: t.status }] });
   rebuildBalances();
   saveState();
   const refreshedQueue = reviewDeskTransactions();
@@ -1866,7 +1910,11 @@ $("transactionCategoryCorrectionSave")?.addEventListener("click", () => {
   const t = state.transactions.find(x => x.id === $("transactionDialog").dataset.transactionId);
   const category = String($("transactionCategoryCorrectionInput")?.value || "").trim();
   if (!t?.external?.provider || !category) return;
-  if (category !== String(t.category || "").trim()) t.categorySource = "user";
+  const previousCategory = t.category || "";
+  if (category !== String(previousCategory).trim()) {
+    t.categorySource = "user";
+    appendTransactionAudit(t, "category_corrected", { summary: "Category corrected by you", changes: [{ field: "Category", before: previousCategory, after: category }] });
+  }
   t.category = category;
   t.suggestedCategory = null;
   t.categoryConfidence = null;
@@ -1881,6 +1929,7 @@ $("transactionDuplicateOpenMatch")?.addEventListener("click", () => {
 $("transactionDuplicateKeepBoth")?.addEventListener("click", () => {
   const t = state.transactions.find(x => x.id === $("transactionDialog").dataset.transactionId);
   if (!t || t.potentialDuplicateStatus !== "needs_review") return;
+  appendTransactionAudit(t, "duplicate_kept", { summary: "Possible duplicate reviewed — kept both entries", changes: [{ field: "Duplicate review", before: "Needs review", after: "Keep both" }] });
   t.potentialDuplicateOf = null;
   t.potentialDuplicateStatus = null;
   saveState();
@@ -1889,7 +1938,9 @@ $("transactionDuplicateKeepBoth")?.addEventListener("click", () => {
 $("transactionAcceptSuggestion")?.addEventListener("click", () => {
   const t = state.transactions.find(x => x.id === $("transactionDialog").dataset.transactionId);
   if (!t?.suggestedCategory) return;
-  t.category = t.suggestedCategory;
+  const acceptedCategory = t.suggestedCategory;
+  appendTransactionAudit(t, "suggestion_accepted", { summary: "Accepted suggested category", source: "OmniPocket suggestion · confirmed by you", changes: [{ field: "Category", before: t.category || "—", after: acceptedCategory }] });
+  t.category = acceptedCategory;
   t.suggestedCategory = null;
   t.categoryConfidence = null;
   t.categoryReason = "";
@@ -1935,6 +1986,7 @@ $("transactionAcceptPair")?.addEventListener("click", () => {
   const destination = account(destinationTx.sourceAccountId);
   if (!source || !destination || source.id === destination.id) return;
 
+  appendTransactionAudit(t, "transfer_matched", { summary: "Matched statement entries as a transfer", source: "transfer matching · confirmed by you", changes: [{ field: "Type", before: t.type, after: "transfer" }, { field: "Paired entry", before: "Separate transaction", after: pair.id }] });
   t.type = "transfer";
   t.sourceAccountId = source.id;
   t.destinationAccountId = destination.id;
@@ -1988,6 +2040,7 @@ $("transactionAcceptHandling")?.addEventListener("click", () => {
     editTransaction(t.id);
     return;
   }
+  appendTransactionAudit(t, "handling_accepted", { summary: "Confirmed suggested transfer handling", source: "OmniPocket suggestion · confirmed by you", changes: [{ field: "Type", before: t.type, after: "transfer" }, { field: "Destination", before: "Unassigned", after: destination.name }] });
   t.type = "transfer";
   t.sourceAccountId = suggestedSource.id;
   t.destinationAccountId = destination.id;
@@ -2009,6 +2062,7 @@ $("editTransactionForm")?.addEventListener("submit", event => {
   event.preventDefault();
   const t = state.transactions.find(x => x.id === $("editTransactionDialog").dataset.transactionId);
   if (!t) return;
+  const beforeEdit = { type: t.type, sourceAccountId: t.sourceAccountId, destinationAccountId: t.destinationAccountId, amount: t.amount, receivedAmount: t.receivedAmount, currency: t.currency, date: t.date, category: t.category, note: t.note, status: t.status, linkedGoalIds: (t.linkedGoalIds || []).join(", ") };
   const amount = Number($("editTxAmount").value);
   const type = $("editTxType").value;
   const source = account($("editTxSource").value);
@@ -2056,6 +2110,10 @@ t.category = $("editTxCategory").value.trim();
   t.note = $("editTxNote").value.trim();
   t.status = $("editTxStatus").value;
   t.linkedGoalIds = readTransactionGoals("editTxGoals");
+  const afterEdit = { type: t.type, sourceAccountId: t.sourceAccountId, destinationAccountId: t.destinationAccountId, amount: t.amount, receivedAmount: t.receivedAmount, currency: t.currency, date: t.date, category: t.category, note: t.note, status: t.status, linkedGoalIds: (t.linkedGoalIds || []).join(", ") };
+  const editFields = [["type","Type"],["sourceAccountId","Source account"],["destinationAccountId","Destination account"],["amount","Amount"],["receivedAmount","Received amount"],["currency","Currency"],["date","Date"],["category","Category"],["note","Note"],["status","Status"],["linkedGoalIds","Linked goals"]];
+  const editChanges = transactionAuditChanges(beforeEdit, afterEdit, editFields);
+  if (editChanges.length) appendTransactionAudit(t, "edited", { summary: "Transaction details edited", changes: editChanges });
   t.createdAt = Date.now();
   rebuildBalances();
   saveState();
