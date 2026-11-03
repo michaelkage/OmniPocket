@@ -1581,7 +1581,7 @@ button { touch-action: manipulation; }
 .widget-fx { grid-column: span 6; }
 .widget-relations { grid-column: span 6; }
 .widget-insights { grid-column: span 6; }
-.widget-spending, .widget-upcoming-payments, .widget-unusual-spending { grid-column: span 6; }
+.widget-spending, .widget-upcoming-payments, .widget-unusual-spending, .widget-cash-flow-forecast { grid-column: span 6; }
 .dashboard-widget .widget-head { margin-bottom: 14px; }
 .dashboard-widget .eyebrow { font-size: 10px; letter-spacing: .12em; }
 .galaxy-networth { margin: 14px 0 8px; font-size: clamp(30px, 4.1vw, 52px); line-height: 1.05; }
@@ -1596,7 +1596,7 @@ button { touch-action: manipulation; }
 @media (min-width: 761px) and (max-width: 1050px) {
   .dashboard-galaxy { grid-template-columns: repeat(6, minmax(0, 1fr)); }
   .widget-networth, .widget-goals, .widget-fx, .widget-relations,
-  .widget-insights, .widget-spending, .widget-upcoming-payments, .widget-unusual-spending { grid-column: span 3; }
+  .widget-insights, .widget-spending, .widget-upcoming-payments, .widget-unusual-spending, .widget-cash-flow-forecast { grid-column: span 3; }
   .widget-trend, .widget-accounts, .widget-activity, .widget-quick { grid-column: span 6; }
 }
 @media (max-width: 760px) {
@@ -1607,7 +1607,7 @@ button { touch-action: manipulation; }
   .dashboard-toolbar > button { flex: 0 0 auto; width: auto; }
   .widget-networth, .widget-trend, .widget-goals, .widget-accounts,
   .widget-activity, .widget-quick, .widget-fx, .widget-relations,
-  .widget-insights, .widget-spending, .widget-upcoming-payments, .widget-unusual-spending { grid-column: 1 / -1; }
+  .widget-insights, .widget-spending, .widget-upcoming-payments, .widget-unusual-spending, .widget-cash-flow-forecast { grid-column: 1 / -1; }
 }
 @media (prefers-reduced-motion: reduce) {
   .dashboard-widget { animation: none !important; }
@@ -1932,4 +1932,49 @@ button { touch-action: manipulation; }
   color: var(--md-sys-color-on-surface-variant);
   font-size: .78rem;
   line-height: 1.45;
+}
+
+
+/* Month-end cash-flow forecast */
+.forecast-primary {
+  display: grid;
+  gap: 5px;
+  padding: 14px 0 16px;
+}
+.forecast-primary > span, .forecast-primary > small,
+.forecast-breakdown span, .forecast-confidence small {
+  color: var(--md-sys-color-on-surface-variant);
+}
+.forecast-primary > strong {
+  font-size: clamp(1.8rem, 4vw, 2.5rem);
+  line-height: 1.12;
+  letter-spacing: -.045em;
+  overflow-wrap: anywhere;
+}
+.forecast-primary > small { font-size: .8rem; }
+.forecast-breakdown {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  padding: 14px 0;
+  border-top: 1px solid var(--md-sys-color-outline-variant);
+  border-bottom: 1px solid var(--md-sys-color-outline-variant);
+}
+.forecast-breakdown > div { display: grid; gap: 6px; min-width: 0; }
+.forecast-breakdown span { font-size: .74rem; line-height: 1.35; }
+.forecast-breakdown strong { font-size: .9rem; overflow-wrap: anywhere; }
+.forecast-confidence {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 6px 12px;
+  padding-top: 12px;
+  font-size: .78rem;
+  font-weight: 700;
+}
+.forecast-confidence small { font-weight: 400; }
+@media (max-width: 420px) {
+  .forecast-breakdown { gap: 8px; }
+  .forecast-breakdown strong { font-size: .8rem; }
+  .forecast-breakdown span { font-size: .68rem; }
 }
