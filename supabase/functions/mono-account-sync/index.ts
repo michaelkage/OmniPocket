@@ -237,8 +237,9 @@ async function syncAccount(supabase: any, userId: string, monoAccountId: string,
     institution_name: account?.institution?.name || null, account_name: account?.name || "Connected bank",
     account_number_last4: account?.account_number ? String(account.account_number).slice(-4) : null,
     currency: String(account?.currency || "NGN").toUpperCase(), account_type: account?.type || null,
-    balance_minor: providerBalance, data_status: accountPayload?.data?.meta?.data_status || accountPayload?.data?.meta?.dataStatus || null,
-    sync_status: transactionFeedComplete ? "healthy" : "warning", provider_balance_minor: providerBalance, provider_balance_at: providerBalance == null ? null : now,
+    ...(providerBalance == null ? {} : { balance_minor: providerBalance, provider_balance_minor: providerBalance, provider_balance_at: now }),
+    data_status: accountPayload?.data?.meta?.data_status || accountPayload?.data?.meta?.dataStatus || null,
+    sync_status: transactionFeedComplete ? "healthy" : "warning",
     last_synced_at: now, last_sync_error: transactionFeedComplete ? null : (feedState.reason || "Mono transaction history is incomplete; balance reconciliation is deferred."),
   };
 
