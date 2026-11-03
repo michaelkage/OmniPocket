@@ -354,7 +354,10 @@
         value += adjustmentDelta(tx);
         value = convert(state, value, tx.currency, goal.currency, tx.fxRate);
       } else if (tx.type === "transfer") {
-        if (sourceIncluded) value -= convert(state, Math.abs(Number(tx.amount) || 0), tx.currency, goal.currency, tx.fxRate);
+        // fxRate describes source currency → received currency, not source → goal currency.
+        // Convert each actual account leg independently into the goal currency so fees,
+        // spread and cross-currency valuation remain visible in the net contribution.
+        if (sourceIncluded) value -= convert(state, Math.abs(Number(tx.amount) || 0), tx.currency, goal.currency);
         if (destinationIncluded) {
           const received = tx.receivedAmount != null ? Math.abs(Number(tx.receivedAmount) || 0) : convert(state, Math.abs(Number(tx.amount) || 0), tx.currency, tx.receivedCurrency || tx.currency, tx.fxRate);
           value += convert(state, received, tx.receivedCurrency || tx.currency, goal.currency);
