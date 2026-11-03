@@ -179,6 +179,68 @@
     return result;
   }
 
+  // Estimate how long active, non-liability balances could cover historical spending.
+  // Essential categories are intentionally conservative; unknown categories stay unclassified.
+  function financialRunway(state, asOf = new Date(), lookbackDays = 90) {
+    const today = new Date(asOf);
+    today.setHours(0, 0, 0, 0);
+    const endKey = dateKey(today);
+    const start = new Date(today);
+    const windowDays = Math.max(1, Math.min(365, Number(lookbackDays) || 90));
+    start.setDate(start.getDate() - windowDays + 1);
+    const startKey = dateKey(start);
+    const essentialPattern = /\\b(rent|housing|mortgage|grocer|food|supermarket|market|utility|electric|power|water|internet|data|transport|fuel|petrol|diesel|health|medical|pharmacy|medicine|education|school|childcare)\\b/i;
+    const totals = { essential: 0, discretionary: 0, unclassified: 0 };
+    let sampleTransactions = 0;
+    const activeDates = new Set();
+    for (const tx of state.transactions || []) {
+      const date = String(tx.date || "");
+      if (tx.type !== "expense" || !isFinanciallyEffective(tx) || date < startKey || date > endKey) continue;
+      const amount = convert(state, Math.abs(Number(tx.amount) || 0), tx.currency || state.settings.baseCurrency, state.settings.baseCurrency, tx.fxRate);
+      if (!(amount > 0)) continue;
+      const category = String(tx.category || "");
+      const bucket = essentialPattern.test(category) ? "essential" : category.trim() ? "discretionary" : "unclassified";
+      totals[bucket] += amount;
+      sampleTransactions++;
+      activeDates.add(date);
+    }
+    const activeAccounts = balancesAt(state, today).filter(account => {
+      if (account.archived) return false;
+      const kind = String(account.type || account.kind || account.accountType || "").toLowerCase();
+      return !/(credit|liabilit|debt|loan)/.test(kind);
+    });
+    const availableBalance = netWorth(state, activeAccounts, state.settings.baseCurrency);
+    const daily = {
+      essential: totals.essential / windowDays,
+      discretionary: totals.discretionary / windowDays,
+      unclassified: totals.unclassified / windowDays
+    };
+    const dailyTotal = daily.essential + daily.discretionary + daily.unclassified;
+    const runwayDays = rate => rate > 0 ? Math.max(0, availableBalance / rate) : null;
+    const activeDays = activeDates.size;
+    const confidence = sampleTransactions >= 30 && activeDays >= 20 ? "High"
+      : sampleTransactions >= 10 && activeDays >= 7 ? "Moderate" : "Low";
+    return {
+      currency: state.settings.baseCurrency,
+      availableBalance,
+      essentialSpend: totals.essential,
+      discretionarySpend: totals.discretionary,
+      unclassifiedSpend: totals.unclassified,
+      totalSpend: totals.essential + totals.discretionary + totals.unclassified,
+      dailyEssential: daily.essential,
+      dailyDiscretionary: daily.discretionary,
+      dailyUnclassified: daily.unclassified,
+      dailySpend: dailyTotal,
+      totalRunwayDays: runwayDays(dailyTotal),
+      essentialOnlyRunwayDays: runwayDays(daily.essential),
+      lookbackDays: windowDays,
+      sampleTransactions,
+      activeDays,
+      confidence,
+      method: "historical daily spend over fixed lookback window"
+    };
+  }
+
   // Linear month-end cash-flow estimate from effective month-to-date activity.
   // This is a run-rate projection, not a promise or a scheduled-payment ledger.
   function monthEndForecast(state, asOf = new Date()) {
@@ -645,7 +707,7 @@
 
   window.OmniPocketEngine = {
     DAY, rate, convert, balancesAt, netWorth, goalProgress,
-    spendingSummary, flowSummary, recurringExpenses, unusualSpending, monthEndForecast, goalProjection, goalContributionHistory, snapshot,
+    spendingSummary, flowSummary, recurringExpenses, unusualSpending, financialRunway, monthEndForecast, goalProjection, goalContributionHistory, snapshot,
     recordDailySnapshot, historicalNetWorth, fxHistory, recordFxSnapshot, wealthChange,
     relatedAccounts, relatedGoals, relatedTransactions, accountExposure,
     goalNetwork, transactionNetwork, goalIntelligence, goalTrajectory, goalHealth
