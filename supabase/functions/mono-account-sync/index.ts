@@ -47,6 +47,40 @@ function unwrapTransactions(payload: any): any[] | null {
   // A valid empty array is different from an unexpected API response shape.
   return null;
 }
+function transactionFeedState(payload: any, transactionCount: number, dataStatus: string) {
+  const meta = payload?.meta || payload?.data?.meta || payload?.data?.paging || payload?.paging || payload?.pagination || {};
+  const totalValue = meta.total ?? meta.total_count ?? meta.totalCount ?? meta.count;
+  const totalNumber = totalValue == null || (typeof totalValue === "string" && !totalValue.trim())
+    ? null : Number(totalValue);
+  const hasReportedTotal = totalNumber != null && Number.isSafeInteger(totalNumber) && totalNumber >= 0;
+  const invalidReportedTotal = totalValue != null && !hasReportedTotal;
+  const pageValue = meta.page ?? meta.current_page ?? meta.currentPage;
+  const pagesValue = meta.total_pages ?? meta.totalPages ?? meta.pages;
+  const page = pageValue == null ? null : Number(pageValue);
+  const pages = pagesValue == null ? null : Number(pagesValue);
+  const invalidPageMetadata = (pageValue != null && (!Number.isSafeInteger(page) || page < 1))
+    || (pagesValue != null && (!Number.isSafeInteger(pages) || pages < 1))
+    || (page != null && pages != null && page > pages);
+  const nextValue = meta.next ?? meta.next_page ?? meta.nextPage ?? meta.next_cursor ?? meta.nextCursor;
+  const hasNext = nextValue === true || (nextValue != null && String(nextValue).trim() !== "" && nextValue !== false);
+  const explicitHasNext = meta.has_next ?? meta.hasNext;
+  const hasNextPage = hasNext || explicitHasNext === true || (page != null && pages != null && page < pages);
+  const explicitHasNextInvalid = explicitHasNext != null && typeof explicitHasNext !== "boolean";
+  const statusIncomplete = ["PARTIAL", "UNAVAILABLE", "PROCESSING", "FAILED"].includes(dataStatus);
+  const totalMismatch = hasReportedTotal && totalNumber !== transactionCount;
+  const reasons = [];
+  if (hasNextPage) reasons.push("Mono indicated additional transaction pages.");
+  if (totalMismatch) reasons.push(`Mono reported ${totalNumber} transactions but returned ${transactionCount}.`);
+  if (invalidReportedTotal || invalidPageMetadata || explicitHasNextInvalid) reasons.push("Mono returned invalid pagination metadata.");
+  if (statusIncomplete) reasons.push(`Mono account data status is ${dataStatus}.`);
+  return {
+    complete: reasons.length === 0,
+    reportedTotal: hasReportedTotal ? totalNumber : null,
+    hasNextPage,
+    reason: reasons.join(" ") || null,
+    metadata: { page: Number.isSafeInteger(page) ? page : null, totalPages: Number.isSafeInteger(pages) ? pages : null }
+  };
+}
 function amountFromProvider(value: any, unit: string) {
   const n = Number(value);
   if (!Number.isFinite(n)) return 0;
@@ -89,16 +123,14 @@ async function syncAccount(supabase: any, userId: string, monoAccountId: string,
   const txPayload = await mono(`/accounts/${encodeURIComponent(monoAccountId)}/transactions?paginate=false`, { headers: { "x-real-time": "true" } });
   const account = unwrapAccount(accountPayload);
   const transactions = unwrapTransactions(txPayload);
-  const transactionMeta = txPayload?.meta || txPayload?.data?.meta || txPayload?.data?.paging || txPayload?.paging || {};
-  const reportedTransactionTotal = Number(transactionMeta.total);
-  const hasReportedTransactionTotal = Number.isFinite(reportedTransactionTotal) && reportedTransactionTotal >= 0;
-  const hasNextTransactionPage = Boolean(transactionMeta.next);
-  const dataStatus = String(accountPayload?.data?.meta?.data_status || accountPayload?.data?.meta?.dataStatus || "").toUpperCase();
-  // Mono documents paginate=false as returning all transactions in one response.
-  // Explicit pagination, a count mismatch, or a partial account state is not complete.
-  const transactionFeedComplete = !hasNextTransactionPage
-    && (!hasReportedTransactionTotal || reportedTransactionTotal === transactions?.length)
-    && !["PARTIAL", "UNAVAILABLE", "PROCESSING", "FAILED"].includes(dataStatus);
+  const transactionMeta = txPayload?.meta || txPayload?.data?.meta || txPayload?.data?.paging || txPayload?.paging || txPayload?.pagination || {};
+  const dataStatus = String(accountPayload?.data?.meta?.data_status || accountPayload?.data?.meta?.dataStatus || transactionMeta?.data_status || transactionMeta?.dataStatus || "").toUpperCase();
+  // paginate=false is expected to return the full feed. If Mono still reports
+  // another page, inconsistent totals, or malformed pagination metadata, fail
+  // closed: import returned rows, but never reconcile opening balance as complete.
+  const feedState = transactionFeedState(txPayload, transactions?.length ?? 0, dataStatus);
+  const transactionFeedComplete = transactions !== null && feedState.complete;
+  const reportedTransactionTotal = feedState.reportedTotal;
   if (transactions === null) {
     const topLevelKeys = txPayload && typeof txPayload === "object" ? Object.keys(txPayload).slice(0, 12) : [];
     console.error("Mono transactions response had an unexpected shape", { topLevelKeys });
@@ -113,7 +145,7 @@ async function syncAccount(supabase: any, userId: string, monoAccountId: string,
     currency: String(account?.currency || "NGN").toUpperCase(), account_type: account?.type || null,
     balance_minor: providerBalanceMinor, data_status: accountPayload?.data?.meta?.data_status || accountPayload?.data?.meta?.dataStatus || null,
     sync_status: transactionFeedComplete ? "healthy" : "warning", provider_balance_minor: providerBalanceMinor, provider_balance_at: now,
-    last_synced_at: now, last_sync_error: transactionFeedComplete ? null : "Mono transaction history is incomplete; balance reconciliation is deferred.",
+    last_synced_at: now, last_sync_error: transactionFeedComplete ? null : (feedState.reason || "Mono transaction history is incomplete; balance reconciliation is deferred."),
   };
 
   let connection: any;
@@ -201,7 +233,7 @@ async function syncAccount(supabase: any, userId: string, monoAccountId: string,
   const { error: eventError } = await supabase.from("bank_sync_events").insert({
     user_id: userId, connection_id: connection.id, provider: "mono",
     event_type: "account_sync", status: transactionFeedComplete ? "success" : "warning", started_at: startedAt, completed_at: completedAt,
-    imported_count: insertedCount, metadata: { transaction_feed_complete: transactionFeedComplete, data_status: row.data_status, amount_unit: amountUnit, fetched_count: transactions.length, inserted_count: insertedCount, updated_count: updatedCount, skipped_count: transactions.length - normalized.length, duplicate_count: duplicateTransactionCount, invalid_direction_count: invalidDirectionCount, invalid_amount_count: invalidAmountCount }
+    imported_count: insertedCount, metadata: { transaction_feed_complete: transactionFeedComplete, data_status: row.data_status, amount_unit: amountUnit, fetched_count: transactions.length, inserted_count: insertedCount, updated_count: updatedCount, skipped_count: transactions.length - normalized.length, duplicate_count: duplicateTransactionCount, invalid_direction_count: invalidDirectionCount, invalid_amount_count: invalidAmountCount, reported_transaction_total: reportedTransactionTotal, pagination: feedState.metadata, pagination_incomplete: feedState.hasNextPage, feed_incomplete_reason: feedState.reason }
   });
   if (eventError) console.warn("Could not record bank sync event:", eventError.message);
 
@@ -209,7 +241,7 @@ async function syncAccount(supabase: any, userId: string, monoAccountId: string,
     connection, account, transactionsImported: insertedCount, transactionsFetched: transactions.length,
     transactionsInserted: insertedCount, transactionsUpdated: updatedCount, transactionsSkipped: transactions.length - normalized.length,
     duplicateTransactionCount, invalidTransactionCount: invalidDirectionCount + invalidAmountCount, transactions: normalized, dataStatus: row.data_status, amountUnit,
-    transactionFeedComplete, reportedTransactionTotal: hasReportedTransactionTotal ? reportedTransactionTotal : null
+    transactionFeedComplete, reportedTransactionTotal, transactionFeedIncompleteReason: feedState.reason, transactionPagination: feedState.metadata
   };
 }
 
