@@ -1578,7 +1578,7 @@ function addTransaction(input) {
       lastSeenAt: input.external.lastSeenAt || new Date().toISOString()
     } : null
   };
-  appendTransactionAudit(tx, "created", { source: external?.provider ? "bank import" : "manual entry", summary: external?.provider ? "Imported from " + external.provider : "Created manually" });
+  appendTransactionAudit(tx, "created", { source: input.external?.provider ? "bank import" : "manual entry", summary: input.external?.provider ? "Imported from " + input.external.provider : "Created manually" });
   state.transactions.push(tx);
   emitStateEvent("transaction:updated", { action: "created", transaction: tx });
   return tx;
