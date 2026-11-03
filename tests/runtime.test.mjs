@@ -270,6 +270,36 @@ const tx = (o) => ({
   assert.equal(JSON.stringify(state.transactions), before, "unusual-spending analysis must not mutate transactions");
 }
 
+// Month-end forecast uses effective month-to-date cash flow and reports sample confidence.
+{
+  const state = makeState({
+    accounts: [{ id: "a", currency: "NGN", openingBalance: 10000, archived: false }],
+    transactions: [
+      tx({ id: "income-a", type: "income", amount: 5000, sourceAccountId: "a", date: "2026-11-01", bankStatus: "posted" }),
+      tx({ id: "income-b", type: "income", amount: 3000, sourceAccountId: "a", date: "2026-11-02", bankStatus: "posted" }),
+      tx({ id: "expense-a", type: "expense", amount: 1000, sourceAccountId: "a", date: "2026-11-02", bankStatus: "posted" }),
+      tx({ id: "pending", type: "income", amount: 9000, sourceAccountId: "a", date: "2026-11-03", bankStatus: "pending" }),
+      tx({ id: "future", type: "expense", amount: 7000, sourceAccountId: "a", date: "2026-11-20", bankStatus: "posted" }),
+    ],
+  });
+  const forecast = E.monthEndForecast(state, new Date("2026-11-03T12:00:00"));
+  assert.equal(forecast.currentBalance, 17000, "current balance must exclude pending and future activity");
+  assert.equal(forecast.incomeToDate, 8000);
+  assert.equal(forecast.expensesToDate, 1000);
+  assert.equal(forecast.projectedIncome, 8000 / 3 * 27);
+  assert.equal(forecast.projectedExpenses, 1000 / 3 * 27);
+  assert.equal(forecast.projectedBalance, 17000 + (7000 / 3 * 27));
+  assert.equal(forecast.daysElapsed, 3);
+  assert.equal(forecast.daysRemaining, 27);
+  assert.equal(forecast.sampleTransactions, 3);
+  assert.equal(forecast.confidence, "Low");
+}
+{
+  const empty = E.monthEndForecast(makeState(), new Date("2026-11-03T12:00:00"));
+  assert.equal(empty.confidence, "Low", "an empty ledger must never imply a confident forecast");
+  assert.equal(empty.projectedBalance, 0);
+}
+
 // Recurring expense detection is conservative, date-bounded, and read-only.
 {
   const state = makeState({
