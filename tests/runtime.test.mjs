@@ -195,6 +195,27 @@ const tx = (o) => ({
   assert.ok(state.snapshots.length <= 730, `snapshot history must be capped, got ${state.snapshots.length}`);
 }
 
+// Historical wealth trend revalues saved native balances at today's FX rates.
+{
+  const state = makeState({
+    accounts: [{ id: "usd", currency: "USD", openingBalance: 1, archived: false }],
+    settings: { baseCurrency: "NGN", fx: { rates: { NGN: { NGN: 1, USD: 1 / 1600 }, USD: { NGN: 1600, USD: 1 } } } },
+    snapshots: [{
+      id: "2026-05-01:NGN", date: "2026-05-01", baseCurrency: "NGN",
+      value: 1500, balances: [{ accountId: "usd", balance: 1, currency: "USD" }],
+      rates: { NGN: { NGN: 1, USD: 1 / 1500 }, USD: { NGN: 1500, USD: 1 } },
+    }],
+  });
+  const [row] = E.historicalNetWorth(state, 90);
+  assert.equal(row.value, 1600, "historical balance should be revalued at current FX");
+  assert.equal(row.recordedValue, 1500, "original historical valuation should remain available");
+  assert.equal(row.valuationBasis, "current_rates");
+  state.settings.fx.rates = { NGN: { NGN: 1 } };
+  const [unresolved] = E.historicalNetWorth(state, 90);
+  assert.equal(unresolved.value, 1500, "unresolved historical currency should retain its recorded value");
+  assert.equal(unresolved.valuationBasis, "historical_rates");
+}
+
 // FX: rate lookup, override, and history recording with same-window dedupe.
 {
   const state = makeState({ accounts: [{ id: "a", currency: "NGN", openingBalance: 0, archived: false }] });
