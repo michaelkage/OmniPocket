@@ -1632,15 +1632,49 @@ function renderFullViews() {
     return `<div class="goal-row interactive-row" data-goal-id="${escapeHtml(g.id)}" tabindex="0" role="button" aria-label="Open goal"><div><strong>${escapeHtml(g.name)}</strong><div class="muted">${escapeHtml(state.settings.privacyHidden ? "••••••" : money(p.current,g.currency) + " of " + money(g.target,g.currency))} · ${p.pct.toFixed(0)}%${g.deadline ? " · "+escapeHtml(g.deadline) : ""}</div></div><span class="status-chip">${escapeHtml(g.status)}</span></div>`;
   }).join("") || '<div class="empty-state">No goals yet.</div>';
 
-  const search = ($("activitySearch")?.value || "").toLowerCase();
-  const reviewOnly = search === "__review__";
-  const activitySearch = reviewOnly ? "" : search;
+  const rawSearch = ($("activitySearch")?.value || "").trim().toLowerCase();
+  const reviewOnly = rawSearch === "__review__";
+  const query = reviewOnly ? "" : rawSearch;
+  const tokens = query.split(/\\s+/).filter(Boolean);
+  const typeFilter = $("activityTypeFilter")?.value || "all";
+  const statusFilter = $("activityStatusFilter")?.value || "all";
+  const categoryFilter = $("activityCategoryFilter")?.value || "all";
+  const fromDate = $("activityFromDate")?.value || "";
+  const toDate = $("activityToDate")?.value || "";
+  const categorySelect = $("activityCategoryFilter");
+  if (categorySelect) {
+    const selectedCategory = categorySelect.value || "all";
+    const categories = [...new Set(state.transactions.map(t => String(t.category || "").trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+    categorySelect.innerHTML = '<option value="all">All categories</option>' + categories.map(category => '<option value="${escapeHtml(category)}">${escapeHtml(category)}</option>').join("");
+    categorySelect.value = categories.includes(selectedCategory) ? selectedCategory : "all";
+  }
   const activityEl = $("activityFullList");
   if (activityEl) activityEl.innerHTML = state.transactions.slice().sort((a,b)=>b.createdAt-a.createdAt).filter(t => {
-    const s = `${transactionLabel(t)} ${t.note} ${t.date} ${t.status} ${t.bankStatus || ""} ${t.type} ${account(t.sourceAccountId)?.name || ""} ${account(t.destinationAccountId)?.name || ""}`.toLowerCase();
-    return reviewOnly
-      ? t.potentialDuplicateStatus === "needs_review" || t.status === "needs_review" || (t.external?.provider && t.suggestedCategory && Number.isFinite(Number(t.categoryConfidence)) && Number(t.categoryConfidence) < 0.8)
-      : t.status !== "superseded" && s.includes(activitySearch);
+    if (t.status === "superseded" && !reviewOnly) return false;
+    const source = account(t.sourceAccountId), destination = account(t.destinationAccountId);
+    const external = t.external || {};
+    const amountText = String(Math.abs(Number(t.amount) || 0));
+    const formattedAmount = money(t.amount, t.currency);
+    const corpus = [
+      transactionLabel(t), t.category, t.description, t.note, t.reference, t.date,
+      t.status, t.bankStatus, t.type, t.currency, amountText, formattedAmount,
+      source?.name, source?.institution, destination?.name, destination?.institution,
+      external.provider, external.providerTransactionId, external.merchantName,
+      t.provenance?.reference, t.provenance?.description
+    ].filter(Boolean).join(" ").toLowerCase();
+    const matchesText = tokens.every(token => corpus.includes(token));
+    const matchesReview = !reviewOnly || t.potentialDuplicateStatus === "needs_review" || t.status === "needs_review" || (external.provider && t.suggestedCategory && Number.isFinite(Number(t.categoryConfidence)) && Number(t.categoryConfidence) < 0.8);
+    const matchesType = typeFilter === "all" || t.type === typeFilter;
+    const matchesCategory = categoryFilter === "all" || t.category === categoryFilter;
+    const bankStatus = String(t.bankStatus || "").toLowerCase();
+    const matchesStatus = statusFilter === "all" ||
+      (statusFilter === "needs_review" && (t.status === "needs_review" || t.potentialDuplicateStatus === "needs_review" || (external.provider && t.suggestedCategory && Number(t.categoryConfidence) < 0.8))) ||
+      (statusFilter === "pending" && bankStatus === "pending") ||
+      (statusFilter === "failed" && bankStatus === "failed") ||
+      (statusFilter === "reversed" && bankStatus === "reversed") ||
+      (statusFilter === "recorded" && t.status === "recorded" && !["pending","failed","reversed"].includes(bankStatus) && t.potentialDuplicateStatus !== "needs_review");
+    const matchesDate = (!fromDate || t.date >= fromDate) && (!toDate || t.date <= toDate);
+    return matchesText && matchesReview && matchesType && matchesCategory && matchesStatus && matchesDate;
   }).map(t => {
     const source = account(t.sourceAccountId), dest = account(t.destinationAccountId);
     const direction = transactionDirection(t);
@@ -2628,7 +2662,9 @@ document.addEventListener("click", event => {
 document.querySelectorAll(".nav-item[data-page]").forEach(button => {
   button.addEventListener("click", () => navigate(button.dataset.page));
 });
-$("activitySearch")?.addEventListener("input", renderFullViews);
+["activitySearch","activityTypeFilter","activityStatusFilter","activityCategoryFilter","activityFromDate","activityToDate"].forEach(id => {
+  $(id)?.addEventListener(id === "activitySearch" ? "input" : "change", renderFullViews);
+});
 $("activitySearch")?.addEventListener("focus", () => {
   if ($("activitySearch").value === "__review__") $("activitySearch").value = "";
 });
