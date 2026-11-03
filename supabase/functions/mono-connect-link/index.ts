@@ -95,6 +95,17 @@ Deno.serve(async (req) => {
           });
 
           if (match) {
+            // Re-check after the provider round-trip so a session that expires
+            // while Mono is responding cannot trigger connection reactivation.
+            const { data: stillPending, error: pendingError } = await supabase
+              .from("mono_link_sessions").select("id")
+              .eq("id", session.id).eq("user_id", user.id)
+              .eq("status", "initiated")
+              .gt("expires_at", new Date().toISOString())
+              .maybeSingle();
+            if (pendingError) throw pendingError;
+            if (!stillPending) return json({ error: "Link session is no longer active" }, 409);
+
             const account = match?.account || match;
             const monoAccountId = String(
               account?.id || account?._id || match?.id || match?._id || "",
