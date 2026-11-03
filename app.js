@@ -1588,6 +1588,7 @@ function renderReviewQueue() {
   if (!host) return;
   const flagged = reviewDeskTransactions();
   const needsReview = state.transactions.filter(t => t.status === "needs_review");
+  const possibleDuplicates = state.transactions.filter(t => t.potentialDuplicateStatus === "needs_review");
   const lowConfidence = state.transactions.filter(t =>
     t.external?.provider && t.suggestedCategory &&
     Number.isFinite(Number(t.categoryConfidence)) && Number(t.categoryConfidence) < 0.8 &&
@@ -1599,11 +1600,11 @@ function renderReviewQueue() {
   const categoryCount = lowConfidence.length;
   host.innerHTML =
     '<div class="review-queue-head"><div><span class="eyebrow">LEDGER CHECK</span><strong>' + flagged.length + ' item' + (flagged.length === 1 ? "" : "s") + ' worth checking</strong><span class="muted">' +
-    reviewCount + ' awaiting confirmation · ' + categoryCount + ' low-confidence categorisation' +
+    reviewCount + ' awaiting confirmation · ' + categoryCount + ' low-confidence categorisation · ' + possibleDuplicates.length + ' possible duplicates' +
     '</span></div><button id="reviewQueueOpen" type="button">Open review desk</button></div>' +
     '<div class="review-queue-list">' + flagged.slice(0,4).map(t => {
       const source = account(t.sourceAccountId);
-      const reason = t.status === "needs_review" ? "Needs confirmation" : "Check category · " + Math.round((Number(t.categoryConfidence) || 0) * 100) + "% confidence";
+      const reason = t.potentialDuplicateStatus === "needs_review" ? "Possible duplicate" : t.status === "needs_review" ? "Needs confirmation" : "Check category · " + Math.round((Number(t.categoryConfidence) || 0) * 100) + "% confidence";
       return '<button class="review-queue-item" data-review-transaction="' + escapeHtml(t.id) + '"><span><strong>' + escapeHtml(transactionLabel(t)) + '</strong><small>' + escapeHtml(t.date) + ' · ' + escapeHtml(source?.name || "Unknown account") + ' · ' + escapeHtml(reason) + '</small></span><strong>' + escapeHtml(state.settings.privacyHidden ? "••••••" : money(t.amount,t.currency)) + '</strong></button>';
     }).join("") + '</div>' +
     (flagged.length > 4 ? '<div class="muted review-queue-more">+' + (flagged.length - 4) + ' more in the review desk</div>' : "");
@@ -1638,7 +1639,7 @@ function renderFullViews() {
   if (activityEl) activityEl.innerHTML = state.transactions.slice().sort((a,b)=>b.createdAt-a.createdAt).filter(t => {
     const s = `${transactionLabel(t)} ${t.note} ${t.date} ${t.status} ${t.bankStatus || ""} ${t.type} ${account(t.sourceAccountId)?.name || ""} ${account(t.destinationAccountId)?.name || ""}`.toLowerCase();
     return reviewOnly
-      ? t.status === "needs_review" || (t.external?.provider && t.suggestedCategory && Number.isFinite(Number(t.categoryConfidence)) && Number(t.categoryConfidence) < 0.8)
+      ? t.potentialDuplicateStatus === "needs_review" || t.status === "needs_review" || (t.external?.provider && t.suggestedCategory && Number.isFinite(Number(t.categoryConfidence)) && Number(t.categoryConfidence) < 0.8)
       : t.status !== "superseded" && s.includes(activitySearch);
   }).map(t => {
     const source = account(t.sourceAccountId), dest = account(t.destinationAccountId);
@@ -1647,7 +1648,7 @@ function renderFullViews() {
     const detail = t.type === "transfer" ? `${source?.name || "Unknown"} → ${dest?.name || "Unknown"}` : source?.name || "Unknown";
      const bankStatus = String(t.bankStatus || "").trim().toLowerCase();
      const transactionStatus = String(t.status || "").trim().toLowerCase();
-     const lifecycleLabel = bankStatus === "pending" ? "Pending at bank · excluded" : bankStatus === "failed" ? "Failed · excluded" : bankStatus === "reversed" ? "Reversed · excluded" : transactionStatus === "needs_review" ? "Needs confirmation" : transactionStatus === "superseded" ? "Paired leg · excluded" : (t.external?.provider && t.suggestedCategory && Number.isFinite(Number(t.categoryConfidence)) && Number(t.categoryConfidence) < 0.8) ? "Check suggested category" : "Recorded";
+     const lifecycleLabel = t.potentialDuplicateStatus === "needs_review" ? "Possible duplicate · review" : bankStatus === "pending" ? "Pending at bank · excluded" : bankStatus === "failed" ? "Failed · excluded" : bankStatus === "reversed" ? "Reversed · excluded" : transactionStatus === "needs_review" ? "Needs confirmation" : transactionStatus === "superseded" ? "Paired leg · excluded" : (t.external?.provider && t.suggestedCategory && Number.isFinite(Number(t.categoryConfidence)) && Number(t.categoryConfidence) < 0.8) ? "Check suggested category" : "Recorded";
     return `<div class="activity-row interactive-row" data-transaction-id="${escapeHtml(t.id)}" tabindex="0" role="button"><div><strong>${escapeHtml(transactionLabel(t))}</strong><div class="muted">${escapeHtml(t.date)} · ${escapeHtml(detail)}${t.note ? " · "+escapeHtml(t.note) : ""}</div></div><div class="activity-value"><strong data-financial-value>${sign}${escapeHtml(state.settings.privacyHidden ? "••••••" : money(t.amount,t.currency))}</strong><span class="muted">${escapeHtml(lifecycleLabel)}${t.external?.provider ? " · " + escapeHtml(t.external.provider) : ""}</span></div></div>`;
   }).join("") || '<div class="empty-state">No matching activity.</div>';
 
@@ -2633,7 +2634,7 @@ $("activitySearch")?.addEventListener("focus", () => {
 });
 $("clearReviewButton")?.addEventListener("click", () => {
   navigate("Activity");
-  const review = state.transactions.filter(t => t.status === "needs_review");
+  const review = state.transactions.filter(t => t.status === "needs_review" || t.potentialDuplicateStatus === "needs_review" || (t.external?.provider && t.suggestedCategory && Number.isFinite(Number(t.categoryConfidence)) && Number(t.categoryConfidence) < 0.8));
   if (!review.length) return alert("No transactions need review.");
   $("activitySearch").value = "__review__";
   renderFullViews();
