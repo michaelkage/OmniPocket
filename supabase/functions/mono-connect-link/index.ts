@@ -238,11 +238,14 @@ Deno.serve(async (req) => {
 
       return json({ reference, monoUrl, redirectUrl: redirectUrl(), sessionId: pending.id });
     } catch (error) {
-      await supabase.from("mono_link_sessions").update({
+      const { error: failureStatusError } = await supabase.from("mono_link_sessions").update({
         status: "failed",
         error_message: error instanceof Error ? error.message : "Mono link initiation failed",
         completed_at: new Date().toISOString(),
       }).eq("id", pending.id).eq("user_id", user.id);
+      if (failureStatusError) {
+        console.error("Could not mark failed Mono link session:", failureStatusError);
+      }
       throw error;
     }
   } catch (error) {
