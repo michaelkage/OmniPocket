@@ -488,6 +488,15 @@ function openTransactionDetail(id) {
   $("transactionDetailNote").textContent = t.note || "No note.";
   $("transactionReviewButton").textContent = t.status === "needs_review" ? "Mark recorded" : "Mark for review";
   $("transactionDialog").dataset.transactionId = id;
+  const reviewQueue = reviewDeskTransactions();
+  const reviewIndex = reviewQueue.findIndex(item => item.id === id);
+  const reviewNav = $("transactionReviewNavigation");
+  if (reviewNav) {
+    reviewNav.hidden = reviewIndex < 0;
+    $("transactionReviewPosition").textContent = reviewIndex < 0 ? "" : (reviewIndex + 1) + " of " + reviewQueue.length + " to review";
+    $("transactionReviewPrevious").disabled = reviewIndex <= 0;
+    $("transactionReviewNext").disabled = reviewIndex < 0 || reviewIndex >= reviewQueue.length - 1;
+  }
   $("transactionDialog").showModal();
 }
 
@@ -1502,17 +1511,33 @@ function applyTransaction(tx) {
 
 
 
+function reviewDeskTransactions() {
+  return state.transactions.filter(t =>
+    t.status === "needs_review" ||
+    (t.external?.provider && t.suggestedCategory &&
+      Number.isFinite(Number(t.categoryConfidence)) && Number(t.categoryConfidence) < 0.8 &&
+      t.status !== "superseded")
+  ).sort((x,y) => new Date(y.date || 0).getTime() - new Date(x.date || 0).getTime() || y.createdAt - x.createdAt);
+}
+
+function moveReviewDesk(offset) {
+  const queue = reviewDeskTransactions();
+  const currentId = $("transactionDialog")?.dataset.transactionId;
+  const index = queue.findIndex(t => t.id === currentId);
+  const next = queue[index + offset];
+  if (next) openTransactionDetail(next.id);
+}
+
 function renderReviewQueue() {
   const host = $("activityReviewQueue");
   if (!host) return;
+  const flagged = reviewDeskTransactions();
   const needsReview = state.transactions.filter(t => t.status === "needs_review");
   const lowConfidence = state.transactions.filter(t =>
     t.external?.provider && t.suggestedCategory &&
     Number.isFinite(Number(t.categoryConfidence)) && Number(t.categoryConfidence) < 0.8 &&
     t.status !== "superseded"
   );
-  const flagged = [...new Map([...needsReview, ...lowConfidence].map(t => [t.id, t])).values()]
-    .sort((a,b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime() || b.createdAt - a.createdAt);
   host.hidden = !flagged.length;
   if (!flagged.length) { host.innerHTML = ""; return; }
   const reviewCount = needsReview.length;
@@ -1721,6 +1746,8 @@ $("accountDetailReconcile")?.addEventListener("click", () => {
   $("reconcileDialog").dataset.accountId = id;
   $("reconcileDialog").showModal();
 });
+$("transactionReviewPrevious")?.addEventListener("click", () => moveReviewDesk(-1));
+$("transactionReviewNext")?.addEventListener("click", () => moveReviewDesk(1));
 $("transactionEditButton")?.addEventListener("click", () => editTransaction($("transactionDialog").dataset.transactionId));
 $("transactionDeleteButton")?.addEventListener("click", () => deleteTransaction($("transactionDialog").dataset.transactionId));
 document.addEventListener("click", event => { const goalLink = event.target.closest("[data-goal-from-transaction]"); if (goalLink) { $("transactionDialog")?.close(); selectGoalContext(goalLink.dataset.goalFromTransaction); openGoalDetail(goalLink.dataset.goalFromTransaction); } });
@@ -1730,10 +1757,19 @@ $("clearDashboardContext")?.addEventListener("click", () => window.OmniPocketBus
 $("transactionReviewButton")?.addEventListener("click", () => {
   const t = state.transactions.find(x => x.id === $("transactionDialog").dataset.transactionId);
   if (!t) return;
+  const wasInReviewDesk = reviewDeskTransactions().some(item => item.id === t.id);
+  const priorIndex = reviewDeskTransactions().findIndex(item => item.id === t.id);
   t.status = t.status === "needs_review" ? "recorded" : "needs_review";
   rebuildBalances();
   saveState();
-  openTransactionDetail(t.id);
+  const refreshedQueue = reviewDeskTransactions();
+  if (wasInReviewDesk && t.status === "recorded") {
+    const next = refreshedQueue[Math.min(Math.max(priorIndex, 0), refreshedQueue.length - 1)];
+    if (next) openTransactionDetail(next.id);
+    else $("transactionDialog").close();
+  } else {
+    openTransactionDetail(t.id);
+  }
 });
 
 $("transactionAcceptSuggestion")?.addEventListener("click", () => {
