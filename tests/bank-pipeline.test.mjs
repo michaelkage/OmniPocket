@@ -179,6 +179,8 @@ assert.match(sync, /transaction_feed_complete: transactionFeedComplete/);
 assert.match(exchange, /sync_status: transactionFeedComplete \? "healthy" : "warning"/);
 assert.match(exchange, /status: transactionFeedComplete \? "success" : "warning"/);
 assert.match(exchange, /transaction_feed_complete: transactionFeedComplete/);
+assert.match(exchange, /const \{ error: eventError \} = await supabase\.from\("bank_sync_events"\)\.insert/);
+assert.match(exchange, /if \(eventError\) console\.warn\("Could not record bank sync event:"/);
 
 assert.match(webhook, /\.eq\("status","initiated"\)\.gt\("expires_at",new Date\(\)\.toISOString\(\)\)/);
 assert.match(webhook, /\.eq\("reference",reference\)[\s\S]*\.eq\("status","initiated"\)\.gt\("expires_at",new Date\(\)\.toISOString\(\)\)/);
