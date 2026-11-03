@@ -5,7 +5,7 @@ import vm from "node:vm";
 const state = {
   transactions: [{
     id: "mono-row",
-    external: { provider: "mono", providerTransactionId: "a|2026-10-29|-250.00|market purchase|ref-1" },
+    external: { provider: "mono", providerTransactionId: "cash|2026-10-29|-250.00|market purchase|ref-1" },
   }],
 };
 const imported = [];
