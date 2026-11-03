@@ -39,7 +39,8 @@ Deno.serve(async (req) => {
     let session:any=null;
 
     if (reference) {
-      const r=await supabase.from("mono_link_sessions").select("*").eq("reference",reference).maybeSingle();
+      const r=await supabase.from("mono_link_sessions").select("*").eq("reference",reference)
+        .eq("status","initiated").gt("expires_at",new Date().toISOString()).maybeSingle();
       if (r.error) {
         console.error("Connect Link reference lookup failed",r.error);
         return new Response(JSON.stringify({error:"Session lookup failed"}),{status:500,headers:responseHeaders});
