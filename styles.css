@@ -2110,3 +2110,28 @@ button { touch-action: manipulation; }
     flex: 1 1 100%;
   }
 }
+
+/* Transaction receipt — compact, print-ready ledger record */
+.transaction-receipt-dialog { width: min(560px, calc(100vw - 28px)); }
+.receipt-paper { padding: 22px; border: 1px solid var(--op-border, #c9c5bc); background: var(--op-surface, #efeee8); }
+.receipt-brand { display:flex; justify-content:space-between; gap:12px; align-items:baseline; padding-bottom:14px; border-bottom:1px dashed var(--op-border, #c9c5bc); }
+.receipt-brand strong { font-size:.72rem; letter-spacing:.12em; }
+.receipt-amount { display:grid; gap:5px; padding:24px 0 12px; }
+.receipt-amount strong { font-size:clamp(2rem,8vw,3rem); line-height:1.05; letter-spacing:-.05em; overflow-wrap:anywhere; font-variant-numeric:tabular-nums; }
+.receipt-amount span,.receipt-reference { color:var(--md-sys-color-on-surface-variant,#68675f); font-size:.72rem; letter-spacing:.09em; }
+.receipt-fields { margin-top:18px; border-top:1px solid var(--op-border,#c9c5bc); }
+.receipt-field { display:grid; grid-template-columns:minmax(90px,.7fr) minmax(0,1.3fr); gap:14px; padding:10px 0; border-bottom:1px solid var(--op-border,#c9c5bc); }
+.receipt-field span { color:var(--md-sys-color-on-surface-variant,#68675f); font-size:.78rem; }
+.receipt-field strong { min-width:0; text-align:right; overflow-wrap:anywhere; font-size:.84rem; font-weight:650; }
+.receipt-footnote { margin-top:18px; padding-top:12px; border-top:1px dashed var(--op-border,#c9c5bc); color:var(--md-sys-color-on-surface-variant,#68675f); font-size:.72rem; line-height:1.5; }
+@media(max-width:420px){.receipt-paper{padding:15px}.receipt-field{grid-template-columns:minmax(76px,.65fr) minmax(0,1.35fr);gap:8px}}
+@media print {
+ body:has(#transactionReceiptDialog[open]) * { visibility:hidden!important; }
+ #transactionReceiptDialog[open],#transactionReceiptDialog[open] * { visibility:visible!important; }
+ #transactionReceiptDialog[open] { position:fixed!important; inset:0 auto auto 0!important; display:block!important; width:100%!important; max-width:none!important; max-height:none!important; margin:0!important; padding:0!important; border:0!important; box-shadow:none!important; overflow:visible!important; background:#fff!important; color:#111!important; }
+ #transactionReceiptDialog[open]::backdrop { display:none!important; }
+ #transactionReceiptDialog .receipt-paper { border:0!important; background:#fff!important; color:#111!important; }
+ #transactionReceiptDialog .receipt-screen-controls { display:none!important; }
+ #transactionReceiptDialog .receipt-field,#transactionReceiptDialog .receipt-fields,#transactionReceiptDialog .receipt-footnote { border-color:#bbb!important; }
+ #transactionReceiptDialog .receipt-field span,#transactionReceiptDialog .receipt-footnote,#transactionReceiptDialog .receipt-amount span,#transactionReceiptDialog .receipt-reference { color:#555!important; }
+}
