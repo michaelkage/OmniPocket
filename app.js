@@ -159,6 +159,7 @@ function migrateState(raw) {
       provider: t.external.provider || null,
       providerTransactionId: t.external.providerTransactionId || null,
       providerAccountId: t.external.providerAccountId || null,
+      merchantName: String(t.external.merchantName || "").trim().slice(0, 160) || null,
       importedAt: t.external.importedAt || null,
       lastSeenAt: t.external.lastSeenAt || null,
       manualEdits: Array.isArray(t.external.manualEdits) ? [...new Set(t.external.manualEdits.filter(field => ["type", "amount", "currency", "date"].includes(field)))] : []
