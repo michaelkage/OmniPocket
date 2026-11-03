@@ -33,6 +33,11 @@ function bindReconcileDialog() {
   const form = $("reconcileForm");
   if (!form || form.dataset.bound) return;
   form.dataset.bound = "1";
+  const dialog = $("reconcileDialog");
+  dialog?.addEventListener("show", () => {
+    if ($("reconcileStatementDate") && !$("reconcileStatementDate").value) $("reconcileStatementDate").value = today();
+    if ($("reconcileResult")) $("reconcileResult").hidden = true;
+  });
   form.addEventListener("submit", event => {
     event.preventDefault();
     const dialog = $("reconcileDialog");
