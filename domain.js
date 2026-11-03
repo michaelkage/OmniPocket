@@ -179,6 +179,44 @@
     return result;
   }
 
+  // Learn merchant-specific categories only from transactions explicitly corrected by the user.
+  // A single correction can help future repeats; generic narration words are ignored.
+  function learnedCategorySuggestion(transactions = [], input = {}) {
+    const stop = new Set(["payment","transfer","purchase","transaction","online","mobile","pos","web","card","debit","credit","bank","banking","ref","reference","narration","from","with","the","and","for","via","cash","alert","notification"]);
+    const tokens = value => [...new Set(String(value || "").toLowerCase()
+      .replace(/[^a-z0-9]+/g, " ").split(/\s+/)
+      .filter(token => token.length >= 4 && !stop.has(token)))];
+    const current = tokens([input.description, input.note, input.reference].filter(Boolean).join(" "));
+    if (!current.length) return null;
+    const history = (transactions || []).filter(tx =>
+      tx && tx.categorySource === "user" && String(tx.category || "").trim()
+    );
+    const votes = new Map();
+    for (const tx of history) {
+      const prior = tokens([tx.description, tx.note, tx.reference, tx.external?.merchantName].filter(Boolean).join(" "));
+      const overlap = current.filter(token => prior.includes(token));
+      if (!overlap.length) continue;
+      const category = String(tx.category).trim();
+      const score = overlap.length / Math.max(current.length, prior.length);
+      const existing = votes.get(category) || { category, score: 0, count: 0, matched: new Set() };
+      existing.score += score;
+      existing.count++;
+      overlap.forEach(token => existing.matched.add(token));
+      votes.set(category, existing);
+    }
+    const ranked = [...votes.values()].sort((a, b) => b.score - a.score || b.count - a.count);
+    const best = ranked[0];
+    const runnerUp = ranked[1];
+    if (!best || best.score < 0.35 || (runnerUp && best.score < runnerUp.score * 1.35)) return null;
+    const confidence = Math.min(0.94, 0.82 + Math.min(0.08, (best.count - 1) * 0.03) + (best.score >= 0.8 ? 0.04 : 0));
+    return {
+      category: best.category,
+      confidence,
+      reason: "Learned from " + best.count + " correction" + (best.count === 1 ? "" : "s") +
+        " for " + [...best.matched].slice(0, 3).join(", ")
+    };
+  }
+
   // Estimate how long active, non-liability balances could cover historical spending.
   // Essential categories are intentionally conservative; unknown categories stay unclassified.
   function financialRunway(state, asOf = new Date(), lookbackDays = 90) {
@@ -707,7 +745,7 @@
 
   window.OmniPocketEngine = {
     DAY, rate, convert, balancesAt, netWorth, goalProgress,
-    spendingSummary, flowSummary, recurringExpenses, unusualSpending, financialRunway, monthEndForecast, goalProjection, goalContributionHistory, snapshot,
+    spendingSummary, flowSummary, recurringExpenses, unusualSpending, learnedCategorySuggestion, financialRunway, monthEndForecast, goalProjection, goalContributionHistory, snapshot,
     recordDailySnapshot, historicalNetWorth, fxHistory, recordFxSnapshot, wealthChange,
     relatedAccounts, relatedGoals, relatedTransactions, accountExposure,
     goalNetwork, transactionNetwork, goalIntelligence, goalTrajectory, goalHealth
