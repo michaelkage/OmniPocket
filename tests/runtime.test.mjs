@@ -632,4 +632,41 @@ const tx = (o) => ({
   assert.equal(bus.getContext().scope, "account");
 }
 
+// Financial runway uses effective historical expenses, separates conservative essentials,
+// excludes future/pending activity and leaves source state untouched.
+{
+  const state = makeState({
+    accounts: [
+      { id: "cash", currency: "NGN", openingBalance: 90000, archived: false, type: "bank" },
+      { id: "card", currency: "NGN", openingBalance: -50000, archived: false, type: "credit_card" },
+      { id: "old", currency: "NGN", openingBalance: 80000, archived: true, type: "bank" },
+    ],
+    transactions: [
+      tx({ id: "rent", type: "expense", amount: 30000, category: "Rent", sourceAccountId: "cash", date: "2026-10-01", bankStatus: "posted" }),
+      tx({ id: "food", type: "expense", amount: 15000, category: "Groceries", sourceAccountId: "cash", date: "2026-10-10", bankStatus: "posted" }),
+      tx({ id: "fun", type: "expense", amount: 9000, category: "Entertainment", sourceAccountId: "cash", date: "2026-10-20", bankStatus: "posted" }),
+      tx({ id: "pending", type: "expense", amount: 50000, category: "Rent", sourceAccountId: "cash", date: "2026-10-21", bankStatus: "pending" }),
+      tx({ id: "future", type: "expense", amount: 70000, category: "Rent", sourceAccountId: "cash", date: "2026-11-04", bankStatus: "posted" }),
+    ],
+  });
+  const before = JSON.stringify(state);
+  const runway = E.financialRunway(state, new Date("2026-11-03T12:00:00"), 90);
+  assert.equal(runway.availableBalance, 90000, "archived and credit liabilities must not count as spendable cash");
+  assert.equal(runway.essentialSpend, 45000);
+  assert.equal(runway.discretionarySpend, 9000);
+  assert.equal(runway.unclassifiedSpend, 0);
+  assert.equal(runway.totalSpend, 54000);
+  assert.equal(runway.dailySpend, 600);
+  assert.equal(runway.totalRunwayDays, 150);
+  assert.equal(runway.essentialOnlyRunwayDays, 180);
+  assert.equal(runway.sampleTransactions, 3);
+  assert.equal(runway.confidence, "Low");
+  assert.equal(JSON.stringify(state), before, "runway analysis must not mutate financial state");
+}
+{
+  const empty = E.financialRunway(makeState(), new Date("2026-11-03T12:00:00"));
+  assert.equal(empty.totalRunwayDays, null, "no spend history must not imply infinite runway");
+  assert.equal(empty.essentialOnlyRunwayDays, null);
+  assert.equal(empty.confidence, "Low");
+}
 console.log("OmniPocket runtime behaviour tests passed");
