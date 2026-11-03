@@ -246,6 +246,28 @@ const tx = (o) => ({
   assert.equal(flow.count, 1, "future-dated movements must not enter current-period counts");
 }
 
+// Recurring expense detection is conservative, date-bounded, and read-only.
+{
+  const state = makeState({
+    transactions: [
+      tx({ id: "sub-jan", type: "expense", amount: 1200, category: "Streaming", note: "StreamCo", sourceAccountId: "a", date: "2026-08-05", bankStatus: "posted" }),
+      tx({ id: "sub-feb", type: "expense", amount: 1250, category: "Streaming", note: "StreamCo", sourceAccountId: "a", date: "2026-09-04", bankStatus: "posted" }),
+      tx({ id: "sub-mar", type: "expense", amount: 1180, category: "Streaming", note: "StreamCo", sourceAccountId: "a", date: "2026-10-04", bankStatus: "posted" }),
+      tx({ id: "one-off-a", type: "expense", amount: 9000, category: "Shopping", note: "One off", sourceAccountId: "a", date: "2026-10-10", bankStatus: "posted" }),
+      tx({ id: "pending", type: "expense", amount: 1200, category: "Streaming", note: "StreamCo", sourceAccountId: "a", date: "2026-11-03", bankStatus: "pending" }),
+    ],
+  });
+  const before = JSON.stringify(state.transactions);
+  const patterns = E.recurringExpenses(state, new Date("2026-11-03T12:00:00"));
+  assert.equal(patterns.length, 1, "only a stable three-observation recurring expense should be detected");
+  assert.equal(patterns[0].cadence, "Monthly");
+  assert.equal(patterns[0].occurrences, 3);
+  assert.equal(patterns[0].currency, "NGN");
+  assert.equal(patterns[0].averageAmount, (1200 + 1250 + 1180) / 3);
+  assert.equal(patterns[0].nextDate, "2026-11-03");
+  assert.equal(JSON.stringify(state.transactions), before, "detection must not mutate transactions");
+}
+
 // Financial summaries must exclude non-effective bank movements consistently.
 {
   const state = makeState({
