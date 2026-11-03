@@ -87,4 +87,20 @@ assert(storage.includes("localStorage.removeItem(this.legacyKey)"), "clearing st
 assert(app.includes("persistenceReady = false;"), "failed IndexedDB saves must switch persistence to local fallback");
 assert(app.includes("Could not persist OmniPocket state to local storage."), "local fallback failures must be reported independently");
 
+// Transaction receipts must remain privacy-aware, safely escaped, and honestly labelled.
+const receiptRows = app.slice(app.indexOf("function transactionReceiptRows"), app.indexOf("function openTransactionDetail"));
+assert(receiptRows.includes("function transactionReceiptCode(t)"), "receipt record IDs must be generated");
+assert(receiptRows.includes("function transactionReceiptText(t)"), "shareable receipt text must be generated");
+assert(receiptRows.includes('hidden && (label==="Received" || label==="Exchange rate")'), "shared receipt must mask received amount and FX rate in privacy mode");
+assert(receiptRows.includes('const amount=hidden?"Hidden · Privacy mode":money(t.amount,t.currency)'), "shared receipt must mask its primary amount in privacy mode");
+assert(receiptRows.includes("Locally generated record. Not bank-issued proof of payment."), "shared receipt must not imply bank-issued proof");
+assert(receiptRows.includes('if(navigator.clipboard?.writeText)'), "receipt copy must use the Clipboard API when available");
+assert(receiptRows.includes('document.execCommand("copy")'), "receipt copy must retain a legacy-browser fallback");
+assert(receiptRows.includes("navigator.share"), "receipt sharing must use the native share API when available");
+assert(receiptRows.includes("Sharing is unavailable here. Receipt details copied instead."), "unsupported native sharing must fall back to copying");
+assert(receiptRows.includes("escapeHtml(value)"), "receipt row values must be escaped before HTML rendering");
+assert(receiptRows.includes('dialog.querySelector("[data-receipt-copy]")'), "receipt copy control must be wired");
+assert(receiptRows.includes('dialog.querySelector("[data-receipt-share]")'), "receipt share control must be wired");
+assert(receiptRows.includes('dialog.querySelector("[data-receipt-print]")'), "receipt print control must be wired");
+
 console.log("OmniPocket static smoke tests passed");
