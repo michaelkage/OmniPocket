@@ -179,9 +179,16 @@ assert.match(bankConnection, /const balanceDifference=transactionFeedComplete\?c
 assert.match(sync, /sync_status: transactionFeedComplete \? "healthy" : "warning"/);
 assert.match(sync, /type: String\(tx\?\.type \|\| ""\)\.toLowerCase\(\)/);
 assert.match(sync, /if \(!\["credit", "debit"\]\.includes\(tx\.type\)\) \{[\s\S]*invalidDirectionCount\+\+/);
-assert.match(sync, /function transactionAmountMinor\(value: any, unit: string\)/);\nassert.match(sync, /if \(tx\.amount_minor == null\) \{[\\s\\S]*invalidAmountCount\+\+/);\nassert.match(sync, /invalid_amount_count: invalidAmountCount/);\nassert.match(sync, /invalidTransactionCount: invalidDirectionCount \+ invalidAmountCount/);\nassert.match(sync, /invalid_direction_count: invalidDirectionCount/);
+assert.match(sync, /function transactionAmountMinor\(value: any, unit: string\)/);
+assert.match(sync, /if \(tx\.amount_minor == null\) \{[\\s\\S]*invalidAmountCount\+\+/);
+assert.match(sync, /invalid_amount_count: invalidAmountCount/);
+assert.match(sync, /invalidTransactionCount: invalidDirectionCount \+ invalidAmountCount/);
+assert.match(sync, /invalid_direction_count: invalidDirectionCount/);
 assert.match(exchange, /type: String\(tx\?\.type \|\| ""\)\.toLowerCase\(\)/);
-assert.match(exchange, /function transactionAmountMinor\(value: any, unit: string\)/);\nassert.match(exchange, /if \(tx\.amount_minor == null\) \{[\\s\\S]*invalidAmountCount\+\+/);\nassert.match(exchange, /invalid_amount_count: invalidAmountCount/);\nassert.match(exchange, /invalidTransactionCount: invalidDirectionCount \+ invalidAmountCount/);
+assert.match(exchange, /function transactionAmountMinor\(value: any, unit: string\)/);
+assert.match(exchange, /if \(tx\.amount_minor == null\) \{[\\s\\S]*invalidAmountCount\+\+/);
+assert.match(exchange, /invalid_amount_count: invalidAmountCount/);
+assert.match(exchange, /invalidTransactionCount: invalidDirectionCount \+ invalidAmountCount/);
 assert.match(bankConnection, /invalidTransactionCount=Number\(payload\?\.invalidTransactionCount\)\|\|0/);
 assert.match(sync, /status: transactionFeedComplete \? "success" : "warning"/);
 assert.match(sync, /transaction_feed_complete: transactionFeedComplete/);
