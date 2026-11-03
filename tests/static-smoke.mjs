@@ -77,6 +77,14 @@ assert(app.includes("amount: Math.abs(finiteOrZero(t.amount))"), "transaction am
 assert(app.includes("Math.abs(finiteOrZero(t.receivedAmount))"), "received amounts must be finite after migration");
 assert(app.includes("Number.isFinite(Number(t.fxRate)) && Number(t.fxRate) > 0"), "invalid or non-positive FX rates must be discarded during migration");
 assert(app.includes("value: finiteOrZero(s.value)"), "snapshot values must be finite after migration");
+assert(app.includes("const accountIds = new Set(next.accounts.map(account => account.id));"), "migration must build the valid account reference set");
+assert(app.includes("const transactionIds = new Set(next.transactions.map(transaction => transaction.id));"), "migration must build the valid transaction reference set");
+assert(app.includes("if (transaction.sourceAccountId && !accountIds.has(transaction.sourceAccountId)) transaction.sourceAccountId = null;"), "orphaned transaction source accounts must be cleared");
+assert(app.includes("if (transaction.destinationAccountId && !accountIds.has(transaction.destinationAccountId)) transaction.destinationAccountId = null;"), "orphaned transaction destination accounts must be cleared");
+assert(app.includes("transaction.suggestedPairCandidates.filter(id => id !== transaction.id && transactionIds.has(id))"), "transfer suggestions must not retain missing or self references");
+assert(app.includes("transaction.linkedGoalIds = [...new Set(transaction.linkedGoalIds.filter(id => typeof id === \"string\" && goalIds.has(id)))]"), "transaction goal links must reference existing goals only");
+assert(app.includes("goal.accountIds = [...new Set(goal.accountIds.filter(id => typeof id === \"string\" && accountIds.has(id)))]"), "goal account links must reference existing accounts only");
+assert(app.includes("transaction.potentialDuplicateStatus = null;"), "orphaned duplicate links must also clear their review status");
 // The prompt's help text may mention the test_pk_ prefix; a real key may not be inlined.
 assert(!/["']test_pk_\w{8,}["']/.test(app), "Mono public key must not be hardcoded in app.js");
 assert(/window\.OMNIPOCKET_CONFIG/.test(app), "app.js must read the runtime config");
