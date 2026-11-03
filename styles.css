@@ -2019,3 +2019,29 @@ button { touch-action: manipulation; }
   .transaction-review-navigation { gap: 6px; }
   .transaction-review-navigation button { padding: 7px 8px; font-size: .78rem; }
 }
+
+
+/* Fast manual category correction in transaction review */
+
+.category-correction-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+.category-correction-controls input {
+  width: 100%;
+  min-width: 0;
+  min-height: 42px;
+  padding: 9px 11px;
+  border: 1px solid var(--op-border, #c9c5bc);
+  border-radius: var(--op-radius-md, 6px);
+  background: var(--op-surface, #fff);
+  color: inherit;
+}
+.category-correction-controls button { min-height: 42px; }
+.category-correction-controls button:disabled { opacity: .45; }
+@media (max-width: 420px) {
+  .category-correction-controls { grid-template-columns: 1fr; }
+  .category-correction-controls button { width: 100%; }
+}
