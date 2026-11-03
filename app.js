@@ -380,16 +380,53 @@ function transactionReceiptRows(t) {
   if(t.category)rows.push(["Category",t.category]);if(t.description)rows.push(["Description",t.description]);if(t.note)rows.push(["Note",t.note]);if(reference)rows.push(["Reference",reference]);if(t.external?.provider)rows.push(["Source",String(t.external.provider).toUpperCase()+" import"]);
   return rows;
 }
+function transactionReceiptCode(t) {
+  const raw=String(t.id||"").replace(/[^a-z0-9]/gi,"").toUpperCase();
+  return "OP-"+(raw.slice(-8)||"LOCAL");
+}
+function transactionReceiptText(t) {
+  const hidden=Boolean(state.settings.privacyHidden);
+  const rows=transactionReceiptRows(t).map(([label,value])=>{
+    if(hidden && (label==="Received" || label==="Exchange rate")) return [label,"Hidden · Privacy mode"];
+    return [label,value];
+  });
+  const amount=hidden?"Hidden · Privacy mode":money(t.amount,t.currency);
+  return ["OMNIPOCKET · TRANSACTION RECORD","Record ID: "+transactionReceiptCode(t),"Amount: "+amount,...rows.map(([label,value])=>label+": "+value),"","Locally generated record. Not bank-issued proof of payment."].join("\n");
+}
+function copyReceiptText(value) {
+  if(navigator.clipboard?.writeText) return navigator.clipboard.writeText(value);
+  const field=document.createElement("textarea");
+  field.value=value;field.setAttribute("readonly","");field.style.position="fixed";field.style.opacity="0";
+  document.body.appendChild(field);field.select();
+  try { if(!document.execCommand("copy")) throw new Error("Copy unavailable"); }
+  finally { field.remove(); }
+  return Promise.resolve();
+}
 function openTransactionReceipt(id) {
   const t=state.transactions.find(item=>item.id===id);if(!t)return;
   let dialog=$("transactionReceiptDialog");
   if(!dialog){dialog=document.createElement("dialog");dialog.id="transactionReceiptDialog";dialog.className="app-dialog transaction-receipt-dialog";document.body.appendChild(dialog);}
   const hidden=Boolean(state.settings.privacyHidden);
   const amount=money(t.amount,t.currency);
-  const rows=transactionReceiptRows(t);
-  dialog.innerHTML='<div class="dialog-head receipt-screen-controls"><div><span class="eyebrow">OMNIPOCKET · TRANSACTION RECEIPT</span><h2>Transaction record</h2><div class="muted">Generated locally · '+escapeHtml(new Date().toLocaleString())+'</div></div><button type="button" class="icon-button" data-receipt-close aria-label="Close receipt">✕</button></div><div class="receipt-paper"><div class="receipt-brand"><span class="eyebrow">OMNIPOCKET</span><strong>TRANSACTION RECEIPT</strong></div><div class="receipt-amount"><strong>'+escapeHtml(hidden?"••••••":amount)+'</strong><span>'+escapeHtml(t.type==="income"?"CREDIT":t.type==="expense"||t.type==="withdrawal"?"DEBIT":"MOVEMENT")+'</span></div><div class="receipt-reference">'+escapeHtml(t.date||"Date unavailable")+'</div><div class="receipt-fields">'+rows.map(([label,value])=>'<div class="receipt-field"><span>'+escapeHtml(label)+'</span><strong>'+escapeHtml(value)+'</strong></div>').join("")+'</div><div class="receipt-footnote">This is a locally generated record, not a bank-issued proof of payment. '+(hidden?"Amounts are masked because Privacy mode is on.":"Only details stored in this transaction are shown.")+'</div></div><div class="dialog-actions receipt-screen-controls"><button type="button" data-receipt-close>Back</button><button type="button" class="primary" data-receipt-print>Print / Save PDF</button></div>';
+  const receiptCode=transactionReceiptCode(t);
+  const rows=transactionReceiptRows(t).map(([label,value])=>hidden&&(label==="Received"||label==="Exchange rate")?[label,"Hidden · Privacy mode"]:[label,value]);
+  dialog.innerHTML='<div class="dialog-head receipt-screen-controls"><div><span class="eyebrow">OMNIPOCKET · TRANSACTION RECEIPT</span><h2>Transaction record</h2><div class="muted">Generated locally · '+escapeHtml(new Date().toLocaleString())+'</div></div><button type="button" class="icon-button" data-receipt-close aria-label="Close receipt">✕</button></div><div class="receipt-paper"><div class="receipt-brand"><span class="eyebrow">OMNIPOCKET</span><strong>TRANSACTION RECEIPT</strong></div><div class="receipt-amount"><strong>'+escapeHtml(hidden?"••••••":amount)+'</strong><span>'+escapeHtml(t.type==="income"?"CREDIT":t.type==="expense"||t.type==="withdrawal"?"DEBIT":"MOVEMENT")+'</span></div><div class="receipt-reference">'+escapeHtml(t.date||"Date unavailable")+' · '+escapeHtml(receiptCode)+'</div><div class="receipt-fields">'+rows.map(([label,value])=>'<div class="receipt-field"><span>'+escapeHtml(label)+'</span><strong>'+escapeHtml(value)+'</strong></div>').join("")+'</div><div class="receipt-footnote">This is a locally generated record, not a bank-issued proof of payment. '+(hidden?"Amounts are masked because Privacy mode is on.":"Only details stored in this transaction are shown.")+'</div></div><div class="dialog-actions receipt-screen-controls"><button type="button" data-receipt-close>Back</button><button type="button" data-receipt-copy>Copy details</button><button type="button" data-receipt-share>Share</button><button type="button" class="primary" data-receipt-print>Print / Save PDF</button></div>';
   dialog.querySelectorAll("[data-receipt-close]").forEach(button=>button.addEventListener("click",()=>dialog.close()));
   dialog.querySelector("[data-receipt-print]")?.addEventListener("click",()=>window.print());
+  const receiptText=transactionReceiptText(t);
+  dialog.querySelector("[data-receipt-copy]")?.addEventListener("click",async()=>{
+    try{await copyReceiptText(receiptText);alert("Receipt details copied.");}
+    catch(error){alert("Could not copy receipt details in this browser.");}
+  });
+  dialog.querySelector("[data-receipt-share]")?.addEventListener("click",async()=>{
+    if(navigator.share){
+      try{await navigator.share({title:"OmniPocket transaction "+receiptCode,text:receiptText});}
+      catch(error){if(error?.name!=="AbortError")alert("Sharing was unavailable. Use Copy details instead.");}
+    } else {
+      try{await copyReceiptText(receiptText);alert("Sharing is unavailable here. Receipt details copied instead.");}
+      catch(error){alert("Sharing and copying are unavailable in this browser.");}
+    }
+  });
   if(!dialog.open)dialog.showModal();
 }
 
