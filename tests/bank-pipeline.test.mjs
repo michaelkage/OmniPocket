@@ -55,7 +55,7 @@ assert.match(sync, /transactionFeedComplete = transactions !== null && feedState
 assert.match(sync, /const hasNextPage = hasNext \|\| explicitHasNext === true \|\| \(page != null && pages != null && page < pages\)/);
 assert.match(sync, /invalidPageMetadata/);
 assert.match(sync, /reported_transaction_total: reportedTransactionTotal/);
-assert.match(sync, /pagination_incomplete: feedState.hasNextPage/);
+assert.match(sync, /pagination_incomplete: !transactionFeedComplete/);
 assert.match(sync, /transactionFeedIncompleteReason: feedState.reason/);
 assert.match(sync, /last_sync_error: transactionFeedComplete \? null : \(feedState.reason \|\| "Mono transaction history is incomplete; balance reconciliation is deferred."\)/);
 assert.match(sync, /\["PARTIAL", "UNAVAILABLE", "PROCESSING", "FAILED"\]\.includes\(dataStatus\)/);
