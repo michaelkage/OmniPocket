@@ -461,7 +461,20 @@
     const rows = Array.isArray(state.snapshots) ? state.snapshots.slice() : [];
     const base = state.settings.baseCurrency;
     const compatible = rows.filter(s => s.baseCurrency === base).slice(-limit);
-    if (compatible.length) return compatible;
+    if (compatible.length) {
+      const currentRates = state.settings?.fx?.rates || {};
+      return compatible.map(item => {
+        if (!Array.isArray(item.balances) || !item.balances.length) return item;
+        let value = 0;
+        for (const balance of item.balances) {
+          const currency = balance.currency || base;
+          const resolved = rateFromTable(currentRates, currency, base, base);
+          if (resolved == null) return { ...item, recordedValue: item.value, valuationBasis: "historical_rates" };
+          value += (Number(balance.balance) || 0) * resolved;
+        }
+        return { ...item, recordedValue: item.value, value, valuationBasis: "current_rates" };
+      });
+    }
     return [snapshot(state)];
   }
 
