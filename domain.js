@@ -204,7 +204,7 @@
       sampleTransactions++;
       activeDates.add(date);
     }
-    const activeAccounts = balancesAt(state, today).filter(account => {
+    const activeAccounts = balancesAt(state, { date: endKey, createdAt: Number.MAX_SAFE_INTEGER }).filter(account => {
       if (account.archived) return false;
       const kind = String(account.type || account.kind || account.accountType || "").toLowerCase();
       return !/(credit|liabilit|debt|loan)/.test(kind);
