@@ -1992,3 +1992,30 @@ button { touch-action: manipulation; }
 .runway-breakdown strong small { font-size: .68rem; font-weight: 500; }
 .runway-meta { margin: 12px 0 0; color: var(--md-sys-color-on-surface-variant); font-size: .78rem; line-height: 1.45; }
 @media (max-width: 420px) { .runway-breakdown { gap: 8px; } .runway-breakdown strong { font-size: .8rem; } .runway-breakdown span { font-size: .68rem; } }
+
+
+/* Sequential transaction review controls */
+
+.transaction-review-navigation {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 0;
+  border-top: 1px solid var(--op-border, #c9c5bc);
+  border-bottom: 1px solid var(--op-border, #c9c5bc);
+}
+.transaction-review-navigation button {
+  min-height: 38px;
+  padding: 7px 11px;
+  border: 1px solid var(--op-border, #c9c5bc);
+  border-radius: var(--op-radius-md, 6px);
+  background: var(--op-bg, #f7f4ef);
+  font-weight: 650;
+}
+.transaction-review-navigation button:disabled { opacity: .4; cursor: not-allowed; }
+.transaction-review-navigation > span { text-align: center; font-size: .78rem; }
+@media (max-width: 420px) {
+  .transaction-review-navigation { gap: 6px; }
+  .transaction-review-navigation button { padding: 7px 8px; font-size: .78rem; }
+}
