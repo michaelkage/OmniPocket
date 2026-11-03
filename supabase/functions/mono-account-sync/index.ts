@@ -165,10 +165,12 @@ function transactionFeedState(payload: any, transactionCount: number, dataStatus
     metadata: { page: Number.isSafeInteger(page) ? page : null, totalPages: Number.isSafeInteger(pages) ? pages : null }
   };
 }
-function amountFromProvider(value: any, unit: string) {
-  const n = Number(value);
-  if (!Number.isFinite(n)) return 0;
-  return unit === "major" ? n : n / 100;
+function providerBalanceMinor(value: any, unit: string): number | null {
+  if (value == null || (typeof value === "string" && !value.trim())) return null;
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) return null;
+  const minor = Math.round((unit === "major" ? amount : amount / 100) * 100);
+  return Number.isSafeInteger(minor) ? minor : null;
 }
 function transactionAmountMinor(value: any, unit: string) {
   if (value == null || (typeof value === "string" && !value.trim())) return null;
@@ -187,7 +189,7 @@ function normalizeTransaction(tx: any, amountUnit: string) {
     category: tx?.category || null,
     bank_status: ["pending", "posted", "reversed", "failed"].includes(String(tx?.status || "").toLowerCase())
       ? String(tx.status).toLowerCase() : null,
-    balance_minor: tx?.balance == null ? null : Math.round(amountFromProvider(tx.balance, amountUnit) * 100),
+    balance_minor: providerBalanceMinor(tx?.balance, amountUnit),
     transaction_at: tx?.date || tx?.created_at || tx?.createdAt || null,
     raw: tx || {},
   };
@@ -202,6 +204,7 @@ async function syncAccount(supabase: any, userId: string, monoAccountId: string,
     if (String(linked.mono_account_id) !== String(monoAccountId)) throw new Error("The requested Mono account does not match this connection.");
   }
   const amountUnit = Deno.env.get("MONO_AMOUNT_UNIT") || "minor";
+  if (!["minor", "major"].includes(amountUnit)) throw new Error("MONO_AMOUNT_UNIT must be either minor or major.");
   const startedAt = new Date().toISOString();
   const accountPayload = await mono(`/accounts/${encodeURIComponent(monoAccountId)}`, { headers: { "x-real-time": "true" } });
   const txPayload = await mono(`/accounts/${encodeURIComponent(monoAccountId)}/transactions?paginate=false`, { headers: { "x-real-time": "true" } });
@@ -227,14 +230,15 @@ async function syncAccount(supabase: any, userId: string, monoAccountId: string,
     throw new Error("Mono returned an unexpected transaction response. The account balance was not changed; retry sync or check the Mono transaction feed.");
   }
   const now = new Date().toISOString();
-  const providerBalanceMinor = account?.balance == null ? null : Math.round(amountFromProvider(account.balance, amountUnit) * 100);
+  const providerBalance = account?.balance == null ? null : providerBalanceMinor(account.balance, amountUnit);
+  if (account?.balance != null && providerBalance == null) throw new Error("Mono returned an invalid account balance; the stored balance was not changed. Retry sync or check the provider response.");
   const row = {
     user_id: userId, provider: "mono", mono_account_id: monoAccountId, status: "active",
     institution_name: account?.institution?.name || null, account_name: account?.name || "Connected bank",
     account_number_last4: account?.account_number ? String(account.account_number).slice(-4) : null,
     currency: String(account?.currency || "NGN").toUpperCase(), account_type: account?.type || null,
-    balance_minor: providerBalanceMinor, data_status: accountPayload?.data?.meta?.data_status || accountPayload?.data?.meta?.dataStatus || null,
-    sync_status: transactionFeedComplete ? "healthy" : "warning", provider_balance_minor: providerBalanceMinor, provider_balance_at: now,
+    balance_minor: providerBalance, data_status: accountPayload?.data?.meta?.data_status || accountPayload?.data?.meta?.dataStatus || null,
+    sync_status: transactionFeedComplete ? "healthy" : "warning", provider_balance_minor: providerBalance, provider_balance_at: providerBalance == null ? null : now,
     last_synced_at: now, last_sync_error: transactionFeedComplete ? null : (feedState.reason || "Mono transaction history is incomplete; balance reconciliation is deferred."),
   };
 
