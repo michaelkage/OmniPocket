@@ -385,6 +385,15 @@ function openTransactionDetail(id) {
   const bankStatus = String(t.bankStatus || "").trim().toLowerCase();
   const transactionStatus = String(t.status || "").trim().toLowerCase();
   $("transactionDetailStatus").textContent = bankStatus === "pending" ? "Pending at provider — not included in available balance" : bankStatus === "failed" ? "Failed at provider — no balance movement" : bankStatus === "reversed" ? "Reversed by provider — excluded from financial totals" : transactionStatus === "needs_review" ? "Needs review — handle later" : transactionStatus === "superseded" ? "Paired transfer leg — excluded from ledger" : "Posted / recorded";
+  const categoryCorrection = $("transactionCategoryCorrectionSection");
+  const categoryCorrectionInput = $("transactionCategoryCorrectionInput");
+  const categoryCorrectionButton = $("transactionCategoryCorrectionSave");
+  if (categoryCorrection && categoryCorrectionInput && categoryCorrectionButton) {
+    categoryCorrection.hidden = !t.external?.provider;
+    categoryCorrectionInput.value = t.category || "";
+    categoryCorrectionInput.placeholder = t.suggestedCategory || "Enter the correct category";
+    categoryCorrectionButton.disabled = !t.external?.provider;
+  }
   const suggestionWrap = $("transactionSuggestionSection");
   const suggestionBox = $("transactionSuggestion");
   const suggestionButton = $("transactionAcceptSuggestion");
@@ -1772,6 +1781,18 @@ $("transactionReviewButton")?.addEventListener("click", () => {
   }
 });
 
+$("transactionCategoryCorrectionSave")?.addEventListener("click", () => {
+  const t = state.transactions.find(x => x.id === $("transactionDialog").dataset.transactionId);
+  const category = String($("transactionCategoryCorrectionInput")?.value || "").trim();
+  if (!t?.external?.provider || !category) return;
+  if (category !== String(t.category || "").trim()) t.categorySource = "user";
+  t.category = category;
+  t.suggestedCategory = null;
+  t.categoryConfidence = null;
+  t.categoryReason = "";
+  saveState();
+  openTransactionDetail(t.id);
+});
 $("transactionAcceptSuggestion")?.addEventListener("click", () => {
   const t = state.transactions.find(x => x.id === $("transactionDialog").dataset.transactionId);
   if (!t?.suggestedCategory) return;
