@@ -16,7 +16,7 @@ assert.match(exchange, /const amountUnit = Deno\.env\.get\("MONO_AMOUNT_UNIT"\) 
 assert.match(exchange, /transactions\.map\(\(item: any\) => normalizeTransaction\(item, amountUnit\)\)/);
 assert.match(exchange, /normalizedById\.has\(tx\.mono_transaction_id\)\) duplicateTransactionCount\+\+/);
 assert.match(exchange, /const normalized = \[\.\.\.normalizedById\.values\(\)\]/);
-assert.match(exchange, /duplicateTransactionCount, transactions: normalized/);
+assert.match(exchange, /duplicateTransactionCount, invalidTransactionCount: invalidDirectionCount, transactions: normalized/);
 assert.match(exchange, /duplicate_count: duplicateTransactionCount/);
 assert.match(sync, /bank_status: \["pending", "posted", "reversed", "failed"\]/);
 assert.match(sync, /const \{ bank_status, \.\.\.databaseTransaction \} = tx/);
@@ -30,7 +30,7 @@ assert.match(exchange, /function unwrapTransactions\(payload: any\): any\[\] \| 
 assert.match(exchange, /if \(!Array\.isArray\(transactions\)\)/);
 assert.match(sync, /provider_balance_minor/);
 assert.match(sync, /normalizedById\.has\(tx\.mono_transaction_id\)\) duplicateTransactionCount\+\+/);
-assert.match(sync, /duplicateTransactionCount, transactions: normalized/);
+assert.match(sync, /duplicateTransactionCount, invalidTransactionCount: invalidDirectionCount, transactions: normalized/);
 assert.match(sync, /bank_sync_events/);
 assert.match(sync, /function unwrapTransactions\(payload: any\): any\[\] \| null/);
 assert.match(sync, /if \(transactions === null\)/);
@@ -177,6 +177,12 @@ assert.match(lifecycle, /Bearer\\s\+/);
 assert.match(bankConnection, /const balanceDifference=transactionFeedComplete\?currentBalance-Number\(local\.balance\):null,balanceMismatch=transactionFeedComplete&&\(!Number\.isFinite\(balanceDifference\)\|\|Math\.abs\(balanceDifference\)>=0\.005\)/);
 
 assert.match(sync, /sync_status: transactionFeedComplete \? "healthy" : "warning"/);
+assert.match(sync, /type: String\(tx\?\.type \|\| ""\)\.toLowerCase\(\)/);
+assert.match(sync, /if \(!\["credit", "debit"\]\.includes\(tx\.type\)\) \{[\s\S]*invalidDirectionCount\+\+/);
+assert.match(sync, /invalid_direction_count: invalidDirectionCount/);
+assert.match(exchange, /type: String\(tx\?\.type \|\| ""\)\.toLowerCase\(\)/);
+assert.match(exchange, /invalidTransactionCount: invalidDirectionCount/);
+assert.match(bankConnection, /invalidTransactionCount=Number\(payload\?\.invalidTransactionCount\)\|\|0/);
 assert.match(sync, /status: transactionFeedComplete \? "success" : "warning"/);
 assert.match(sync, /transaction_feed_complete: transactionFeedComplete/);
 assert.match(exchange, /sync_status: transactionFeedComplete \? "healthy" : "warning"/);

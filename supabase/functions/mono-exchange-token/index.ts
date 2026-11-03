@@ -54,7 +54,7 @@ function amountFromProvider(value: any, unit = Deno.env.get("MONO_AMOUNT_UNIT") 
 function normalizeTransaction(tx: any, amountUnit: string) {
   return {
     mono_transaction_id: tx?._id || tx?.id || tx?.transaction_id ? String(tx._id || tx.id || tx.transaction_id) : null,
-    type: String(tx?.type || "").toLowerCase() === "credit" ? "credit" : "debit",
+    type: String(tx?.type || "").toLowerCase(),
     amount_minor: Math.round(amountFromProvider(tx?.amount, amountUnit) * 100),
     currency: String(tx?.currency || "NGN").toUpperCase(),
     narration: tx?.narration || tx?.description || tx?.remark || null,
@@ -125,7 +125,12 @@ async function syncAccount(supabase: any, userId: string, monoAccountId: string,
   // deterministic counts and the final provider copy wins.
   const normalizedById = new Map<string, any>();
   let duplicateTransactionCount = 0;
+  let invalidDirectionCount = 0;
   for (const tx of transactions.map((item: any) => normalizeTransaction(item, amountUnit))) {
+    if (!["credit", "debit"].includes(tx.type)) {
+      invalidDirectionCount++;
+      continue;
+    }
     if (!tx.mono_transaction_id) {
       console.warn("Skipping Mono transaction without a stable provider ID");
       continue;
@@ -162,14 +167,14 @@ async function syncAccount(supabase: any, userId: string, monoAccountId: string,
     user_id: userId, connection_id: connection.id, provider: "mono",
     event_type: "account_sync", status: transactionFeedComplete ? "success" : "warning", started_at: startedAt, completed_at: now,
     imported_count: insertedCount,
-    metadata: { transaction_feed_complete: transactionFeedComplete, data_status: row.data_status, amount_unit: amountUnit, fetched_count: transactions.length, inserted_count: insertedCount, updated_count: updatedCount, skipped_count: transactions.length - normalized.length, duplicate_count: duplicateTransactionCount }
+    metadata: { transaction_feed_complete: transactionFeedComplete, data_status: row.data_status, amount_unit: amountUnit, fetched_count: transactions.length, inserted_count: insertedCount, updated_count: updatedCount, skipped_count: transactions.length - normalized.length, duplicate_count: duplicateTransactionCount, invalid_direction_count: invalidDirectionCount }
   });
   if (eventError) console.warn("Could not record bank sync event:", eventError.message);
 
   return {
     connection, account, transactionsImported: insertedCount, transactionsFetched: transactions.length,
     transactionsInserted: insertedCount, transactionsUpdated: updatedCount, transactionsSkipped: transactions.length - normalized.length,
-    duplicateTransactionCount, transactions: normalized, dataStatus: row.data_status, amountUnit,
+    duplicateTransactionCount, invalidTransactionCount: invalidDirectionCount, transactions: normalized, dataStatus: row.data_status, amountUnit,
     transactionFeedComplete, reportedTransactionTotal: hasReportedTransactionTotal ? reportedTransactionTotal : null
   };
 }
