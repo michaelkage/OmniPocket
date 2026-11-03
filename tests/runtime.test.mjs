@@ -195,6 +195,32 @@ const tx = (o) => ({
   assert.ok(state.snapshots.length <= 730, `snapshot history must be capped, got ${state.snapshots.length}`);
 }
 
+// Wealth movement attribution separates cash flow, adjustments and internal transfer FX.
+{
+  const state = makeState({
+    accounts: [
+      { id: "local", currency: "NGN", openingBalance: 0, archived: false },
+      { id: "foreign", currency: "USD", openingBalance: 0, archived: false },
+    ],
+    transactions: [
+      tx({ id: "in", type: "income", amount: 1000, currency: "NGN", sourceAccountId: "local", date: "2026-05-02" }),
+      tx({ id: "out", type: "expense", amount: 200, currency: "NGN", sourceAccountId: "local", date: "2026-05-02" }),
+      tx({ id: "cashout", type: "withdrawal", amount: 30, currency: "NGN", sourceAccountId: "local", date: "2026-05-02" }),
+      tx({ id: "adjust", type: "adjustment", amount: 50, adjustmentSign: 1, currency: "NGN", sourceAccountId: "local", date: "2026-05-03" }),
+      tx({ id: "move", type: "transfer", amount: 100, currency: "NGN", receivedAmount: 0.05, receivedCurrency: "USD", sourceAccountId: "local", destinationAccountId: "foreign", date: "2026-05-03" }),
+      tx({ id: "pending", type: "expense", amount: 900, currency: "NGN", sourceAccountId: "local", date: "2026-05-03", bankStatus: "pending" }),
+    ],
+  });
+  const breakdown = E.wealthMovementBreakdown(state, "2026-05-01", "2026-05-03");
+  assert.equal(breakdown.income, 1000);
+  assert.equal(breakdown.expenses, 200);
+  assert.equal(breakdown.withdrawals, 30);
+  assert.equal(breakdown.netCashFlow, 770);
+  assert.equal(breakdown.adjustments, 50);
+  assert.equal(breakdown.internalTransferDifference, -25);
+  assert.equal(breakdown.transactionCount, 5, "pending activity must be excluded");
+}
+
 // Historical wealth trend revalues saved native balances at today's FX rates.
 {
   const state = makeState({
