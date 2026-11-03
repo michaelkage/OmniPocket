@@ -133,7 +133,7 @@ function commitStatementImport(previewRows) {
   for (const row of previewRows) {
     if (row.invalid) { invalid++; continue; }
     const fingerprint = [row.accountId,row.date,row.signedAmount.toFixed(2),row.description.toLowerCase().replace(/\s+/g," ").trim(),row.reference.toLowerCase().trim()].join("|");
-    const existing = state.transactions.find(t => t.external?.providerTransactionId === fingerprint);
+    const existing = state.transactions.find(t => (t.external?.provider === "statement_import" || t.external?.provider === "statement_csv") && t.external.providerTransactionId === fingerprint);
     if (existing) {
       existing.external.lastSeenAt = new Date().toISOString();
       duplicates++;
