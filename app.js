@@ -922,6 +922,17 @@ function renderIntelligence() {
     }).join("") : '<div class="empty-state">Record expenses to see your spending mix.</div>';
   }
 
+  const unusualEl = $("unusualSpendingContent");
+  if (unusualEl && window.OmniPocketEngine?.unusualSpending) {
+    const alerts = OmniPocketEngine.unusualSpending(state, new Date()).slice(0, 5);
+    unusualEl.innerHTML = alerts.length ? alerts.map(alert => {
+      const accountName = account(alert.accountId)?.name || "Account unavailable";
+      const amount = state.settings.privacyHidden ? "••••" : money(alert.amount, alert.currency);
+      const typical = state.settings.privacyHidden ? "••••" : money(alert.typicalAmount, alert.currency);
+      return '<div class="unusual-spending-row"><div class="unusual-spending-main"><strong>' + escapeHtml(alert.note || alert.category) + '</strong><small>' + escapeHtml(alert.category + " · " + accountName + " · " + alert.baselineCount + " previous expenses") + '</small></div><div class="unusual-spending-side"><strong>' + escapeHtml(amount) + '</strong><small>' + escapeHtml(alert.multiple.toFixed(1) + "× usual · typical " + typical) + '</small></div></div>';
+    }).join("") : '<div class="empty-state">Nothing stands out. OmniPocket needs at least four comparable past expenses before flagging an unusually large one.</div>';
+  }
+
   const recurringEl = $("upcomingPaymentsContent");
   if (recurringEl && window.OmniPocketEngine?.recurringExpenses) {
     const patterns = OmniPocketEngine.recurringExpenses(state, new Date()).slice(0, 6);
@@ -939,9 +950,9 @@ function renderDashboard() {
   if(!root) return;
   const widgets={
     networth:$("widgetNetWorth"), trend:$("widgetTrend"), goals:$("widgetGoals"), accounts:$("widgetAccounts"),
-    activity:$("widgetActivity"), quick:$("widgetQuick"), fx:$("widgetFx"), relations:$("widgetRelations"), insights:$("widgetInsights"), spending:$("widgetSpending"), upcoming:$("widgetUpcomingPayments")
+    activity:$("widgetActivity"), quick:$("widgetQuick"), fx:$("widgetFx"), relations:$("widgetRelations"), insights:$("widgetInsights"), spending:$("widgetSpending"), upcoming:$("widgetUpcomingPayments"), unusual:$("widgetUnusualSpending")
   };
-  const defaultOrder=["networth","trend","goals","accounts","activity","quick","fx","relations","insights","spending","upcoming"];
+  const defaultOrder=["networth","trend","goals","accounts","activity","quick","fx","relations","insights","spending","upcoming","unusual"];
   const order=[...(state.settings.dashboard.order || [])];
   defaultOrder.forEach(id=>{ if(!order.includes(id)) order.push(id); });
   root.innerHTML="";
