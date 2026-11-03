@@ -910,7 +910,44 @@ function financialInsights() {
 function renderIntelligence() {
   const insightsEl = $("insightContent");
   if (insightsEl) {
-    insightsEl.innerHTML = financialInsights().map(value => '<div class="insight-row"><span class="node">✦</span><div>' + escapeHtml(value) + '</div></div>').join("");
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const signals = [];
+    if (window.OmniPocketEngine?.unusualSpending) {
+      OmniPocketEngine.unusualSpending(state, today).forEach(alert => {
+        const amount = state.settings.privacyHidden ? "••••" : money(alert.amount, alert.currency);
+        signals.push({
+          priority: 0,
+          type: "REVIEW",
+          title: alert.note || alert.category,
+          detail: amount + " · " + alert.multiple.toFixed(1) + "× your typical " + alert.category + " expense",
+          action: "Check the transaction details and confirm the amount and category."
+        });
+      });
+    }
+    if (window.OmniPocketEngine?.recurringExpenses) {
+      OmniPocketEngine.recurringExpenses(state, today).forEach(pattern => {
+        const next = new Date(pattern.nextDate + "T12:00:00");
+        const days = Math.round((next - today) / OmniPocketEngine.DAY);
+        const amount = state.settings.privacyHidden ? "••••" : money(pattern.averageAmount, pattern.currency);
+        signals.push({
+          priority: days <= 7 ? 1 : 2,
+          days,
+          type: "UPCOMING",
+          title: pattern.label,
+          detail: amount + " · " + pattern.cadence + " · estimated " + next.toLocaleDateString(undefined, { day: "numeric", month: "short" }),
+          action: "Check whether this payment is still expected; this is a pattern, not a scheduled bill."
+        });
+      });
+    }
+    signals.sort((a, b) => a.priority - b.priority || (a.days ?? 0) - (b.days ?? 0));
+    const generated = signals.slice(0, 4).map(signal =>
+      '<div class="financial-signal"><div class="financial-signal-top"><span class="financial-signal-type">' + escapeHtml(signal.type) + '</span><strong>' + escapeHtml(signal.title) + '</strong></div><div class="financial-signal-detail">' + escapeHtml(signal.detail) + '</div><p>' + escapeHtml(signal.action) + '</p></div>'
+    );
+    const baseline = financialInsights().slice(0, Math.max(0, 4 - generated.length)).map(value =>
+      '<div class="insight-row"><span class="node">✦</span><div>' + escapeHtml(value) + '</div></div>'
+    );
+    insightsEl.innerHTML = generated.concat(baseline).join("") || '<div class="empty-state">Your financial signals will appear as OmniPocket learns from recorded activity.</div>';
   }
   const spendingEl = $("spendingContent");
   if (spendingEl) {
