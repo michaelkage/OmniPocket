@@ -151,6 +151,42 @@
       .sort((a, b) => String(a.date).localeCompare(String(b.date)) || Number(a.createdAt) - Number(b.createdAt));
   }
 
+  // Read-only statement comparison. Opening balance is the ledger's starting point;
+  // because its effective date is not stored, the comparison cannot infer older omissions.
+  function reconcileAccount(state, accountId, statementBalance, statementDate) {
+    const account = (state.accounts || []).find(row => row.id === accountId);
+    const value = Number(statementBalance);
+    const validDate = /^\\d{4}-\\d{2}-\\d{2}$/.test(String(statementDate || ""));
+    if (!account || !Number.isFinite(value) || !validDate) return { status: "unknown", reason: "Choose an account, a valid statement date and a finite balance." };
+    const cutoff = { date: String(statementDate), createdAt: Number.MAX_SAFE_INTEGER };
+    const ledgerAccount = balancesAt(state, cutoff).find(row => row.id === accountId);
+    const ledgerBalance = Number(ledgerAccount?.balance) || 0;
+    const related = (state.transactions || []).filter(tx => tx.sourceAccountId === accountId || tx.destinationAccountId === accountId);
+    const throughDate = related.filter(tx => String(tx.date || "") <= String(statementDate));
+    const effective = throughDate.filter(isFinanciallyEffective);
+    const excluded = throughDate.filter(tx => !isFinanciallyEffective(tx));
+    const afterDate = related.filter(tx => String(tx.date || "") > String(statementDate));
+    const counts = {
+      included: effective.length,
+      pending: excluded.filter(tx => String(tx.bankStatus || "").toLowerCase() === "pending").length,
+      failed: excluded.filter(tx => String(tx.bankStatus || "").toLowerCase() === "failed").length,
+      reversed: excluded.filter(tx => String(tx.bankStatus || "").toLowerCase() === "reversed").length,
+      needsReview: excluded.filter(tx => String(tx.status || "").toLowerCase() === "needs_review").length,
+      superseded: excluded.filter(tx => String(tx.status || "").toLowerCase() === "superseded").length,
+      otherExcluded: excluded.filter(tx => !["pending", "failed", "reversed"].includes(String(tx.bankStatus || "").toLowerCase()) && !["needs_review", "superseded"].includes(String(tx.status || "").toLowerCase())).length,
+      afterStatementDate: afterDate.length
+    };
+    const difference = value - ledgerBalance;
+    return {
+      status: Math.abs(difference) < 0.005 ? "matched" : "mismatch",
+      accountId, currency: account.currency || state.settings?.baseCurrency || null,
+      statementDate: String(statementDate), statementBalance: value, ledgerBalance,
+      difference, counts,
+      openingBalanceDateUnknown: true,
+      readOnly: true
+    };
+  }
+
   function balancesAt(state, until = null) {
     const accounts = (state.accounts || []).map(a => ({
       ...a,
@@ -819,7 +855,7 @@
   }
 
   window.OmniPocketEngine = {
-    DAY, rate, convert, fxFreshness, valuationCoverage, balancesAt, netWorth, goalProgress,
+    DAY, rate, convert, fxFreshness, valuationCoverage, reconcileAccount, balancesAt, netWorth, goalProgress,
     spendingSummary, flowSummary, recurringExpenses, unusualSpending, learnedCategorySuggestion, financialRunway, monthEndForecast, goalProjection, goalContributionHistory, snapshot,
     recordDailySnapshot, historicalNetWorth, fxHistory, recordFxSnapshot, wealthChange, wealthMovementBreakdown,
     relatedAccounts, relatedGoals, relatedTransactions, accountExposure,
