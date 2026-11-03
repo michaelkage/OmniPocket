@@ -184,6 +184,31 @@ function migrateState(raw) {
 
   next.snapshots = Array.isArray(raw.snapshots) ? raw.snapshots.filter(s => s && s.date).map(s => ({ id: String(s.id || `${s.date}:${s.baseCurrency || next.settings.baseCurrency}`), date: String(s.date), capturedAt: Number(s.capturedAt) || Date.now(), baseCurrency: CURRENCIES.includes(s.baseCurrency) ? s.baseCurrency : next.settings.baseCurrency, value: finiteOrZero(s.value), balances: Array.isArray(s.balances) ? s.balances.map(b => ({ accountId: b.accountId, balance: finiteOrZero(b.balance), currency: CURRENCIES.includes(b.currency) ? b.currency : "NGN" })) : [], rates: s.rates && typeof s.rates === "object" ? s.rates : clone(DEFAULT_RATES) })).slice(-730) : [];
 
+  // Reconcile persisted relationships only after all account, transaction and goal IDs are known.
+  const accountIds = new Set(next.accounts.map(account => account.id));
+  const transactionIds = new Set(next.transactions.map(transaction => transaction.id));
+  const goalIds = new Set(next.goals.map(goal => goal.id));
+  for (const transaction of next.transactions) {
+    if (transaction.sourceAccountId && !accountIds.has(transaction.sourceAccountId)) transaction.sourceAccountId = null;
+    if (transaction.destinationAccountId && !accountIds.has(transaction.destinationAccountId)) transaction.destinationAccountId = null;
+    if (transaction.suggestedSourceAccountId && !accountIds.has(transaction.suggestedSourceAccountId)) transaction.suggestedSourceAccountId = null;
+    if (transaction.suggestedDestinationAccountId && !accountIds.has(transaction.suggestedDestinationAccountId)) transaction.suggestedDestinationAccountId = null;
+    if (transaction.pairedTransactionId && (transaction.pairedTransactionId === transaction.id || !transactionIds.has(transaction.pairedTransactionId))) transaction.pairedTransactionId = null;
+    if (transaction.potentialDuplicateOf && (transaction.potentialDuplicateOf === transaction.id || !transactionIds.has(transaction.potentialDuplicateOf))) {
+      transaction.potentialDuplicateOf = null;
+      transaction.potentialDuplicateStatus = null;
+    }
+    if (transaction.suggestedPairTransactionId && !transactionIds.has(transaction.suggestedPairTransactionId)) transaction.suggestedPairTransactionId = null;
+    transaction.suggestedPairCandidates = transaction.suggestedPairCandidates.filter(id => id !== transaction.id && transactionIds.has(id));
+    transaction.suggestedPairCandidateMeta = Object.fromEntries(Object.entries(transaction.suggestedPairCandidateMeta).filter(([id]) =>
+      id !== transaction.id && transactionIds.has(id)
+    ));
+    transaction.linkedGoalIds = [...new Set(transaction.linkedGoalIds.filter(id => typeof id === "string" && goalIds.has(id)))];
+  }
+  for (const goal of next.goals) {
+    goal.accountIds = [...new Set(goal.accountIds.filter(id => typeof id === "string" && accountIds.has(id)))];
+  }
+
   next.schemaVersion = SCHEMA_VERSION;
   return next;
 }
