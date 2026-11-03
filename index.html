@@ -366,7 +366,18 @@
               <div class="muted">A ledger of recorded movements, including imported activity waiting for review.</div>
             </div>
           <div class="activity-filter">
-            <input id="activitySearch" type="search" placeholder="Search activity…" aria-label="Search transactions by description, category, account or amount" autocomplete="off" spellcheck="false">
+            <input id="activitySearch" type="search" placeholder="Search merchant, reference, note, amount…" aria-label="Search transactions by merchant, reference, category, note, amount, date or account" autocomplete="off" spellcheck="false">
+            <div class="activity-filter-grid">
+              <select id="activityTypeFilter" aria-label="Filter by transaction type">
+                <option value="all">All types</option><option value="income">Income</option><option value="expense">Expense</option><option value="transfer">Transfer</option><option value="withdrawal">Withdrawal</option><option value="adjustment">Adjustment</option>
+              </select>
+              <select id="activityStatusFilter" aria-label="Filter by transaction status">
+                <option value="all">All statuses</option><option value="needs_review">Needs review</option><option value="recorded">Recorded</option><option value="pending">Pending</option><option value="failed">Failed</option><option value="reversed">Reversed</option>
+              </select>
+              <select id="activityCategoryFilter" aria-label="Filter by category"><option value="all">All categories</option></select>
+              <label class="activity-date-filter">From <input id="activityFromDate" type="date" aria-label="Activity from date"></label>
+              <label class="activity-date-filter">To <input id="activityToDate" type="date" aria-label="Activity to date"></label>
+            </div>
           </div>
           <div id="activityReviewQueue" class="review-queue" hidden></div>
           <div id="activityFullList" class="stack"></div>
