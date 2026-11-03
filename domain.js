@@ -454,9 +454,78 @@
     };
   }
 
+  // Detect likely recurring expenses without changing or creating transactions.
+  // Groups are deliberately conservative: three effective observations, a stable
+  // amount, and a recognisable cadence are required before a pattern is surfaced.
+  function recurringExpenses(state, asOf = new Date(), lookbackDays = 400) {
+    const end = new Date(asOf);
+    end.setHours(0, 0, 0, 0);
+    const start = new Date(end);
+    start.setDate(start.getDate() - Math.max(30, Number(lookbackDays) || 400));
+    const endKey = dateKey(end);
+    const startKey = dateKey(start);
+    const groups = new Map();
+
+    for (const tx of state.transactions || []) {
+      if (tx.type !== "expense" || !isFinanciallyEffective(tx)) continue;
+      const date = String(tx.date || "");
+      if (date < startKey || date > endKey || !/^\\d{4}-\\d{2}-\\d{2}$/.test(date)) continue;
+      const amount = Math.abs(Number(tx.amount) || 0);
+      if (!amount) continue;
+      const label = String(tx.note || tx.category || "Uncategorised expense")
+        .toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().slice(0, 80);
+      const accountId = tx.sourceAccountId || null;
+      const currency = tx.currency || state.settings.baseCurrency;
+      const key = [label, accountId || "", currency].join("|");
+      if (!groups.has(key)) groups.set(key, { label, accountId, currency, rows: [] });
+      groups.get(key).rows.push({ date, amount, id: tx.id });
+    }
+
+    const median = values => {
+      const sorted = values.slice().sort((a, b) => a - b);
+      const mid = Math.floor(sorted.length / 2);
+      return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+    };
+    const patterns = [];
+    for (const group of groups.values()) {
+      const rows = group.rows.sort((a, b) => a.date.localeCompare(b.date));
+      if (rows.length < 3) continue;
+      const typicalAmount = median(rows.map(row => row.amount));
+      const stableRows = rows.filter(row => Math.abs(row.amount - typicalAmount) <= typicalAmount * 0.2);
+      if (stableRows.length < 3) continue;
+      const gaps = [];
+      for (let i = 1; i < stableRows.length; i++) {
+        const a = new Date(stableRows[i - 1].date + "T12:00:00");
+        const b = new Date(stableRows[i].date + "T12:00:00");
+        gaps.push(Math.round((b - a) / DAY));
+      }
+      const typicalGap = median(gaps);
+      const cadence = typicalGap >= 6 && typicalGap <= 8 ? "Weekly"
+        : typicalGap >= 12 && typicalGap <= 16 ? "Every 2 weeks"
+        : typicalGap >= 25 && typicalGap <= 35 ? "Monthly"
+        : typicalGap >= 80 && typicalGap <= 100 ? "Quarterly" : null;
+      if (!cadence || gaps.some(gap => Math.abs(gap - typicalGap) > Math.max(3, typicalGap * 0.25))) continue;
+      const last = stableRows[stableRows.length - 1];
+      const next = new Date(last.date + "T12:00:00");
+      next.setDate(next.getDate() + Math.round(typicalGap));
+      patterns.push({
+        label: group.label,
+        accountId: group.accountId,
+        currency: group.currency,
+        cadence,
+        averageAmount: stableRows.reduce((sum, row) => sum + row.amount, 0) / stableRows.length,
+        occurrences: stableRows.length,
+        lastDate: last.date,
+        nextDate: dateKey(next),
+        transactionIds: stableRows.map(row => row.id).filter(Boolean)
+      });
+    }
+    return patterns.sort((a, b) => b.averageAmount - a.averageAmount);
+  }
+
   window.OmniPocketEngine = {
     DAY, rate, convert, balancesAt, netWorth, goalProgress,
-    spendingSummary, flowSummary, goalProjection, goalContributionHistory, snapshot,
+    spendingSummary, flowSummary, recurringExpenses, goalProjection, goalContributionHistory, snapshot,
     recordDailySnapshot, historicalNetWorth, fxHistory, recordFxSnapshot, wealthChange,
     relatedAccounts, relatedGoals, relatedTransactions, accountExposure,
     goalNetwork, transactionNetwork, goalIntelligence, goalTrajectory, goalHealth
