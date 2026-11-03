@@ -85,6 +85,14 @@ assert.match(bankConnection, /mock-" \+ account\.id \+ "-" \+ \(i \+ 1\)/);
 assert.match(bankConnection, /state\.transactions\.some\(tx => tx\.id === id\)/);
 assert.match(bankConnection, /state\.accounts\.find\(a => a\.id === preferredAccountId && a\.connection\?\.provider === "mock"\)/);
 assert.match(bankConnection, /existing\.bankStatus=bankStatus/);
+assert.match(bankConnection, /function monoTransactionReferences\\(tx\\)/);
+assert.match(bankConnection, /providerReference: pick\\(tx\\?\\.reference, tx\\?\\.transaction_reference, tx\\?\\.payment_reference, tx\\?\\.ref\\)/);
+assert.match(bankConnection, /providerReversalReference: pick\\(tx\\?\\.reversal_reference, tx\\?\\.reversalReference, tx\\?\\.original_transaction_id, tx\\?\\.parent_transaction_id\\)/);
+assert.match(bankConnection, /provider_status_changed/);
+assert.match(bankConnection, /providerStatus:bankStatus/);
+assert.match(app, /providerReference: String\\(t\\.external\\.providerReference \\|\\| ""\\)/);
+assert.match(app, /Bank ref " \\+ t\\.external\\.providerReference/);
+assert.match(app, /Provider ID " \\+ t\\.external\\.providerTransactionId/);
 assert.match(bankConnection, /if\(existing\.sourceAccountId&&existing\.sourceAccountId!==local\.id\)\{ownershipConflictCount\+\+;continue;\}/);
 assert.match(bankConnection, /t\.external\.providerTransactionId===String\(pid\)&&\(t\.external\.providerAccountId===String\(monoAccountId\)\|\|\(!t\.external\.providerAccountId&&t\.sourceAccountId===local\.id\)\)/);
 
