@@ -1978,3 +1978,17 @@ button { touch-action: manipulation; }
   .forecast-breakdown strong { font-size: .8rem; }
   .forecast-breakdown span { font-size: .68rem; }
 }
+
+
+/* Financial runway — cash resilience estimate */
+.runway-primary { display: grid; gap: 5px; padding: 14px 0 16px; }
+.runway-primary > span, .runway-primary > small, .runway-breakdown span { color: var(--md-sys-color-on-surface-variant); }
+.runway-primary > strong { font-size: clamp(1.8rem, 4vw, 2.5rem); line-height: 1.1; letter-spacing: -.045em; }
+.runway-primary > small { font-size: .8rem; }
+.runway-breakdown { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 12px; padding: 14px 0; border-top: 1px solid var(--md-sys-color-outline-variant); border-bottom: 1px solid var(--md-sys-color-outline-variant); }
+.runway-breakdown > div { display: grid; gap: 6px; min-width: 0; }
+.runway-breakdown span { font-size: .74rem; line-height: 1.35; }
+.runway-breakdown strong { font-size: .9rem; overflow-wrap: anywhere; }
+.runway-breakdown strong small { font-size: .68rem; font-weight: 500; }
+.runway-meta { margin: 12px 0 0; color: var(--md-sys-color-on-surface-variant); font-size: .78rem; line-height: 1.45; }
+@media (max-width: 420px) { .runway-breakdown { gap: 8px; } .runway-breakdown strong { font-size: .8rem; } .runway-breakdown span { font-size: .68rem; } }
