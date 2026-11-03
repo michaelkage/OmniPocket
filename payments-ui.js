@@ -61,7 +61,15 @@ function bindReconcileDialog() {
 }
 
 (function bindReconcileUIOnLoad() {
-  const bind = () => { bindPaymentReconcileUI(); bindReconcileDialog(); };
+  const bind = () => {
+    bindPaymentReconcileUI(); bindReconcileDialog();
+    document.addEventListener("click", event => {
+      if (event.target.closest("[data-reconcile], #accountDetailReconcile")) {
+        if ($("reconcileStatementDate")) $("reconcileStatementDate").value = today();
+        if ($("reconcileResult")) $("reconcileResult").hidden = true;
+      }
+    }, true);
+  };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", bind, { once: true });
   else bind();
 })();
