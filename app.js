@@ -371,6 +371,28 @@ function pairCandidateReason(t, id) {
   return t.suggestedPairCandidateMeta?.[id]?.reason || (id === t.suggestedPairTransactionId ? t.suggestedPairReason : "Possible transfer match");
 }
 
+
+function transactionReceiptRows(t) {
+  const source = account(t.sourceAccountId), destination = account(t.destinationAccountId);
+  const reference = t.reference || t.provenance?.reference || t.external?.providerTransactionId || "";
+  const rows = [["Transaction",transactionLabel(t)],["Type",({income:"Money in",expense:"Money out",transfer:"Transfer",withdrawal:"Cash withdrawal",adjustment:"Balance adjustment"})[t.type]||t.type],["Date",t.date||"—"],["Status",t.bankStatus|| (t.status==="needs_review"?"Needs review":t.status==="superseded"?"Paired transfer leg":"Recorded")],["Account",source?.name||destination?.name||"Unknown account"]];
+  if(t.type==="transfer"||t.type==="withdrawal"){rows.push(["Destination",destination?.name||"Unknown account"]);if(t.receivedAmount!=null)rows.push(["Received",money(t.receivedAmount,t.receivedCurrency||destination?.currency||t.currency)]);if(t.fxRate!=null&&Number.isFinite(Number(t.fxRate)))rows.push(["Exchange rate",Number(t.fxRate).toLocaleString(undefined,{maximumFractionDigits:8})+" "+(t.receivedCurrency||destination?.currency||"")+" / "+t.currency]);}
+  if(t.category)rows.push(["Category",t.category]);if(t.description)rows.push(["Description",t.description]);if(t.note)rows.push(["Note",t.note]);if(reference)rows.push(["Reference",reference]);if(t.external?.provider)rows.push(["Source",String(t.external.provider).toUpperCase()+" import"]);
+  return rows;
+}
+function openTransactionReceipt(id) {
+  const t=state.transactions.find(item=>item.id===id);if(!t)return;
+  let dialog=$("transactionReceiptDialog");
+  if(!dialog){dialog=document.createElement("dialog");dialog.id="transactionReceiptDialog";dialog.className="app-dialog transaction-receipt-dialog";document.body.appendChild(dialog);}
+  const hidden=Boolean(state.settings.privacyHidden);
+  const amount=t.receivedAmount!=null&&t.type==="transfer"?money(t.receivedAmount,t.receivedCurrency||t.currency):money(t.amount,t.currency);
+  const rows=transactionReceiptRows(t);
+  dialog.innerHTML='<div class="dialog-head receipt-screen-controls"><div><span class="eyebrow">OMNIPOCKET · TRANSACTION RECEIPT</span><h2>Transaction record</h2><div class="muted">Generated locally · '+escapeHtml(new Date().toLocaleString())+'</div></div><button type="button" class="icon-button" data-receipt-close aria-label="Close receipt">✕</button></div><div class="receipt-paper"><div class="receipt-brand"><span class="eyebrow">OMNIPOCKET</span><strong>TRANSACTION RECEIPT</strong></div><div class="receipt-amount"><strong>'+escapeHtml(hidden?"••••••":amount)+'</strong><span>'+escapeHtml(t.type==="income"?"CREDIT":t.type==="expense"||t.type==="withdrawal"?"DEBIT":"MOVEMENT")+'</span></div><div class="receipt-reference">'+escapeHtml(t.date||"Date unavailable")+'</div><div class="receipt-fields">'+rows.map(([label,value])=>'<div class="receipt-field"><span>'+escapeHtml(label)+'</span><strong>'+escapeHtml(value)+'</strong></div>').join("")+'</div><div class="receipt-footnote">This is a locally generated record, not a bank-issued proof of payment. '+(hidden?"Amounts are masked because Privacy mode is on.":"Only details stored in this transaction are shown.")+'</div></div><div class="dialog-actions receipt-screen-controls"><button type="button" data-receipt-close>Back</button><button type="button" class="primary" data-receipt-print>Print / Save PDF</button></div>';
+  dialog.querySelectorAll("[data-receipt-close]").forEach(button=>button.addEventListener("click",()=>dialog.close()));
+  dialog.querySelector("[data-receipt-print]")?.addEventListener("click",()=>window.print());
+  if(!dialog.open)dialog.showModal();
+}
+
 function openTransactionDetail(id) {
   const t = state.transactions.find(x => x.id === id);
   if (!t) return;
