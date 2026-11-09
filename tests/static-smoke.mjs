@@ -99,7 +99,9 @@ assert(storage.includes("if (settled) {\n          db.close();"), "late IndexedD
 assert(storage.includes("tx.onabort = () => reject(tx.error || new Error(\"OmniPocket clear was aborted.\"))"), "storage clear must reject on aborted transactions");
 assert(storage.includes("OmniPocket read was aborted."), "storage reads must reject on aborted transactions");
 assert(storage.includes("tx.oncomplete = () => resolve(result)"), "storage reads must wait for transaction completion before resolving");
-assert(storage.includes("localStorage.removeItem(this.legacyKey)"), "clearing storage must also remove the legacy fallback to prevent data resurrection");
+assert(storage.includes("localStorage.removeItem(this.legacyKey)"), "clearing and migration must remove the legacy fallback to prevent stale data resurrection");
+const legacyMigration = storage.slice(storage.indexOf("// One-time migration from the V1 localStorage snapshot"), storage.indexOf("    return null;", storage.indexOf("// One-time migration from the V1 localStorage snapshot")));
+assert(legacyMigration.indexOf("await this.save(legacy);") < legacyMigration.indexOf("localStorage.removeItem(this.legacyKey);"), "legacy localStorage data must only be removed after its IndexedDB write commits");
 assert(app.includes("persistenceReady = false;"), "failed IndexedDB saves must switch persistence to local fallback");
 const persistenceBlock = app.slice(app.indexOf("function flushPersistence()"), app.indexOf("function account(id)"));
 assert(persistenceBlock.includes("await storage.save(snapshot);\n        return;"), "healthy IndexedDB writes must return without a synchronous localStorage mirror");
