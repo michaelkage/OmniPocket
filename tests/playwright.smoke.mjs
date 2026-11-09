@@ -220,6 +220,33 @@ try {
   check("V1 migration lost the localStorage account", v1Migration.account);
   check("V1 localStorage source was not removed after commit", v1Migration.removed);
 
+  // Two tabs with the same starting version must not silently overwrite each other.
+  const concurrentWrites = await page.evaluate(async () => {
+    const dbName = "omnipocket-concurrency-fixture";
+    const options = { dbName, storeName: "state", legacyKey: "omnipocket.concurrency-legacy" };
+    const writerA = new window.OmniPocketStorage(options);
+    await writerA.save({
+      schemaVersion: 9,
+      settings: { baseCurrency: "NGN" },
+      accounts: [{ id: "shared-account", name: "Shared", currency: "NGN", openingBalance: 100, balance: 100 }],
+      transactions: [], goals: [], snapshots: [], deletedExternalTransactions: [],
+    });
+    const writerB = new window.OmniPocketStorage(options);
+    const stateA = await writerA.load();
+    const stateB = await writerB.load();
+    stateA.accounts[0].balance = 125;
+    await writerA.save(stateA);
+    stateB.accounts[0].balance = 150;
+    let rejectedAsConflict = false;
+    try { await writerB.save(stateB); }
+    catch (error) { rejectedAsConflict = error?.code === "OMNI_CONFLICT"; }
+    const verifier = new window.OmniPocketStorage(options);
+    const latest = await verifier.load();
+    return { rejectedAsConflict, committedBalance: latest?.accounts?.[0]?.balance ?? null };
+  });
+  check("stale second-tab write was not rejected", concurrentWrites.rejectedAsConflict);
+  check("stale second-tab write overwrote the first committed balance", concurrentWrites.committedBalance === 125);
+
   // The financial engine runs against live DOM state.
   const engine = await page.evaluate(() => {
     const state = window.omnipocketState;
