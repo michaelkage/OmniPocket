@@ -108,7 +108,7 @@ try {
       openingBalance: 500, balance: 500, archived: false,
     });
     state.transactions.push({
-      id: "e2e-transaction", type: "income", amount: 125, currency: "NGN",
+      id: "e2e-transaction", type: "income", status: "recorded", bankStatus: "posted", amount: 125, currency: "NGN",
       date: "2026-11-09", createdAt: 1, sourceAccountId: "e2e-account",
       destinationAccountId: null, external: { provider: "mono", providerTransactionId: "e2e-provider-tx" },
     });
@@ -116,6 +116,7 @@ try {
     state.snapshots.push({ id: "e2e-snapshot", date: "2026-11-09", capturedAt: 1, baseCurrency: "NGN", value: 500, balances: [], rates: {} });
     state.deletedExternalTransactions.push({ provider: "mono", providerAccountId: "e2e-provider-account", providerTransactionId: "e2e-deleted-tx", localAccountId: "e2e-account", deletedAt: "2026-11-09T00:00:00.000Z" });
     state.schemaVersion = 8;
+    if (typeof rebuildBalances === "function") rebuildBalances();
     if (typeof flushPersistence === "function") await flushPersistence();
     const store = new window.OmniPocketStorage({ dbName: "omnipocket", storeName: "state", legacyKey: "omnipocket.v1" });
     const raw = await store.load();
