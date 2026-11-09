@@ -803,6 +803,7 @@
     const baselineKey = dateKey(baselineStart);
     const groups = new Map();
     const expenses = [];
+    if (state.transactions?.some(tx => tx.id === "spike")) console.log("unusual-spending-filter-debug", state.transactions.map(tx => ({ id: tx.id, type: tx.type, effective: isFinanciallyEffective(tx), status: tx.status, bankStatus: tx.bankStatus })));
 
     for (const tx of state.transactions || []) {
       if (tx.type !== "expense" || !isFinanciallyEffective(tx)) continue;
