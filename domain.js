@@ -832,6 +832,7 @@
       const history = (groups.get(key) || []).filter(item =>
         item.date < row.date && item.date >= baselineKey
       );
+      if (row.id === "spike") console.log("unusual-spending-internal-debug", { alertKey, baselineKey, row, history });
       if (history.length < 4) continue;
       const typicalAmount = median(history.map(item => item.amount));
       const deviations = history.map(item => Math.abs(item.amount - typicalAmount));
