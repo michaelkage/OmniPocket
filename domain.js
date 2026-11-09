@@ -735,7 +735,7 @@
     for (const tx of state.transactions || []) {
       if (tx.type !== "expense" || !isFinanciallyEffective(tx)) continue;
       const date = String(tx.date || "");
-      if (date < startKey || date > endKey || !/^\\d{4}-\\d{2}-\\d{2}$/.test(date)) continue;
+      if (date < startKey || date > endKey || !/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
       const amount = Math.abs(Number(tx.amount) || 0);
       if (!amount) continue;
       const label = String(tx.note || tx.category || "Uncategorised expense")
@@ -803,12 +803,11 @@
     const baselineKey = dateKey(baselineStart);
     const groups = new Map();
     const expenses = [];
-    if (state.transactions?.some(tx => tx.id === "spike")) console.log("unusual-spending-filter-debug", state.transactions.map(tx => ({ id: tx.id, type: tx.type, effective: isFinanciallyEffective(tx), status: tx.status, bankStatus: tx.bankStatus })));
 
     for (const tx of state.transactions || []) {
       if (tx.type !== "expense" || !isFinanciallyEffective(tx)) continue;
       const date = String(tx.date || "");
-      if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(date) || date < baselineKey || date > endKey) continue;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date < baselineKey || date > endKey) continue;
       const amount = Math.abs(Number(tx.amount) || 0);
       if (!amount) continue;
       const category = String(tx.category || "Uncategorised").trim() || "Uncategorised";
@@ -820,7 +819,6 @@
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key).push(row);
     }
-    if (state.transactions?.some(tx => tx.id === "spike")) console.log("unusual-spending-collected-debug", { alertKey, baselineKey, expenses });
 
     const median = values => {
       const sorted = values.slice().sort((a, b) => a - b);
@@ -834,7 +832,6 @@
       const history = (groups.get(key) || []).filter(item =>
         item.date < row.date && item.date >= baselineKey
       );
-      if (row.id === "spike") console.log("unusual-spending-internal-debug", { alertKey, baselineKey, row, history });
       if (history.length < 4) continue;
       const typicalAmount = median(history.map(item => item.amount));
       const deviations = history.map(item => Math.abs(item.amount - typicalAmount));
