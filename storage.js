@@ -89,7 +89,7 @@ class OmniPocketStorage {
           this.channel.onmessage = event => {
             const version = Number(event.data?.version) || 0;
             if (event.data?.type === "state-committed" && version > Number(this.cache?.version || 0)) {
-              window.dispatchEvent(new CustomEvent("omnipocket:external-state-change", { detail: { version } }));
+              window.dispatchEvent(new CustomEvent("omnipocket:external-state-change", { detail: { version, dbName: this.dbName } }));
             }
           };
         }
