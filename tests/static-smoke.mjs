@@ -101,6 +101,11 @@ assert(storage.includes("OmniPocket read was aborted."), "storage reads must rej
 assert(storage.includes("tx.oncomplete = () => resolve(result)"), "storage reads must wait for transaction completion before resolving");
 assert(storage.includes("localStorage.removeItem(this.legacyKey)"), "clearing storage must also remove the legacy fallback to prevent data resurrection");
 assert(app.includes("persistenceReady = false;"), "failed IndexedDB saves must switch persistence to local fallback");
+const persistenceBlock = app.slice(app.indexOf("function flushPersistence()"), app.indexOf("function account(id)"));
+assert(persistenceBlock.includes("await storage.save(snapshot);\n        return;"), "healthy IndexedDB writes must return without a synchronous localStorage mirror");
+assert(persistenceBlock.includes("if (persistenceReady)"), "IndexedDB must remain the primary persistence path");
+assert(persistenceBlock.includes("localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));"), "localStorage must remain available as a compatibility fallback");
+assert(persistenceBlock.indexOf("await storage.save(snapshot);") < persistenceBlock.indexOf("localStorage.setItem(STORAGE_KEY"), "localStorage fallback must only run after IndexedDB is unavailable or fails");
 assert(app.includes("Could not persist OmniPocket state to local storage."), "local fallback failures must be reported independently");
 
 // Transaction receipts must remain privacy-aware, safely escaped, and honestly labelled.
