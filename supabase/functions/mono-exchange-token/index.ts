@@ -93,12 +93,13 @@ async function syncAccount(supabase: any, userId: string, monoAccountId: string,
   const pagesValue = transactionMeta.total_pages ?? transactionMeta.totalPages ?? transactionMeta.pages;
   const page = pageValue == null ? null : Number(pageValue);
   const pages = pagesValue == null ? null : Number(pagesValue);
+  const explicitHasNext = transactionMeta.has_next ?? transactionMeta.hasNext;
   const invalidPageMetadata = (pageValue != null && (!Number.isSafeInteger(page) || page < 1))
     || (pagesValue != null && (!Number.isSafeInteger(pages) || pages < 1))
-    || (page != null && pages != null && page > pages);
-  const hasNextTransactionPage = Boolean(transactionMeta.next ?? transactionMeta.next_page ?? transactionMeta.nextPage)
-    || transactionMeta.has_next === true || transactionMeta.hasNext === true
-    || (page != null && pages != null && page < pages);
+    || (page != null && pages != null && page > pages)
+    || (explicitHasNext != null && typeof explicitHasNext !== "boolean");
+  const hasNextTransactionPage = Boolean(transactionMeta.next || transactionMeta.next_page || transactionMeta.nextPage)
+    || explicitHasNext === true || (page != null && pages != null && page < pages);
   const dataStatus = String(accountPayload?.data?.meta?.data_status || accountPayload?.data?.meta?.dataStatus || "").toUpperCase();
   let transactionFeedComplete = !hasNextTransactionPage && !invalidReportedTotal && !invalidPageMetadata
     && (!hasReportedTransactionTotal || reportedTransactionTotal === transactions?.length)
