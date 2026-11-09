@@ -4,7 +4,7 @@ class OmniPocketStorage {
     this.dbName = dbName;
     this.storeName = storeName;
     this.legacyKey = legacyKey;
-    this.version = 3;
+    this.version = 4;
     this.key = "current";
     this.dbPromise = null;
     this.cache = null;
@@ -30,8 +30,9 @@ class OmniPocketStorage {
 
       let settled = false;
       const request = indexedDB.open(this.dbName, this.version);
-      request.onupgradeneeded = () => {
+      request.onupgradeneeded = event => {
         const db = request.result;
+        const upgradeTransaction = event?.target?.transaction || request.transaction || null;
         if (!db.objectStoreNames.contains(this.storeName)) {
           db.createObjectStore(this.storeName);
         }
@@ -51,11 +52,17 @@ class OmniPocketStorage {
         if (!db.objectStoreNames.contains("transactions")) {
           const transactions = db.createObjectStore("transactions", { keyPath: "id" });
           transactions.createIndex("date", "date", { unique: false });
+          transactions.createIndex("dateId", ["date", "id"], { unique: false });
           transactions.createIndex("sourceAccountId", "sourceAccountId", { unique: false });
           transactions.createIndex("destinationAccountId", "destinationAccountId", { unique: false });
           transactions.createIndex("sourceAccountDate", ["sourceAccountId", "date"], { unique: false });
           transactions.createIndex("destinationAccountDate", ["destinationAccountId", "date"], { unique: false });
           transactions.createIndex("providerTransactionId", ["external.provider", "external.providerTransactionId"], { unique: false });
+        } else if (upgradeTransaction) {
+          const transactions = upgradeTransaction.objectStore("transactions");
+          if (!transactions.indexNames?.contains?.("dateId")) {
+            transactions.createIndex("dateId", ["date", "id"], { unique: false });
+          }
         }
         if (!db.objectStoreNames.contains("goals")) {
           const goals = db.createObjectStore("goals", { keyPath: "id" });
@@ -245,6 +252,66 @@ class OmniPocketStorage {
       tx.oncomplete = () => resolve(result);
       tx.onerror = () => reject(tx.error || new Error("Could not read OmniPocket data."));
       tx.onabort = () => reject(tx.error || new Error("OmniPocket read was aborted."));
+    });
+  }
+
+  // Read a bounded page directly from the date/id index. The opaque cursor
+  // carries the final compound key from the prior page, so equal-date rows
+  // cannot be skipped or repeated between requests.
+  async getTransactionPage(options = {}) {
+    const db = await this.open();
+    const requestedLimit = Math.floor(Number(options.limit) || 50);
+    const limit = Math.min(200, Math.max(1, requestedLimit));
+    const fromDate = String(options.fromDate || "");
+    const toDate = String(options.toDate || "");
+    const cursor = options.cursor && typeof options.cursor === "object" ? options.cursor : null;
+    if (fromDate && toDate && fromDate > toDate) {
+      return { items: [], nextCursor: null, hasMore: false };
+    }
+    if (cursor && (!cursor.date || !cursor.id || (toDate && cursor.date > toDate) || (fromDate && cursor.date < fromDate))) {
+      throw new Error("Invalid transaction page cursor for the requested date range.");
+    }
+
+    const lower = [fromDate || "", ""];
+    const upper = cursor ? [String(cursor.date), String(cursor.id)] : [toDate || "\\uffff", "\\uffff"];
+    const range = IDBKeyRange.bound(lower, upper, false, Boolean(cursor));
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction("transactions", "readonly");
+      const index = tx.objectStore("transactions").index("dateId");
+      const request = index.openCursor(range, "prev");
+      const items = [];
+      let hasMore = false;
+      request.onsuccess = () => {
+        const recordCursor = request.result;
+        if (!recordCursor) return;
+        const record = recordCursor.value;
+        const accountMatch = !options.accountId ||
+          record.sourceAccountId === options.accountId ||
+          record.destinationAccountId === options.accountId;
+        const typeMatch = !options.type || options.type === "all" || record.type === options.type;
+        const statusMatch = !options.status || options.status === "all" || record.status === options.status;
+        const categoryMatch = !options.category || options.category === "all" || record.category === options.category;
+        const supersededMatch = options.includeSuperseded !== false || record.status !== "superseded";
+        if (accountMatch && typeMatch && statusMatch && categoryMatch && supersededMatch) {
+          if (items.length < limit) items.push(record);
+          else {
+            hasMore = true;
+            return;
+          }
+        }
+        recordCursor.continue();
+      };
+      request.onerror = () => reject(request.error || new Error("Could not read the transaction page."));
+      tx.oncomplete = () => {
+        const last = items[items.length - 1];
+        resolve({
+          items,
+          nextCursor: hasMore && last ? { date: last.date, id: last.id } : null,
+          hasMore
+        });
+      };
+      tx.onerror = () => reject(tx.error || new Error("Transaction page read failed."));
+      tx.onabort = () => reject(tx.error || new Error("Transaction page read was aborted."));
     });
   }
 
