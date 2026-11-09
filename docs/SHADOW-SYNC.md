@@ -8,6 +8,7 @@ Make OmniPocket reliable under intermittent connectivity without weakening its a
 
 - `storage.js` uses IndexedDB schema v3 with normalized `accounts`, `transactions`, `goals`, `snapshots`, `deletedExternalTransactions`, `meta`, and `outbox` stores. The V2 monolithic `state/current` snapshot remains available as a migration source until the normalized write transaction commits.
 - `storage.js` reconstructs the current domain state from those stores on startup. The UI still loads the full in-memory state; paginated query APIs are a later step.
+- The Activity page progressively renders 50 matching rows at a time with a Load 50 more control. This limits DOM size and layout work, but filtering/sorting and startup hydration still use the full in-memory collection; indexed cursor pagination is not yet wired into the UI.
 - Normalized saves compare per-record fingerprints and only `put` changed records or delete removed records, with all related changes committed in one IndexedDB transaction. A monotonic `stateVersion` is checked inside the same read/write transaction; stale tabs abort rather than silently replacing newer state. `BroadcastChannel` notifies other tabs after commit, and conflicted tabs are told to reload instead of writing a stale localStorage fallback. This avoids rewriting every unchanged financial record, although the current app still clones the in-memory state and computes fingerprints across records on save.
 - `production-hardening.js` stores offline bank-refresh jobs in the IndexedDB outbox, migrates the legacy localStorage queue after commit, and no longer truncates it at 50 jobs.
 - Supabase already owns the provider-data boundary: `bank_connections`, `bank_transactions`, `bank_sync_runs`, webhook/event tables and reconciliation/payment tables exist. Do not create a competing copy of provider bank data.
@@ -100,6 +101,7 @@ Recommended payment-intent lifecycle:
 - [x] Keep the outbox in the same database and preserve queued work across reloads.
 - [ ] Add runtime migration fixtures covering populated V2 databases, empty databases, interrupted upgrades, and legacy localStorage imports.
 - [ ] Add paginated transaction query APIs and migrate activity/review views away from full-history rendering.
+- [x] Progressively render Activity results in 50-row batches so the DOM does not grow with the full ledger.
 - [ ] Move large receipt/OCR text and image blobs into a dedicated attachments store.
 - [x] Add optimistic state-version checks to every normalized write; a stale tab aborts instead of overwriting newer ledger records.
 - [x] Broadcast committed versions across tabs and warn stale tabs to reload; conflict writes never fall back to localStorage.
