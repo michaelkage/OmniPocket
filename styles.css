@@ -2135,3 +2135,18 @@ button { touch-action: manipulation; }
  #transactionReceiptDialog .receipt-field,#transactionReceiptDialog .receipt-fields,#transactionReceiptDialog .receipt-footnote { border-color:#bbb!important; }
  #transactionReceiptDialog .receipt-field span,#transactionReceiptDialog .receipt-footnote,#transactionReceiptDialog .receipt-amount span,#transactionReceiptDialog .receipt-reference { color:#555!important; }
 }
+
+
+.activity-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 16px 4px 4px;
+  border-top: 1px solid var(--op-border);
+}
+.activity-pagination .secondary {
+  min-height: 40px;
+  padding: 8px 14px;
+}
