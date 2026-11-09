@@ -237,16 +237,21 @@ function flushPersistence() {
   // IndexedDB writes can take longer than the debounce window. Serialize them
   // so an older snapshot can never finish after, and overwrite, a newer one.
   persistenceQueue = persistenceQueue.catch(() => {}).then(async () => {
-    // Keep the browser fallback healthy even when IndexedDB is unavailable.
-    // Each store is attempted independently so one failure cannot skip the other.
+    // IndexedDB is the primary store. Do not mirror every full-ledger snapshot
+    // into synchronous localStorage: that duplicates serialization on the UI
+    // thread and reintroduces the browser's small per-origin quota ceiling.
     if (persistenceReady) {
       try {
         await storage.save(snapshot);
+        return;
       } catch (error) {
         persistenceReady = false;
-        console.warn("IndexedDB save failed; continuing with local fallback.", error);
+        console.warn("IndexedDB save failed; switching to local fallback.", error);
       }
     }
+
+    // localStorage is a compatibility/recovery path only when IndexedDB is
+    // unavailable. It is never written during healthy IndexedDB operation.
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
     } catch (error) {
