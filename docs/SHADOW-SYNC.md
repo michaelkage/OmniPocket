@@ -79,10 +79,14 @@ Recommended payment-intent lifecycle:
 
 ## Delivery plan
 
-### 1. Inventory and guardrails
-- Map every direct `localStorage` read/write and classify it as preference, transient UI state, legacy migration, or durable work queue.
-- Add tests proving no ledger transaction is reported saved before the IndexedDB transaction completes.
-- Add a test proving a failed IndexedDB write never silently falls back to a stale snapshot and overwrites newer data.
+### 1. Inventory and guardrails — in progress
+- [x] Move the offline bank-refresh queue into the IndexedDB outbox.
+- [x] Migrate the legacy queue only after the IndexedDB transaction commits.
+- [x] Remove the arbitrary 50-job truncation and acknowledge completed jobs individually.
+- [x] Add static contract checks for the durable outbox and service-worker cache version.
+- [ ] Map every remaining direct `localStorage` read/write and classify it as preference, transient UI state, legacy migration, or durable work queue.
+- [ ] Add runtime tests proving no ledger transaction is reported saved before the IndexedDB transaction completes.
+- [ ] Add a test proving a failed IndexedDB write never silently falls back to a stale snapshot and overwrites newer data.
 
 ### 2. Normalize IndexedDB
 - Introduce a new database version and object stores.
@@ -104,7 +108,8 @@ Recommended payment-intent lifecycle:
 
 ## Exit criteria
 
-- No financial history or durable sync queue is stored in localStorage.
+- [x] Durable offline bank-refresh jobs are stored in IndexedDB, not localStorage.
+- [ ] No financial history or other durable sync queue is stored in localStorage.
 - A local transaction is acknowledged only after its IndexedDB transaction commits.
 - Replaying any operation/batch produces no duplicate effect.
 - A network timeout never advances the sync cursor or implies provider success.
