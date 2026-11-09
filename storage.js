@@ -107,11 +107,11 @@ class OmniPocketStorage {
   }
 
   _deletedKey(item) {
-    return [
+    return JSON.stringify([
       String(item.provider || ""),
       String(item.providerAccountId || ""),
       String(item.providerTransactionId || "")
-    ].join(":");
+    ]);
   }
 
   _fingerprint(value) {
