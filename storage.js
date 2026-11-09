@@ -4,7 +4,7 @@ class OmniPocketStorage {
     this.dbName = dbName;
     this.storeName = storeName;
     this.legacyKey = legacyKey;
-    this.version = 1;
+    this.version = 2;
     this.key = "current";
     this.dbPromise = null;
   }
@@ -24,6 +24,11 @@ class OmniPocketStorage {
         const db = request.result;
         if (!db.objectStoreNames.contains(this.storeName)) {
           db.createObjectStore(this.storeName);
+        }
+        if (!db.objectStoreNames.contains("outbox")) {
+          const outbox = db.createObjectStore("outbox", { keyPath: "id" });
+          outbox.createIndex("createdAt", "createdAt", { unique: false });
+          outbox.createIndex("type", "type", { unique: false });
         }
       };
       request.onsuccess = () => {
@@ -109,6 +114,67 @@ class OmniPocketStorage {
       tx.onerror = () => reject(tx.error || new Error("Could not save OmniPocket data."));
       tx.onabort = () => reject(tx.error || new Error("OmniPocket save was aborted."));
     });
+  }
+
+
+  // Durable offline work queue. Each operation is keyed by its stable ID so
+  // retrying enqueue after an uncertain response cannot create a duplicate.
+  async enqueueOutbox(job) {
+    if (!job || !job.id) throw new Error("Outbox jobs require a stable id.");
+    const db = await this.open();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction("outbox", "readwrite");
+      tx.objectStore("outbox").put({ ...job, createdAt: Number(job.createdAt) || Date.now() });
+      tx.oncomplete = () => resolve(job.id);
+      tx.onerror = () => reject(tx.error || new Error("Could not enqueue offline work."));
+      tx.onabort = () => reject(tx.error || new Error("Outbox enqueue was aborted."));
+    });
+  }
+
+  async listOutbox() {
+    const db = await this.open();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction("outbox", "readonly");
+      const request = tx.objectStore("outbox").getAll();
+      let result = [];
+      request.onsuccess = () => { result = request.result || []; };
+      request.onerror = () => reject(request.error || new Error("Could not read offline work."));
+      tx.oncomplete = () => resolve(result.sort((a, b) => a.createdAt - b.createdAt));
+      tx.onerror = () => reject(tx.error || new Error("Could not read offline work."));
+      tx.onabort = () => reject(tx.error || new Error("Outbox read was aborted."));
+    });
+  }
+
+  async removeOutbox(id) {
+    const db = await this.open();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction("outbox", "readwrite");
+      tx.objectStore("outbox").delete(id);
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error || new Error("Could not acknowledge offline work."));
+      tx.onabort = () => reject(tx.error || new Error("Outbox acknowledgement was aborted."));
+    });
+  }
+
+  async migrateLegacyOutbox(key) {
+    let legacy;
+    try { legacy = JSON.parse(localStorage.getItem(key) || "[]"); }
+    catch (error) { throw new Error("Legacy offline queue is unreadable; it was left untouched.", { cause: error }); }
+    if (!Array.isArray(legacy) || legacy.length === 0) return 0;
+    const db = await this.open();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction("outbox", "readwrite");
+      const store = tx.objectStore("outbox");
+      for (const job of legacy) {
+        if (job && job.id && job.type) store.put({ ...job, createdAt: Number(job.createdAt) || Date.now() });
+      }
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error || new Error("Could not migrate the legacy offline queue."));
+      tx.onabort = () => reject(tx.error || new Error("Legacy outbox migration was aborted."));
+    });
+    // Delete the old copy only after all records are durably committed.
+    localStorage.removeItem(key);
+    return legacy.length;
   }
 
   async clear() {
