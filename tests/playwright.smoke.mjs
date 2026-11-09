@@ -246,19 +246,22 @@ try {
     const clearer = new window.OmniPocketStorage(options);
     await clearer.clear();
     let staleAfterClearRejected = false;
+    let staleAfterClearError = null;
     try { await writerB.save(staleBeforeClear); }
-    catch (error) { staleAfterClearRejected = error?.code === "OMNI_CONFLICT"; }
+    catch (error) { staleAfterClearError = error?.code || error?.message || String(error); staleAfterClearRejected = error?.code === "OMNI_CONFLICT"; }
     const afterClear = await verifier.load();
     return {
       rejectedAsConflict,
       committedBalance: latest?.accounts?.[0]?.balance ?? null,
       staleAfterClearRejected,
+      staleAfterClearError,
+      clearStateVersion: afterClear?.stateVersion ?? null,
       recordsAfterClear: afterClear?.accounts?.length ?? -1,
     };
   });
   check("stale second-tab write was not rejected", concurrentWrites.rejectedAsConflict);
   check("stale second-tab write overwrote the first committed balance", concurrentWrites.committedBalance === 125);
-  check("stale tab resurrected the ledger after another tab cleared it", concurrentWrites.staleAfterClearRejected && concurrentWrites.recordsAfterClear === 0);
+  check(`stale tab resurrected the ledger after another tab cleared it (rejected=${concurrentWrites.staleAfterClearRejected}, error=${concurrentWrites.staleAfterClearError}, version=${concurrentWrites.clearStateVersion}, accounts=${concurrentWrites.recordsAfterClear})`, concurrentWrites.staleAfterClearRejected && concurrentWrites.recordsAfterClear === 0);
 
   // The financial engine runs against live DOM state.
   const engine = await page.evaluate(() => {
