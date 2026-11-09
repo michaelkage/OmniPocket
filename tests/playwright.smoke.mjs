@@ -300,7 +300,7 @@ try {
     search.value = "TX-000120";
     search.dispatchEvent(new Event("input", { bubbles: true }));
     const filteredPage = list.querySelectorAll(".activity-row").length;
-    const filteredText = list.textContent.includes("TX-000120");
+    const filteredText = list.querySelector(".activity-row")?.dataset.transactionId === "TX-000120";
     state.transactions = original;
     search.value = "";
     search.dispatchEvent(new Event("input", { bubbles: true }));
