@@ -131,7 +131,7 @@ class OmniPocketStorage {
     };
   }
 
-  _buildCache(records, settings) {
+  _buildCache(records, settings, schemaVersion = 1) {
     const cache = { stores: {}, meta: {} };
     for (const name of this.entityStoreNames) {
       cache.stores[name] = new Map();
@@ -142,6 +142,7 @@ class OmniPocketStorage {
     }
     cache.meta.settings = this._fingerprint(settings || {});
     cache.meta.stateVersion = this._fingerprint({ key: "stateVersion", value: 1 });
+    cache.meta.schemaVersion = this._fingerprint({ key: "schemaVersion", value: schemaVersion });
     return cache;
   }
 
@@ -155,23 +156,27 @@ class OmniPocketStorage {
       }
       requests.settings = tx.objectStore(this.metaStoreName).get("settings");
       requests.stateVersion = tx.objectStore(this.metaStoreName).get("stateVersion");
-      const result = { records: {}, settings: null, version: null };
+      requests.schemaVersion = tx.objectStore(this.metaStoreName).get("schemaVersion");
+      const result = { records: {}, settings: null, version: null, schemaVersion: null };
       for (const name of this.entityStoreNames) {
         requests[name].onsuccess = () => { result.records[name] = requests[name].result || []; };
         requests[name].onerror = () => reject(requests[name].error || new Error("Could not read normalized " + name + "."));
       }
       requests.settings.onsuccess = () => { result.settings = requests.settings.result?.value || null; };
       requests.stateVersion.onsuccess = () => { result.version = requests.stateVersion.result?.value || null; };
+      requests.schemaVersion.onsuccess = () => { result.schemaVersion = requests.schemaVersion.result?.value ?? null; };
       requests.settings.onerror = () => reject(requests.settings.error || new Error("Could not read OmniPocket settings."));
       requests.stateVersion.onerror = () => reject(requests.stateVersion.error || new Error("Could not read normalized storage version."));
+      requests.schemaVersion.onerror = () => reject(requests.schemaVersion.error || new Error("Could not read application schema version."));
       tx.oncomplete = () => {
         if (!result.version) {
           resolve(null);
           return;
         }
         result.records.deletedExternalTransactions = result.records.deletedExternalTransactions.map(({ key, ...item }) => item);
-        this.cache = this._buildCache(result.records, result.settings || {});
+        this.cache = this._buildCache(result.records, result.settings || {}, result.schemaVersion ?? 1);
         resolve({
+          schemaVersion: result.schemaVersion ?? null,
           settings: result.settings || {},
           accounts: result.records.accounts,
           transactions: result.records.transactions,
@@ -245,7 +250,8 @@ class OmniPocketStorage {
       }
     }
 
-    const nextCache = this._buildCache(records, settings);
+    const appSchemaVersion = Number.isFinite(Number(state.schemaVersion)) ? Number(state.schemaVersion) : 1;
+    const nextCache = this._buildCache(records, settings, appSchemaVersion);
     const storeNames = [...this.entityStoreNames, this.metaStoreName, this.storeName];
     return new Promise((resolve, reject) => {
       const tx = db.transaction(storeNames, "readwrite");
@@ -270,6 +276,9 @@ class OmniPocketStorage {
         meta.put({ key: "settings", value: settings });
       }
       meta.put({ key: "stateVersion", value: 1 });
+      if (this.cache.meta.schemaVersion !== nextCache.meta.schemaVersion) {
+        meta.put({ key: "schemaVersion", value: appSchemaVersion });
+      }
       // Remove the old monolithic V2 snapshot only in the same successful
       // transaction that commits its normalized replacement.
       tx.objectStore(this.storeName).delete(this.key);
