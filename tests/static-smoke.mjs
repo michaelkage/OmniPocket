@@ -53,7 +53,7 @@ assert(!/areyxlydzqzlzmgzavpi\.supabase\.co/.test(client + app), "Supabase URL m
 // otherwise the PWA serves index.html in place of the missing JS when offline.
 const sw = fs.readFileSync("sw.js", "utf8");
 assert(/const CACHE="omnipocket-shell-v\d+"/.test(sw), "service worker must version its shell cache");
-assert(sw.includes('const CACHE="omnipocket-shell-v19"'), "shell cache must be bumped when the app shell changes");
+assert(sw.includes('const CACHE="omnipocket-shell-v21"'), "shell cache must be bumped when the app shell changes");
 const cacheLine = sw.split("\n").find(line => line.includes("const ASSETS="));
 assert(cacheLine, "sw.js must declare an ASSETS list");
 for (const match of html.matchAll(/<script src="([^"]+)"/g)) {
@@ -100,8 +100,10 @@ assert(storage.includes("tx.onabort = () => reject(tx.error || new Error(\"OmniP
 assert(storage.includes("OmniPocket read was aborted."), "storage reads must reject on aborted transactions");
 assert(storage.includes("tx.oncomplete = () => resolve(result)"), "storage reads must wait for transaction completion before resolving");
 assert(storage.includes("localStorage.removeItem(this.legacyKey)"), "clearing and migration must remove the legacy fallback to prevent stale data resurrection");
-const legacyMigration = storage.slice(storage.indexOf("// One-time migration from the V1 localStorage snapshot"), storage.indexOf("    return null;", storage.indexOf("// One-time migration from the V1 localStorage snapshot")));
-assert(legacyMigration.indexOf("await this.save(legacy);") < legacyMigration.indexOf("localStorage.removeItem(this.legacyKey);"), "legacy localStorage data must only be removed after its IndexedDB write commits");
+const legacyMigration = storage.slice(storage.indexOf("async load()"), storage.indexOf("  read(db) {", storage.indexOf("async load()")));
+assert(legacyMigration.includes("return snapshot;") && legacyMigration.includes("return legacy;"), "legacy sources must be returned for domain normalization before persistence");
+const normalizedSave = storage.slice(storage.indexOf("async save(state)"), storage.indexOf("// Durable offline work queue"));
+assert(normalizedSave.indexOf("tx.oncomplete = () => {") < normalizedSave.indexOf("localStorage.removeItem(this.legacyKey);"), "legacy localStorage data must only be removed after the normalized IndexedDB transaction commits");
 assert(app.includes("persistenceReady = false;"), "failed IndexedDB saves must switch persistence to local fallback");
 const persistenceBlock = app.slice(app.indexOf("function flushPersistence()"), app.indexOf("function account(id)"));
 assert(persistenceBlock.includes("await storage.save(snapshot);\n        return;"), "healthy IndexedDB writes must return without a synchronous localStorage mirror");
@@ -125,5 +127,33 @@ assert(receiptRows.includes("escapeHtml(value)"), "receipt row values must be es
 assert(receiptRows.includes('dialog.querySelector("[data-receipt-copy]")'), "receipt copy control must be wired");
 assert(receiptRows.includes('dialog.querySelector("[data-receipt-share]")'), "receipt share control must be wired");
 assert(receiptRows.includes('dialog.querySelector("[data-receipt-print]")'), "receipt print control must be wired");
+
+
+assert(storage.includes('this.version = 3;'), "IndexedDB schema must be versioned for normalized financial records");
+assert(storage.includes('db.createObjectStore("outbox", { keyPath: "id" })'), "IndexedDB must create the durable outbox store");
+assert(storage.includes('db.createObjectStore("accounts", { keyPath: "id" })'), "normalized accounts store must be created");
+assert(storage.includes('db.createObjectStore("transactions", { keyPath: "id" })'), "normalized transactions store must be created");
+assert(storage.includes('db.createObjectStore("goals", { keyPath: "id" })'), "normalized goals store must be created");
+assert(storage.includes('db.createObjectStore("snapshots", { keyPath: "id" })'), "normalized snapshots store must be created");
+assert(storage.includes('db.createObjectStore("meta", { keyPath: "key" })'), "normalized metadata store must be created");
+assert(storage.includes('createIndex("sourceAccountDate", ["sourceAccountId", "date"]'), "transaction history must be indexed by account and date");
+assert(storage.includes('createIndex("providerTransactionId", ["external.provider", "external.providerTransactionId"]'), "provider transaction identity must be indexed");
+assert(storage.includes('requests.schemaVersion = tx.objectStore(this.metaStoreName).get("schemaVersion");'), "normalized storage must preserve the application schema version");
+assert(storage.includes('meta.put({ key: "schemaVersion", value: appSchemaVersion });'), "normalized writes must persist the application schema version");
+assert(storage.includes("async _readNormalized(db)"), "storage must reconstruct the domain state from normalized records");
+assert(storage.includes("async _readSnapshot(db)"), "storage must retain the V2 snapshot migration path");
+assert(storage.includes("const storeNames = [...this.entityStoreNames, this.metaStoreName, this.storeName]"), "normalized records and legacy snapshot cleanup must share one atomic write transaction");
+assert(storage.includes("if (previous.get(key) !== fingerprint)"), "normalized persistence must only write changed records");
+assert(storage.includes("for (const key of previous.keys())"), "normalized persistence must remove deleted records");
+assert(app.includes("await storage.save(state);"), "bootstrap must persist the migrated domain shape to normalized stores");
+assert(app.includes("if (!domainStateLoaded) state = loadState();"), "a failed normalized migration must not discard a readable legacy ledger");
+
+assert(storage.includes("async enqueueOutbox(job)"), "storage must expose durable outbox enqueue");
+assert(storage.includes("async listOutbox()"), "storage must expose durable outbox reads");
+assert(storage.includes("async removeOutbox(id)"), "storage must expose per-job acknowledgements");
+assert(storage.includes("localStorage.removeItem(key)"), "legacy queue must only be removed after IndexedDB migration commits");
+assert(!/slice\(-50\)/.test(fs.readFileSync("production-hardening.js", "utf8")), "offline jobs must never be silently truncated at 50");
+assert(fs.readFileSync("production-hardening.js", "utf8").includes("queueStorage.enqueueOutbox(job)"), "bank refresh queue must use IndexedDB");
+assert(fs.readFileSync("production-hardening.js", "utf8").includes("if (!navigator.onLine || queueFlushInProgress) return;"), "offline queue flushes must be single-flight within a tab");
 
 console.log("OmniPocket static smoke tests passed");
