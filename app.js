@@ -51,8 +51,10 @@ function showStorageConflict(message) {
   if (notify) notify(message);
   else console.warn(message);
 }
-window.addEventListener("omnipocket:external-state-change", () => {
-  showStorageConflict("This ledger changed in another tab. Reload before continuing so you do not overwrite newer entries.");
+window.addEventListener("omnipocket:external-state-change", event => {
+  if (event.detail?.dbName === "omnipocket") {
+    showStorageConflict("This ledger changed in another tab. Reload before continuing so you do not overwrite newer entries.");
+  }
 });
 
 function emitStateEvent(event, detail = {}) { if (window.OmniPocketBus) OmniPocketBus.emit(event, { state, ...detail }); }
