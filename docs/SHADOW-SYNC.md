@@ -8,7 +8,7 @@ Make OmniPocket reliable under intermittent connectivity without weakening its a
 
 - `storage.js` uses IndexedDB schema v3 with normalized `accounts`, `transactions`, `goals`, `snapshots`, `deletedExternalTransactions`, `meta`, and `outbox` stores. The V2 monolithic `state/current` snapshot remains available as a migration source until the normalized write transaction commits.
 - `storage.js` reconstructs the current domain state from those stores on startup. The UI still loads the full in-memory state; paginated query APIs are a later step.
-- Normalized saves compare per-record fingerprints and only `put` changed records or delete removed records, with all related changes committed in one IndexedDB transaction. This avoids rewriting every unchanged financial record, although the current app still clones the in-memory state and computes fingerprints across records on save.
+- Normalized saves compare per-record fingerprints and only `put` changed records or delete removed records, with all related changes committed in one IndexedDB transaction. A monotonic `stateVersion` is checked inside the same read/write transaction; stale tabs abort rather than silently replacing newer state. `BroadcastChannel` notifies other tabs after commit, and conflicted tabs are told to reload instead of writing a stale localStorage fallback. This avoids rewriting every unchanged financial record, although the current app still clones the in-memory state and computes fingerprints across records on save.
 - `production-hardening.js` stores offline bank-refresh jobs in the IndexedDB outbox, migrates the legacy localStorage queue after commit, and no longer truncates it at 50 jobs.
 - Supabase already owns the provider-data boundary: `bank_connections`, `bank_transactions`, `bank_sync_runs`, webhook/event tables and reconciliation/payment tables exist. Do not create a competing copy of provider bank data.
 - Mono transaction import already has provider identity/deduplication and explicit reconciliation state. Preserve these semantics.
@@ -101,7 +101,7 @@ Recommended payment-intent lifecycle:
 - [ ] Add runtime migration fixtures covering populated V2 databases, empty databases, interrupted upgrades, and legacy localStorage imports.
 - [ ] Add paginated transaction query APIs and migrate activity/review views away from full-history rendering.
 - [ ] Move large receipt/OCR text and image blobs into a dedicated attachments store.
-- [ ] Add multi-tab coordination and explicit conflict/reload behavior before supporting concurrent edits.
+- [x] Add optimistic state-version checks to every normalized write; a stale tab aborts instead of overwriting newer ledger records.\n- [x] Broadcast committed versions across tabs and warn stale tabs to reload; conflict writes never fall back to localStorage.
 
 ### 3. Implement outbox sync
 - Add a sync worker/service module with single-flight locking, bounded batches, retry/backoff, jitter, online/visibility triggers, and an explicit manual retry.
