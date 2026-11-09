@@ -807,7 +807,6 @@ const tx = (o) => ({
     ...history,
     tx({ id: "corrected-2", type: "expense", description: "ACME COFFEE ONLINE", category: "Shopping", categorySource: "user" }),
   ];
-  console.log("learned-category-conflict-debug", conflict.map(item => ({ category: item.category, categorySource: item.categorySource, description: item.description, note: item.note })), E.learnedCategorySuggestion(conflict, { description: "ACME COFFEE" }));
   assert.equal(E.learnedCategorySuggestion(conflict, { description: "ACME COFFEE" }), null,
     "conflicting user corrections should not produce an overconfident suggestion");
   assert.equal(history[0].categorySource, "user", "learning must remain read-only");
