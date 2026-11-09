@@ -24,6 +24,17 @@ assert.match(exchange, /normalizedById\.has\(tx\.mono_transaction_id\)\) duplica
 assert.match(exchange, /const normalized = \[\.\.\.normalizedById\.values\(\)\]/);
 assert.match(sync, /duplicateTransactionCount, invalidTransactionCount: invalidDirectionCount \+ invalidAmountCount \+ missingProviderIdCount, transactions: normalized/);
 assert.match(exchange, /duplicate_count: duplicateTransactionCount/);
+assert.match(exchange, /const totalValue = transactionMeta\.total \?\? transactionMeta\.total_count/);
+assert.match(exchange, /reportedTransactionTotal = totalValue == null \|\| \(typeof totalValue === "string" && !totalValue\.trim\(\)\) \? null : Number\(totalValue\)/);
+assert.match(exchange, /let missingProviderIdCount = 0/);
+assert.match(exchange, /missingProviderIdCount\+\+/);
+assert.match(exchange, /const feedQualityIssues = \[\]/);
+assert.match(exchange, /if \(feedQualityIssues\.length\) \{/);
+assert.match(exchange, /transactionFeedComplete = false/);
+assert.match(exchange, /sync_status: "warning", last_sync_error: row\.last_sync_error/);
+assert.match(exchange, /missing_provider_id_count: missingProviderIdCount/);
+assert.match(exchange, /invalidTransactionCount: invalidDirectionCount \+ invalidAmountCount \+ missingProviderIdCount/);
+assert.match(exchange, /transactionFeedIncompleteReason: feedQualityIssues\.join\(" "\)/);
 assert.match(sync, /bank_status: \["pending", "posted", "reversed", "failed"\]/);
 assert.match(sync, /const \{ bank_status, \.\.\.databaseTransaction \} = tx/);
 assert.match(sync, /\.\.\.databaseTransaction, provider_status: bank_status/);
