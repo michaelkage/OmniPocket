@@ -5,15 +5,31 @@
   const $ = id => document.getElementById(id);
   const toast = message => window.OmniPocketV1?.toast ? window.OmniPocketV1.toast(message) : console.info(message);
 
-  function readQueue() {
-    try { const q = JSON.parse(localStorage.getItem(QUEUE_KEY) || "[]"); return Array.isArray(q) ? q : []; }
-    catch { return []; }
+  const queueStorage = window.OmniPocketStorageInstance;
+  let queueMigrationPromise = null;
+  async function ensureQueueStorage() {
+    if (!queueStorage) throw new Error("Durable local storage is not ready.");
+    if (!queueMigrationPromise) {
+      queueMigrationPromise = queueStorage.migrateLegacyOutbox(QUEUE_KEY).catch(error => {
+        queueMigrationPromise = null;
+        throw error;
+      });
+    }
+    await queueMigrationPromise;
   }
-  function writeQueue(q) {
-    localStorage.setItem(QUEUE_KEY, JSON.stringify(q.slice(-50)));
+  async function readQueue() {
+    await ensureQueueStorage();
+    return queueStorage.listOutbox();
+  }
+  async function writeQueue(q) {
+    await ensureQueueStorage();
+    const wanted = new Set(q.map(job => job.id));
+    const current = await queueStorage.listOutbox();
+    for (const job of current) if (!wanted.has(job.id)) await queueStorage.removeOutbox(job.id);
+    for (const job of q) await queueStorage.enqueueOutbox(job);
     updateQueueBadge(q.length);
   }
-  function updateQueueBadge(count = readQueue().length) {
+  function updateQueueBadge(count = 0) {
     let el = $("offlineQueueStatus");
     if (!el) {
       el = document.createElement("span");
@@ -28,37 +44,56 @@
 
   function queueBankSync(accountId) {
     if (!accountId) return;
-    const q = readQueue();
-    if (!q.some(x => x.type === "bank-sync" && x.accountId === accountId)) {
-      q.push({ id: crypto.randomUUID?.() || String(Date.now()), type: "bank-sync", accountId, createdAt: Date.now() });
-      writeQueue(q);
-    }
+    readQueue().then(async q => {
+      if (!q.some(x => x.type === "bank-sync" && x.accountId === accountId)) {
+        const job = { id: crypto.randomUUID?.() || String(Date.now()) + "-" + Math.random().toString(36).slice(2), type: "bank-sync", accountId, createdAt: Date.now() };
+        await queueStorage.enqueueOutbox(job);
+        updateQueueBadge(q.length + 1);
+      }
+    }).catch(error => {
+      console.error("Could not durably queue bank refresh:", error);
+      toast("Could not save the offline refresh. Keep OmniPocket open and try again.");
+    });
   }
 
+  let queueFlushInProgress = false;
   async function flushQueue() {
-    if (!navigator.onLine) return;
-    const q = readQueue();
-    if (!q.length) { updateQueueBadge(0); return; }
-    const remaining = [];
-    for (const job of q) {
-      try {
-        if (job.type === "bank-sync") {
-          const a = state.accounts.find(x => x.id === job.accountId);
-          if (!a || a.archived || a.connection?.status !== "connected") continue;
-          if (a.connection.provider === "mono" && a.connection.providerAccountId) {
-            await syncMonoAccount(a.connection.providerAccountId, a.name, a.id);
-          } else if (a.connection.provider === "mock") {
-            await syncMockBankAccount(a.id);
+    if (!navigator.onLine || queueFlushInProgress) return;
+    queueFlushInProgress = true;
+    try {
+      let q;
+      try { q = await readQueue(); }
+      catch (error) { console.warn("Offline queue unavailable:", error); return; }
+      if (!q.length) { updateQueueBadge(0); return; }
+      const remaining = [];
+      for (const job of q) {
+        try {
+          if (job.type === "bank-sync") {
+            const a = state.accounts.find(x => x.id === job.accountId);
+            if (!a || a.archived || a.connection?.status !== "connected") continue;
+            if (a.connection.provider === "mono" && a.connection.providerAccountId) {
+              await syncMonoAccount(a.connection.providerAccountId, a.name, a.id);
+            } else if (a.connection.provider === "mock") {
+              await syncMockBankAccount(a.id);
+            }
           }
+        } catch (error) {
+          remaining.push(job);
+          console.warn("Queued OmniPocket job failed:", error);
         }
-      } catch (error) {
-        remaining.push(job);
-        console.warn("Queued OmniPocket job failed:", error);
       }
+      // Acknowledge each completed or obsolete job individually. Failed jobs
+      // remain in IndexedDB, including when the tab closes mid-flush.
+      const remainingIds = new Set(remaining.map(job => job.id));
+      for (const job of q) {
+        if (!remainingIds.has(job.id)) await queueStorage.removeOutbox(job.id);
+      }
+      updateQueueBadge(remaining.length);
+      if (!remaining.length) toast("Offline bank refreshes completed.");
+      render();
+    } finally {
+      queueFlushInProgress = false;
     }
-    writeQueue(remaining);
-    if (!remaining.length) toast("Offline bank refreshes completed.");
-    render();
   }
 
   async function requestSyncWithOfflineFallback(id, originalRequestSync) {
@@ -213,7 +248,7 @@
     flushQueue,
     upgradeAnonymousAccount,
     runReceiptOcr,
-    queueSize: () => readQueue().length
+    queueSize: async () => (await readQueue()).length
   };
 
   window.addEventListener("load", () => {
@@ -223,7 +258,7 @@
     installErrorGuard();
     installSyncQueueHooks();
     installStatusPanel();
-    updateQueueBadge();
+    readQueue().then(q => updateQueueBadge(q.length)).catch(error => console.warn("Could not restore offline queue:", error));
     setTimeout(flushQueue, 1200);
   });
 })();
