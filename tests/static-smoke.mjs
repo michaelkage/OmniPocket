@@ -127,8 +127,22 @@ assert(receiptRows.includes('dialog.querySelector("[data-receipt-share]")'), "re
 assert(receiptRows.includes('dialog.querySelector("[data-receipt-print]")'), "receipt print control must be wired");
 
 
-assert(storage.includes('this.version = 2;'), "IndexedDB schema must be versioned for the durable outbox");
+assert(storage.includes('this.version = 3;'), "IndexedDB schema must be versioned for normalized financial records");
 assert(storage.includes('db.createObjectStore("outbox", { keyPath: "id" })'), "IndexedDB must create the durable outbox store");
+assert(storage.includes('db.createObjectStore("accounts", { keyPath: "id" })'), "normalized accounts store must be created");
+assert(storage.includes('db.createObjectStore("transactions", { keyPath: "id" })'), "normalized transactions store must be created");
+assert(storage.includes('db.createObjectStore("goals", { keyPath: "id" })'), "normalized goals store must be created");
+assert(storage.includes('db.createObjectStore("snapshots", { keyPath: "id" })'), "normalized snapshots store must be created");
+assert(storage.includes('db.createObjectStore("meta", { keyPath: "key" })'), "normalized metadata store must be created");
+assert(storage.includes('createIndex("sourceAccountDate", ["sourceAccountId", "date"]'), "transaction history must be indexed by account and date");
+assert(storage.includes('createIndex("providerTransactionId", ["external.provider", "external.providerTransactionId"]'), "provider transaction identity must be indexed");
+assert(storage.includes("async _readNormalized(db)"), "storage must reconstruct the domain state from normalized records");
+assert(storage.includes("async _readSnapshot(db)"), "storage must retain the V2 snapshot migration path");
+assert(storage.includes("const storeNames = [...this.entityStoreNames, this.metaStoreName, this.storeName]"), "normalized records and legacy snapshot cleanup must share one atomic write transaction");
+assert(storage.includes("if (previous.get(key) !== fingerprint)"), "normalized persistence must only write changed records");
+assert(storage.includes("for (const key of previous.keys())"), "normalized persistence must remove deleted records");
+assert(app.includes("await storage.save(state);"), "bootstrap must persist the migrated domain shape to normalized stores");
+
 assert(storage.includes("async enqueueOutbox(job)"), "storage must expose durable outbox enqueue");
 assert(storage.includes("async listOutbox()"), "storage must expose durable outbox reads");
 assert(storage.includes("async removeOutbox(id)"), "storage must expose per-job acknowledgements");
