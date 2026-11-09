@@ -53,7 +53,7 @@ assert(!/areyxlydzqzlzmgzavpi\.supabase\.co/.test(client + app), "Supabase URL m
 // otherwise the PWA serves index.html in place of the missing JS when offline.
 const sw = fs.readFileSync("sw.js", "utf8");
 assert(/const CACHE="omnipocket-shell-v\d+"/.test(sw), "service worker must version its shell cache");
-assert(sw.includes('const CACHE="omnipocket-shell-v21"'), "shell cache must be bumped when the app shell changes");
+assert(sw.includes('const CACHE="omnipocket-shell-v22"'), "shell cache must be bumped when the app shell changes");
 const cacheLine = sw.split("\n").find(line => line.includes("const ASSETS="));
 assert(cacheLine, "sw.js must declare an ASSETS list");
 for (const match of html.matchAll(/<script src="([^"]+)"/g)) {
