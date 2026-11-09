@@ -287,11 +287,15 @@
       tx && tx.categorySource === "user" && String(tx.category || "").trim()
     );
     const votes = new Map();
+    const exactMatchCategories = new Set();
     for (const tx of history) {
       const prior = tokens([tx.description, tx.note, tx.reference, tx.external?.merchantName].filter(Boolean).join(" "));
       const overlap = current.filter(token => prior.includes(token));
       if (!overlap.length) continue;
       const category = String(tx.category).trim();
+      // If multiple user-corrected categories independently match every
+      // identifying token in the new narration, the merchant is ambiguous.
+      if (overlap.length === current.length) exactMatchCategories.add(category);
       const score = overlap.length / Math.max(current.length, prior.length);
       const existing = votes.get(category) || { category, score: 0, count: 0, matched: new Set() };
       existing.score += score;
@@ -299,6 +303,7 @@
       overlap.forEach(token => existing.matched.add(token));
       votes.set(category, existing);
     }
+    if (exactMatchCategories.size > 1) return null;
     const ranked = [...votes.values()].sort((a, b) => b.score - a.score || b.count - a.count);
     const best = ranked[0];
     const runnerUp = ranked[1];
