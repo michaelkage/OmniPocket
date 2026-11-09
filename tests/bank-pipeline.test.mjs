@@ -25,6 +25,8 @@ assert.match(exchange, /const normalized = \[\.\.\.normalizedById\.values\(\)\]/
 assert.match(sync, /duplicateTransactionCount, invalidTransactionCount: invalidDirectionCount \+ invalidAmountCount \+ missingProviderIdCount, transactions: normalized/);
 assert.match(exchange, /duplicate_count: duplicateTransactionCount/);
 assert.match(exchange, /const totalValue = transactionMeta\.total \?\? transactionMeta\.total_count/);
+assert.match(exchange, /explicitHasNext != null && typeof explicitHasNext !== "boolean"/);
+assert.match(exchange, /Boolean\(transactionMeta\.next \|\| transactionMeta\.next_page \|\| transactionMeta\.nextPage\)/);
 assert.match(exchange, /reportedTransactionTotal = totalValue == null \|\| \(typeof totalValue === "string" && !totalValue\.trim\(\)\) \? null : Number\(totalValue\)/);
 assert.match(exchange, /let missingProviderIdCount = 0/);
 assert.match(exchange, /missingProviderIdCount\+\+/);
