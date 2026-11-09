@@ -611,8 +611,11 @@ const tx = (o) => ({
   assert.equal((await fresh.load()).schemaVersion, 3, "migrated payload must persist");
 
   legacy.set("omnipocket.main", JSON.stringify({ schemaVersion: 8, accounts: [{ id: "resurrected" }] }));
+  const versionBeforeClear = (await store.load()).stateVersion;
   await store.clear();
-  assert.equal(await store.load(), null, "clear must remove the stored snapshot");
+  const cleared = await store.load();
+  assert.equal(cleared.accounts.length, 0, "clear must leave an empty normalized ledger");
+  assert.equal(cleared.stateVersion, versionBeforeClear + 1, "clear must advance the monotonic ledger version");
   assert.equal(legacy.has("omnipocket.main"), false, "clear must remove the fallback snapshot so cleared data cannot be resurrected");
 }
 
