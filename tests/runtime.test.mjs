@@ -366,7 +366,7 @@ const tx = (o) => ({
     ],
   });
   const before = JSON.stringify(state.transactions);
-  const alerts = E.unusualSpending(state, new Date("2026-11-03T12:00:00"));
+  const alerts = E.unusualSpending(state, new Date("2026-11-03T12:00:00"), 30, 180);
   assert.equal(alerts.length, 1, "only an effective recent expense with enough comparable history should be flagged");
   assert.equal(alerts[0].transactionId, "spike");
   assert.equal(alerts[0].typicalAmount, 1025);
