@@ -400,7 +400,7 @@
       sampleTransactions++;
     }
 
-    const currentBalance = netWorth(state, balancesAt(state, today), state.settings.baseCurrency);
+    const currentBalance = netWorth(state, balancesAt(state, { date: todayKey, createdAt: Number.MAX_SAFE_INTEGER }), state.settings.baseCurrency);
     const dailyIncome = totals.income / daysElapsed;
     const dailyExpenses = totals.expenses / daysElapsed;
     const projectedIncome = dailyIncome * daysRemaining;
