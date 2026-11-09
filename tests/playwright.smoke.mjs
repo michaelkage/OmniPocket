@@ -57,7 +57,7 @@ try {
     };
   });
   check("activity search is not a native search input", activityUi.type === "search");
-  check("activity search has no descriptive accessible label", activityUi.label === "Search transactions by description, category, account or amount");
+  check("activity search has no descriptive accessible label", activityUi.label === "Search transactions by merchant, reference, category, note, amount, date or account");
   check("activity ledger container is missing", activityUi.fullList);
   check("activity review queue container is missing", activityUi.reviewQueue);
 
