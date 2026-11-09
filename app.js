@@ -63,7 +63,9 @@ async function bootstrapStorage() {
     rebuildBalances();
     bindOmniPocketBus();
     OmniPocketEngine.recordDailySnapshot(state);
-    if (!loaded) await storage.save(state);
+    // Persist the migrated domain shape into normalized stores on every boot.
+    // The storage adapter only writes records whose content has changed.
+    await storage.save(state);
   } catch (error) {
     console.warn("IndexedDB unavailable; using local fallback.", error);
     state = loadState();
