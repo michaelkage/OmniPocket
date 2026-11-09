@@ -150,6 +150,7 @@ assert(app.includes("if (!domainStateLoaded) state = loadState();"), "a failed n
 
 assert(storage.includes('const versionRequest = meta.get("stateVersion")'), "normalized writes must verify the expected ledger version before committing");
 assert(storage.includes('conflictError.code = "OMNI_CONFLICT"'), "stale tab writes must fail with an explicit conflict code");
+assert(storage.includes('meta.put({ key: "stateVersion", value: nextVersion });'), "ledger clear must leave a monotonic version tombstone to prevent stale-tab resurrection");
 assert(storage.includes('new BroadcastChannel("omnipocket:" + this.dbName + ":state")'), "tabs must receive committed-ledger notifications");
 assert(app.includes('if (error?.code === "OMNI_CONFLICT")'), "stale ledger conflicts must not fall through to localStorage fallback");
 assert(app.includes('if (revision !== persistenceRevision && !persistenceConflict)'), "a conflicted tab must not retry stale snapshots");
