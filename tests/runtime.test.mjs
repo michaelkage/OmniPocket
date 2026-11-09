@@ -526,30 +526,48 @@ const tx = (o) => ({
     return request;
   };
   const fakeIndexedDB = {
-    open(dbName) {
-      if (!databases.has(dbName)) databases.set(dbName, new Map());
-      const rows = databases.get(dbName);
-      const store = {
-        get: key => makeRequest(rows.has(key) ? rows.get(key) : undefined),
-        put: (value, key) => { rows.set(key, value); return makeRequest(key); },
-        delete: key => { rows.delete(key); return makeRequest(undefined); },
+    open(dbName, version = 1) {
+      if (!databases.has(dbName)) databases.set(dbName, { version: 0, stores: new Map() });
+      const database = databases.get(dbName);
+      const makeStore = (name, options = {}) => {
+        if (!database.stores.has(name)) database.stores.set(name, { rows: new Map(), keyPath: options.keyPath || null });
+        const entry = database.stores.get(name);
+        return {
+          get: key => makeRequest(entry.rows.has(key) ? entry.rows.get(key) : undefined),
+          getAll: () => makeRequest([...entry.rows.values()]),
+          put: (value, key) => {
+            const resolvedKey = key !== undefined ? key : (entry.keyPath ? value?.[entry.keyPath] : undefined);
+            entry.rows.set(resolvedKey, value);
+            return makeRequest(resolvedKey);
+          },
+          delete: key => { entry.rows.delete(key); return makeRequest(undefined); },
+          clear: () => { entry.rows.clear(); return makeRequest(undefined); },
+          createIndex: () => {},
+        };
       };
       const db = {
-        objectStoreNames: { contains: () => true },
-        createObjectStore: () => {},
+        objectStoreNames: { contains: name => database.stores.has(name) },
+        createObjectStore: (name, options) => makeStore(name, options),
         transaction: () => {
           const tx = {
-            objectStore: () => store,
+            objectStore: name => makeStore(name),
             error: null,
             oncomplete: null, onerror: null, onabort: null,
           };
-          // IndexedDB completes only after request callbacks; defer the fake transaction completion accordingly.
+          // Requests settle before the fake transaction completion event.
           setTimeout(() => setTimeout(() => tx.oncomplete && tx.oncomplete(), 0), 0);
           return tx;
         },
+        close: () => {},
       };
       const request = { result: db, onsuccess: null, onerror: null, onupgradeneeded: null };
-      setTimeout(() => request.onsuccess && request.onsuccess(), 0);
+      setTimeout(() => {
+        if (version > database.version) {
+          database.version = version;
+          request.onupgradeneeded && request.onupgradeneeded({ target: { result: db } });
+        }
+        request.onsuccess && request.onsuccess();
+      }, 0);
       return request;
     },
   };
