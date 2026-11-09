@@ -100,7 +100,7 @@ assert(storage.includes("tx.onabort = () => reject(tx.error || new Error(\"OmniP
 assert(storage.includes("OmniPocket read was aborted."), "storage reads must reject on aborted transactions");
 assert(storage.includes("tx.oncomplete = () => resolve(result)"), "storage reads must wait for transaction completion before resolving");
 assert(storage.includes("localStorage.removeItem(this.legacyKey)"), "clearing and migration must remove the legacy fallback to prevent stale data resurrection");
-const legacyMigration = storage.slice(storage.indexOf("// One-time migration from the original V1 localStorage snapshot"), storage.indexOf("  read(db) {", storage.indexOf("// One-time migration from the original V1 localStorage snapshot")));
+const legacyMigration = storage.slice(storage.indexOf("async load()"), storage.indexOf("  read(db) {", storage.indexOf("async load()")));
 assert(legacyMigration.includes("return snapshot;") && legacyMigration.includes("return legacy;"), "legacy sources must be returned for domain normalization before persistence");
 const normalizedSave = storage.slice(storage.indexOf("async save(state)"), storage.indexOf("// Durable offline work queue"));
 assert(normalizedSave.indexOf("tx.oncomplete = () => {") < normalizedSave.indexOf("localStorage.removeItem(this.legacyKey);"), "legacy localStorage data must only be removed after the normalized IndexedDB transaction commits");
