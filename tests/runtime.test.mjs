@@ -280,8 +280,8 @@ const tx = (o) => ({
       EUR: { NGN: 1750, EUR: 1 },
     } } },
   });
-  assert.equal(E.rate(sparse, "USD", "EUR"), 1750 / 1500, "missing direct pair should resolve through base currency");
-  assert.equal(E.rate(sparse, "EUR", "USD"), 1500 / 1750, "cross rate should work in the reverse direction");
+  assert.ok(Math.abs(E.rate(sparse, "USD", "EUR") - (1500 / 1750)) < 1e-12, "USD to EUR should resolve through the NGN base currency");
+  assert.ok(Math.abs(E.rate(sparse, "EUR", "USD") - (1750 / 1500)) < 1e-12, "EUR to USD should resolve through the NGN base currency");
   const inverseOnly = makeState({ settings: { baseCurrency: "NGN", fx: { rates: { USD: { NGN: 1500 } } } } });
   assert.equal(E.rate(inverseOnly, "NGN", "USD"), 1 / 1500, "inverse-only pair should be usable");
   assert.equal(E.convert(state, 1500, "NGN", "USD", 1 / 2000), 0.75, "override rate must win");
@@ -357,7 +357,7 @@ const tx = (o) => ({
     transactions: [
       ...[1000, 1100, 900, 1050].map((amount, index) => tx({
         id: "usual-" + index, type: "expense", amount, category: "Food",
-        sourceAccountId: "a", date: ["2026-07-01", "2026-07-20", "2026-08-10", "2026-09-02"][index],
+        sourceAccountId: "a", date: ["2026-10-01", "2026-10-05", "2026-10-10", "2026-10-15"][index],
       })),
       tx({ id: "spike", type: "expense", amount: 4500, category: "Food", sourceAccountId: "a", date: "2026-10-20", note: "Large dinner" }),
       tx({ id: "future-spike", type: "expense", amount: 9000, category: "Food", sourceAccountId: "a", date: "2026-11-10" }),
@@ -366,7 +366,7 @@ const tx = (o) => ({
     ],
   });
   const before = JSON.stringify(state.transactions);
-  const alerts = E.unusualSpending(state, new Date("2026-11-03T12:00:00"));
+  const alerts = E.unusualSpending(state, new Date("2026-11-03T12:00:00"), 30, 180);
   assert.equal(alerts.length, 1, "only an effective recent expense with enough comparable history should be flagged");
   assert.equal(alerts[0].transactionId, "spike");
   assert.equal(alerts[0].typicalAmount, 1025);
@@ -525,30 +525,48 @@ const tx = (o) => ({
     return request;
   };
   const fakeIndexedDB = {
-    open(dbName) {
-      if (!databases.has(dbName)) databases.set(dbName, new Map());
-      const rows = databases.get(dbName);
-      const store = {
-        get: key => makeRequest(rows.has(key) ? rows.get(key) : undefined),
-        put: (value, key) => { rows.set(key, value); return makeRequest(key); },
-        delete: key => { rows.delete(key); return makeRequest(undefined); },
+    open(dbName, version = 1) {
+      if (!databases.has(dbName)) databases.set(dbName, { version: 0, stores: new Map() });
+      const database = databases.get(dbName);
+      const makeStore = (name, options = {}) => {
+        if (!database.stores.has(name)) database.stores.set(name, { rows: new Map(), keyPath: options.keyPath || null });
+        const entry = database.stores.get(name);
+        return {
+          get: key => makeRequest(entry.rows.has(key) ? entry.rows.get(key) : undefined),
+          getAll: () => makeRequest([...entry.rows.values()]),
+          put: (value, key) => {
+            const resolvedKey = key !== undefined ? key : (entry.keyPath ? value?.[entry.keyPath] : undefined);
+            entry.rows.set(resolvedKey, value);
+            return makeRequest(resolvedKey);
+          },
+          delete: key => { entry.rows.delete(key); return makeRequest(undefined); },
+          clear: () => { entry.rows.clear(); return makeRequest(undefined); },
+          createIndex: () => {},
+        };
       };
       const db = {
-        objectStoreNames: { contains: () => true },
-        createObjectStore: () => {},
+        objectStoreNames: { contains: name => database.stores.has(name) },
+        createObjectStore: (name, options) => makeStore(name, options),
         transaction: () => {
           const tx = {
-            objectStore: () => store,
+            objectStore: name => makeStore(name),
             error: null,
             oncomplete: null, onerror: null, onabort: null,
           };
-          // IndexedDB completes only after request callbacks; defer the fake transaction completion accordingly.
+          // Requests settle before the fake transaction completion event.
           setTimeout(() => setTimeout(() => tx.oncomplete && tx.oncomplete(), 0), 0);
           return tx;
         },
+        close: () => {},
       };
       const request = { result: db, onsuccess: null, onerror: null, onupgradeneeded: null };
-      setTimeout(() => request.onsuccess && request.onsuccess(), 0);
+      setTimeout(() => {
+        if (version > database.version) {
+          database.version = version;
+          request.onupgradeneeded && request.onupgradeneeded({ target: { result: db } });
+        }
+        request.onsuccess && request.onsuccess();
+      }, 0);
       return request;
     },
   };
