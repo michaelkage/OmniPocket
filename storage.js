@@ -73,6 +73,9 @@ class OmniPocketStorage {
       const legacy = JSON.parse(localStorage.getItem(this.legacyKey) || "null");
       if (legacy && typeof legacy === "object") {
         await this.save(legacy);
+        // Release the old synchronous snapshot only after the IndexedDB
+        // transaction has committed, so an interrupted migration is recoverable.
+        localStorage.removeItem(this.legacyKey);
         return legacy;
       }
     } catch (error) {
