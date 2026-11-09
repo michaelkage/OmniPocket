@@ -15,7 +15,7 @@ Make OmniPocket reliable under intermittent connectivity without weakening its a
 
 ## Architectural decision
 
-**Phase 1: normalized IndexedDB + durable outbox.** The initial implementation is now present on the Shadow-Sync branch. IndexedDB is already asynchronous, supported by the PWA target, and avoids shipping a second database engine. The normalized stores and changed-record writes are in place; paginated reads, attachment separation, and multi-tab conflict handling remain follow-up work.
+**Phase 1: normalized IndexedDB + durable outbox.** The initial implementation is now present on the Shadow-Sync branch. IndexedDB is already asynchronous, supported by the PWA target, and avoids shipping a second database engine. The normalized stores, changed-record writes, and optimistic multi-tab write guard are in place; paginated reads and attachment separation remain follow-up work.
 
 **Phase 2: append-only local operation journal and Supabase ingestion.** Treat immutable financial facts as events/operations. Use deterministic IDs and idempotency keys. Sync operations in batches, acknowledge only after the server transaction commits, then advance a per-user/device cursor. Keep the current Supabase provider tables canonical for Mono data.
 
