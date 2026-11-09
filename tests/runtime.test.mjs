@@ -280,8 +280,8 @@ const tx = (o) => ({
       EUR: { NGN: 1750, EUR: 1 },
     } } },
   });
-  assert.equal(E.rate(sparse, "USD", "EUR"), 1500 / 1750, "USD to EUR should resolve through the NGN base currency");
-  assert.equal(E.rate(sparse, "EUR", "USD"), 1750 / 1500, "EUR to USD should resolve through the NGN base currency");
+  assert.ok(Math.abs(E.rate(sparse, "USD", "EUR") - (1500 / 1750)) < 1e-12, "USD to EUR should resolve through the NGN base currency");
+  assert.ok(Math.abs(E.rate(sparse, "EUR", "USD") - (1750 / 1500)) < 1e-12, "EUR to USD should resolve through the NGN base currency");
   const inverseOnly = makeState({ settings: { baseCurrency: "NGN", fx: { rates: { USD: { NGN: 1500 } } } } });
   assert.equal(E.rate(inverseOnly, "NGN", "USD"), 1 / 1500, "inverse-only pair should be usable");
   assert.equal(E.convert(state, 1500, "NGN", "USD", 1 / 2000), 0.75, "override rate must win");
