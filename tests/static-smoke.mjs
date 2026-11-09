@@ -146,6 +146,7 @@ assert(storage.includes("const storeNames = [...this.entityStoreNames, this.meta
 assert(storage.includes("if (previous.get(key) !== fingerprint)"), "normalized persistence must only write changed records");
 assert(storage.includes("for (const key of previous.keys())"), "normalized persistence must remove deleted records");
 assert(app.includes("await storage.save(state);"), "bootstrap must persist the migrated domain shape to normalized stores");
+assert(app.includes("if (!domainStateLoaded) state = loadState();"), "a failed normalized migration must not discard a readable legacy ledger");
 
 assert(storage.includes("async enqueueOutbox(job)"), "storage must expose durable outbox enqueue");
 assert(storage.includes("async listOutbox()"), "storage must expose durable outbox reads");
