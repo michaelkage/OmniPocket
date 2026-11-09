@@ -145,6 +145,81 @@ try {
   check("schemaVersion not persisted", persisted.version === 8);
   check("monolithic IndexedDB snapshot was not removed after normalized commit", persisted.legacySnapshotRemoved);
 
+  // V2 monolithic snapshot migration: preserve the source until normalized commit.
+  const v2Migration = await page.evaluate(async () => {
+    const dbName = "omnipocket-v2-migration-fixture";
+    const legacyState = {
+      schemaVersion: 8,
+      settings: { baseCurrency: "NGN" },
+      accounts: [{ id: "v2-account", name: "V2 account", currency: "NGN", openingBalance: 250, balance: 250 }],
+      transactions: [{ id: "v2-transaction", type: "income", amount: 25, currency: "NGN", date: "2026-11-08", createdAt: 1, sourceAccountId: "v2-account" }],
+      goals: [{ id: "v2-goal", name: "V2 goal", target: 500, currency: "NGN", accountIds: ["v2-account"], status: "active", createdAt: 1 }],
+      snapshots: [{ id: "v2-snapshot", date: "2026-11-08", capturedAt: 1, baseCurrency: "NGN", value: 250, balances: [], rates: {} }],
+      deletedExternalTransactions: [{ provider: "mono", providerAccountId: "v2-provider-account", providerTransactionId: "v2-deleted", deletedAt: "2026-11-08T00:00:00.000Z" }],
+    };
+    await new Promise((resolve, reject) => {
+      const request = indexedDB.open(dbName, 2);
+      request.onupgradeneeded = () => request.result.createObjectStore("state");
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        const db = request.result;
+        const tx = db.transaction("state", "readwrite");
+        tx.objectStore("state").put(legacyState, "current");
+        tx.oncomplete = () => { db.close(); resolve(); };
+        tx.onerror = () => reject(tx.error);
+        tx.onabort = () => reject(tx.error);
+      };
+    });
+    const store = new window.OmniPocketStorage({ dbName, storeName: "state", legacyKey: "omnipocket.v2-fixture" });
+    const legacy = await store.load();
+    const sourceWasReadable = legacy?.transactions?.some(row => row.id === "v2-transaction") ?? false;
+    await store.save(legacy);
+    const normalized = await store.load();
+    const db = await store.open();
+    const oldSnapshot = await new Promise((resolve, reject) => {
+      const tx = db.transaction("state", "readonly");
+      const request = tx.objectStore("state").get("current");
+      request.onsuccess = () => resolve(request.result ?? null);
+      request.onerror = () => reject(request.error);
+    });
+    db.close();
+    return {
+      sourceWasReadable,
+      transaction: normalized?.transactions?.some(row => row.id === "v2-transaction") ?? false,
+      goal: normalized?.goals?.some(row => row.id === "v2-goal") ?? false,
+      tombstone: normalized?.deletedExternalTransactions?.some(row => row.providerTransactionId === "v2-deleted") ?? false,
+      oldSnapshotRemoved: oldSnapshot === null,
+    };
+  });
+  check("V2 migration could not read its source snapshot", v2Migration.sourceWasReadable);
+  check("V2 migration lost a transaction", v2Migration.transaction);
+  check("V2 migration lost a goal", v2Migration.goal);
+  check("V2 migration lost a provider deletion tombstone", v2Migration.tombstone);
+  check("V2 migration did not remove the old snapshot after commit", v2Migration.oldSnapshotRemoved);
+
+  // V1 localStorage migration removes the legacy copy only after IndexedDB commits.
+  const v1Migration = await page.evaluate(async () => {
+    const legacyKey = "omnipocket.e2e.v1-fixture";
+    const dbName = "omnipocket-v1-migration-fixture";
+    const legacyState = {
+      schemaVersion: 7,
+      settings: { baseCurrency: "NGN" },
+      accounts: [{ id: "v1-account", name: "V1 account", currency: "NGN", openingBalance: 100, balance: 100 }],
+      transactions: [], goals: [], snapshots: [], deletedExternalTransactions: [],
+    };
+    localStorage.setItem(legacyKey, JSON.stringify(legacyState));
+    const store = new window.OmniPocketStorage({ dbName, storeName: "state", legacyKey });
+    const legacy = await store.load();
+    await store.save(legacy);
+    const normalized = await store.load();
+    return {
+      account: normalized?.accounts?.some(row => row.id === "v1-account") ?? false,
+      removed: localStorage.getItem(legacyKey) === null,
+    };
+  });
+  check("V1 migration lost the localStorage account", v1Migration.account);
+  check("V1 localStorage source was not removed after commit", v1Migration.removed);
+
   // The financial engine runs against live DOM state.
   const engine = await page.evaluate(() => {
     const state = window.omnipocketState;
