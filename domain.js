@@ -287,11 +287,15 @@
       tx && tx.categorySource === "user" && String(tx.category || "").trim()
     );
     const votes = new Map();
+    const exactMatchCategories = new Set();
     for (const tx of history) {
       const prior = tokens([tx.description, tx.note, tx.reference, tx.external?.merchantName].filter(Boolean).join(" "));
       const overlap = current.filter(token => prior.includes(token));
       if (!overlap.length) continue;
       const category = String(tx.category).trim();
+      // If multiple user-corrected categories independently match every
+      // identifying token in the new narration, the merchant is ambiguous.
+      if (overlap.length === current.length) exactMatchCategories.add(category);
       const score = overlap.length / Math.max(current.length, prior.length);
       const existing = votes.get(category) || { category, score: 0, count: 0, matched: new Set() };
       existing.score += score;
@@ -299,6 +303,7 @@
       overlap.forEach(token => existing.matched.add(token));
       votes.set(category, existing);
     }
+    if (exactMatchCategories.size > 1) return null;
     const ranked = [...votes.values()].sort((a, b) => b.score - a.score || b.count - a.count);
     const best = ranked[0];
     const runnerUp = ranked[1];
@@ -322,7 +327,7 @@
     const windowDays = Math.max(1, Math.min(365, Number(lookbackDays) || 90));
     start.setDate(start.getDate() - windowDays + 1);
     const startKey = dateKey(start);
-    const essentialPattern = /\b(rent|housing|mortgage|grocer|food|supermarket|market|utility|electric|power|water|internet|data|transport|fuel|petrol|diesel|health|medical|pharmacy|medicine|education|school|childcare)\b/i;
+    const essentialPattern = /\b(rent|housing|mortgage|grocer(?:y|ies)|food|supermarket|market|utility|electric|power|water|internet|data|transport|fuel|petrol|diesel|health|medical|pharmacy|medicine|education|school|childcare)\b/i;
     const totals = { essential: 0, discretionary: 0, unclassified: 0 };
     let sampleTransactions = 0;
     const activeDates = new Set();
@@ -400,7 +405,7 @@
       sampleTransactions++;
     }
 
-    const currentBalance = netWorth(state, balancesAt(state, today), state.settings.baseCurrency);
+    const currentBalance = netWorth(state, balancesAt(state, { date: todayKey, createdAt: Number.MAX_SAFE_INTEGER }), state.settings.baseCurrency);
     const dailyIncome = totals.income / daysElapsed;
     const dailyExpenses = totals.expenses / daysElapsed;
     const projectedIncome = dailyIncome * daysRemaining;
@@ -735,7 +740,7 @@
     for (const tx of state.transactions || []) {
       if (tx.type !== "expense" || !isFinanciallyEffective(tx)) continue;
       const date = String(tx.date || "");
-      if (date < startKey || date > endKey || !/^\\d{4}-\\d{2}-\\d{2}$/.test(date)) continue;
+      if (date < startKey || date > endKey || !/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
       const amount = Math.abs(Number(tx.amount) || 0);
       if (!amount) continue;
       const label = String(tx.note || tx.category || "Uncategorised expense")
@@ -807,7 +812,7 @@
     for (const tx of state.transactions || []) {
       if (tx.type !== "expense" || !isFinanciallyEffective(tx)) continue;
       const date = String(tx.date || "");
-      if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(date) || date < baselineKey || date > endKey) continue;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date < baselineKey || date > endKey) continue;
       const amount = Math.abs(Number(tx.amount) || 0);
       if (!amount) continue;
       const category = String(tx.category || "Uncategorised").trim() || "Uncategorised";
