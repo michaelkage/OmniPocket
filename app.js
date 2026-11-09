@@ -1933,17 +1933,6 @@ async function refreshPaymentCenter(){const sb=getSupabaseClient();if(!sb){payme
 function openPaymentDetail(paymentId){const p=paymentCenterRows.find(x=>x.id===paymentId);if(!p)return;const d=document.createElement("dialog");d.className="app-dialog payment-detail-dialog";d.innerHTML='<div class="dialog-head"><div><span class="eyebrow">PAYMENT INTENT</span><h2>'+escapeHtml(p.recipient_name||"Payment")+'</h2><div class="muted">'+escapeHtml(paymentStatusLabel(p.status))+'</div></div><button type="button" class="icon-button" data-close>✕</button></div><div class="detail-balance"><strong>'+escapeHtml(state.settings.privacyHidden?"••••":money((Number(p.amount_minor)||0)/100,p.currency||"NGN"))+'</strong><span class="muted">'+escapeHtml(p.currency||"NGN")+'</span></div><div class="payment-detail-grid"><div><span>From</span><strong>'+escapeHtml(account(p.source_account_id)?.name||"—")+'</strong></div><div><span>Bank</span><strong>'+escapeHtml(p.recipient_bank_name||"—")+'</strong></div><div><span>Account</span><strong>'+escapeHtml(p.recipient_account_number||"—")+'</strong></div><div><span>Reference</span><strong>'+escapeHtml(p.provider_reference||"—")+'</strong></div></div><div class="detail-section"><div class="eyebrow">RECONCILIATION TIMELINE</div><div class="payment-progress">'+paymentProgressSteps(p)+'</div></div><div class="detail-callout">'+escapeHtml(p.error||(p.status==="awaiting_user"?"Complete the payment in your bank app or dialer. OmniPocket will wait for confirmation.":p.status==="completed"?"Payment confirmed; the completion can be reconciled against bank activity.":"Waiting for the provider or bank transaction to settle."))+'</div><div class="dialog-actions"><button type="button" data-close>Done</button></div>';document.body.appendChild(d);d.showModal();d.querySelectorAll("[data-close]").forEach(b=>b.addEventListener("click",()=>d.close()));d.addEventListener("close",()=>d.remove(),{once:true});}
 function bindPaymentCenter(){ $("newPaymentPageButton")?.addEventListener("click",openPaymentFlow); $("refreshPaymentsButton")?.addEventListener("click",refreshPaymentCenter); $("paymentStatusFilters")?.addEventListener("click",e=>{const b=e.target.closest("[data-payment-filter]");if(!b)return;paymentCenterFilter=b.dataset.paymentFilter;document.querySelectorAll("[data-payment-filter]").forEach(x=>x.classList.toggle("is-active",x===b));renderPaymentCenter();}); $("paymentCenterTimeline")?.addEventListener("click",e=>{const b=e.target.closest("[data-payment-id]");if(b)openPaymentDetail(b.dataset.paymentId);});}
 
-["activitySearch", "activityTypeFilter", "activityStatusFilter", "activityCategoryFilter", "activityFromDate", "activityToDate"].forEach(id => {
-  const control = $(id);
-  if (!control) return;
-  const eventName = id === "activitySearch" ? "input" : "change";
-  control.addEventListener(eventName, () => {
-    activityPageSize = ACTIVITY_PAGE_SIZE;
-    activityFilterSignature = "";
-    renderFullViews();
-  });
-});
-
 bindPaymentCenter();
 refreshPaymentCenter();
 
@@ -2911,7 +2900,11 @@ document.querySelectorAll(".nav-item[data-page]").forEach(button => {
   button.addEventListener("click", () => navigate(button.dataset.page));
 });
 ["activitySearch","activityTypeFilter","activityStatusFilter","activityCategoryFilter","activityFromDate","activityToDate"].forEach(id => {
-  $(id)?.addEventListener(id === "activitySearch" ? "input" : "change", renderFullViews);
+  $(id)?.addEventListener(id === "activitySearch" ? "input" : "change", () => {
+    activityPageSize = ACTIVITY_PAGE_SIZE;
+    activityFilterSignature = "";
+    renderFullViews();
+  });
 });
 $("activitySearch")?.addEventListener("focus", () => {
   if ($("activitySearch").value === "__review__") $("activitySearch").value = "";
