@@ -56,38 +56,44 @@
     });
   }
 
+  let queueFlushInProgress = false;
   async function flushQueue() {
-    if (!navigator.onLine) return;
-    let q;
-    try { q = await readQueue(); }
-    catch (error) { console.warn("Offline queue unavailable:", error); return; }
-    if (!q.length) { updateQueueBadge(0); return; }
-    const remaining = [];
-    for (const job of q) {
-      try {
-        if (job.type === "bank-sync") {
-          const a = state.accounts.find(x => x.id === job.accountId);
-          if (!a || a.archived || a.connection?.status !== "connected") continue;
-          if (a.connection.provider === "mono" && a.connection.providerAccountId) {
-            await syncMonoAccount(a.connection.providerAccountId, a.name, a.id);
-          } else if (a.connection.provider === "mock") {
-            await syncMockBankAccount(a.id);
+    if (!navigator.onLine || queueFlushInProgress) return;
+    queueFlushInProgress = true;
+    try {
+      let q;
+      try { q = await readQueue(); }
+      catch (error) { console.warn("Offline queue unavailable:", error); return; }
+      if (!q.length) { updateQueueBadge(0); return; }
+      const remaining = [];
+      for (const job of q) {
+        try {
+          if (job.type === "bank-sync") {
+            const a = state.accounts.find(x => x.id === job.accountId);
+            if (!a || a.archived || a.connection?.status !== "connected") continue;
+            if (a.connection.provider === "mono" && a.connection.providerAccountId) {
+              await syncMonoAccount(a.connection.providerAccountId, a.name, a.id);
+            } else if (a.connection.provider === "mock") {
+              await syncMockBankAccount(a.id);
+            }
           }
+        } catch (error) {
+          remaining.push(job);
+          console.warn("Queued OmniPocket job failed:", error);
         }
-      } catch (error) {
-        remaining.push(job);
-        console.warn("Queued OmniPocket job failed:", error);
       }
+      // Acknowledge each completed or obsolete job individually. Failed jobs
+      // remain in IndexedDB, including when the tab closes mid-flush.
+      const remainingIds = new Set(remaining.map(job => job.id));
+      for (const job of q) {
+        if (!remainingIds.has(job.id)) await queueStorage.removeOutbox(job.id);
+      }
+      updateQueueBadge(remaining.length);
+      if (!remaining.length) toast("Offline bank refreshes completed.");
+      render();
+    } finally {
+      queueFlushInProgress = false;
     }
-    // Acknowledge each completed or obsolete job individually. Failed jobs
-    // remain in IndexedDB, including when the tab closes mid-flush.
-    const remainingIds = new Set(remaining.map(job => job.id));
-    for (const job of q) {
-      if (!remainingIds.has(job.id)) await queueStorage.removeOutbox(job.id);
-    }
-    updateQueueBadge(remaining.length);
-    if (!remaining.length) toast("Offline bank refreshes completed.");
-    render();
   }
 
   async function requestSyncWithOfflineFallback(id, originalRequestSync) {
