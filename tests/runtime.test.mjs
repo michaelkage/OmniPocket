@@ -357,7 +357,7 @@ const tx = (o) => ({
     transactions: [
       ...[1000, 1100, 900, 1050].map((amount, index) => tx({
         id: "usual-" + index, type: "expense", amount, category: "Food",
-        sourceAccountId: "a", date: ["2026-07-01", "2026-07-20", "2026-08-10", "2026-09-02"][index],
+        sourceAccountId: "a", date: ["2026-07-10", "2026-07-20", "2026-08-10", "2026-09-02"][index],
       })),
       tx({ id: "spike", type: "expense", amount: 4500, category: "Food", sourceAccountId: "a", date: "2026-10-20", note: "Large dinner" }),
       tx({ id: "future-spike", type: "expense", amount: 9000, category: "Food", sourceAccountId: "a", date: "2026-11-10" }),
