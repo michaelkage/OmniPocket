@@ -22,7 +22,7 @@ The financial state is treated as a domain model rather than a collection of UI 
 
 The current browser persistence adapter is **IndexedDB** (`storage.js`), with a one-time migration path from the legacy V1 localStorage snapshot. The domain model is intentionally separated from the UI. localStorage remains in use for small preferences and a few legacy integration/queue values; it is not the primary financial-state database.
 
-The next storage milestone is to replace the single serialized state snapshot with indexed, independently committed local records and a durable outbox. See [Project Shadow-Sync](docs/SHADOW-SYNC.md). SQLite/WASM is an evaluated future option, not a prerequisite: the existing IndexedDB foundation should be normalized and measured before adding another database runtime.
+The next storage milestone is to replace the single serialized state snapshot with indexed, independently committed local records. The offline bank-refresh queue now uses a durable IndexedDB outbox (schema v2), including migration from its legacy localStorage queue and per-job acknowledgements. See [Project Shadow-Sync](docs/SHADOW-SYNC.md). SQLite/WASM is an evaluated future option, not a prerequisite: the existing IndexedDB foundation should be normalized and measured before adding another database runtime.
 
 ## Status
 
