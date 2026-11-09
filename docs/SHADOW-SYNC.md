@@ -6,15 +6,16 @@ Make OmniPocket reliable under intermittent connectivity without weakening its a
 
 ## What exists today
 
-- `storage.js` already persists the application state asynchronously in IndexedDB and migrates the legacy `omnipocket.v1` localStorage snapshot after the IndexedDB commit.
-- `app.js` still stores the domain state as one serialized snapshot under one IndexedDB key. This avoids synchronous localStorage writes but makes every save proportional to the full state size.
-- `production-hardening.js` still stores its bank-refresh queue in localStorage and caps it at 50 jobs. This is a small but important durability gap.
+- `storage.js` uses IndexedDB schema v3 with normalized `accounts`, `transactions`, `goals`, `snapshots`, `deletedExternalTransactions`, `meta`, and `outbox` stores. The V2 monolithic `state/current` snapshot remains available as a migration source until the normalized write transaction commits.
+- `storage.js` reconstructs the current domain state from those stores on startup. The UI still loads the full in-memory state; paginated query APIs are a later step.
+- Normalized saves compare per-record fingerprints and only `put` changed records or delete removed records, with all related changes committed in one IndexedDB transaction. This avoids rewriting every unchanged financial record, although the current app still clones the in-memory state and computes fingerprints across records on save.
+- `production-hardening.js` stores offline bank-refresh jobs in the IndexedDB outbox, migrates the legacy localStorage queue after commit, and no longer truncates it at 50 jobs.
 - Supabase already owns the provider-data boundary: `bank_connections`, `bank_transactions`, `bank_sync_runs`, webhook/event tables and reconciliation/payment tables exist. Do not create a competing copy of provider bank data.
 - Mono transaction import already has provider identity/deduplication and explicit reconciliation state. Preserve these semantics.
 
 ## Architectural decision
 
-**Phase 1: normalized IndexedDB + durable outbox.** Do this before adopting SQLite/WASM. IndexedDB is already asynchronous, supported by the PWA target, and avoids shipping a second database engine. The current bottleneck is the monolithic snapshot and the localStorage queue, not the absence of SQL.
+**Phase 1: normalized IndexedDB + durable outbox.** The initial implementation is now present on the Shadow-Sync branch. IndexedDB is already asynchronous, supported by the PWA target, and avoids shipping a second database engine. The normalized stores and changed-record writes are in place; paginated reads, attachment separation, and multi-tab conflict handling remain follow-up work.
 
 **Phase 2: append-only local operation journal and Supabase ingestion.** Treat immutable financial facts as events/operations. Use deterministic IDs and idempotency keys. Sync operations in batches, acknowledge only after the server transaction commits, then advance a per-user/device cursor. Keep the current Supabase provider tables canonical for Mono data.
 
@@ -28,7 +29,6 @@ Use a versioned IndexedDB database with stores along these lines:
 |---|---|---|
 | `accounts` | accountId | Account metadata and materialized balance |
 | `transactions` | transactionId | Immutable ledger facts and provenance |
-| `transaction_events` | eventId | Append-only corrections, reversals, review and reconciliation events |
 | `goals` | goalId | Goal configuration |
 | `snapshots` | snapshotId | Historical wealth snapshots |
 | `attachments` | attachmentId | Receipt/OCR metadata and blob references |
@@ -84,16 +84,24 @@ Recommended payment-intent lifecycle:
 - [x] Migrate the legacy queue only after the IndexedDB transaction commits.
 - [x] Remove the arbitrary 50-job truncation and acknowledge completed jobs individually.
 - [x] Add static contract checks for the durable outbox and service-worker cache version.
+- [x] Create normalized IndexedDB stores for accounts, transactions, goals, snapshots, deleted-provider markers, and metadata.
+- [x] Add account/date and provider-identity indexes for transaction history.
+- [x] Migrate the V2 monolithic snapshot into normalized records atomically, deleting the old snapshot only in the successful transaction.
+- [x] Write only changed records and remove deleted records within one atomic transaction.
+- [x] Persist the post-migration domain shape during bootstrap.
 - [ ] Map every remaining direct `localStorage` read/write and classify it as preference, transient UI state, legacy migration, or durable work queue.
 - [ ] Add runtime tests proving no ledger transaction is reported saved before the IndexedDB transaction completes.
 - [ ] Add a test proving a failed IndexedDB write never silently falls back to a stale snapshot and overwrites newer data.
 
-### 2. Normalize IndexedDB
-- Introduce a new database version and object stores.
-- Migrate the existing snapshot in one resumable, idempotent migration.
-- Keep the legacy snapshot until record counts and checksums match; only then mark migration complete and retire it.
-- Add indexes and paginated reads so the UI does not load the entire history for every view.
-- Move the bank-sync queue to the durable outbox; do not truncate queued work.
+### 2. Normalize IndexedDB — foundation implemented; performance work remains
+- [x] Introduce database schema v3 and normalized entity stores.
+- [x] Migrate the existing snapshot in a single atomic transaction; if it aborts, the old snapshot remains available for retry.
+- [x] Add indexes for transaction date, account/date, provider transaction identity, account currency, goal status, and snapshot date.
+- [x] Keep the outbox in the same database and preserve queued work across reloads.
+- [ ] Add runtime migration fixtures covering populated V2 databases, empty databases, interrupted upgrades, and legacy localStorage imports.
+- [ ] Add paginated transaction query APIs and migrate activity/review views away from full-history rendering.
+- [ ] Move large receipt/OCR text and image blobs into a dedicated attachments store.
+- [ ] Add multi-tab coordination and explicit conflict/reload behavior before supporting concurrent edits.
 
 ### 3. Implement outbox sync
 - Add a sync worker/service module with single-flight locking, bounded batches, retry/backoff, jitter, online/visibility triggers, and an explicit manual retry.
@@ -109,12 +117,15 @@ Recommended payment-intent lifecycle:
 ## Exit criteria
 
 - [x] Durable offline bank-refresh jobs are stored in IndexedDB, not localStorage.
-- [ ] No financial history or other durable sync queue is stored in localStorage.
+- [x] Financial records are stored in normalized IndexedDB object stores rather than a single serialized snapshot.
+- [ ] Large transaction lists are paginated and do not require loading the entire ledger for every view.
+- [ ] Receipt OCR text and blobs are stored separately from frequently updated transaction metadata.
+- [ ] Concurrent tabs cannot silently overwrite financial edits.
 - A local transaction is acknowledged only after its IndexedDB transaction commits.
 - Replaying any operation/batch produces no duplicate effect.
 - A network timeout never advances the sync cursor or implies provider success.
 - Conflicts in financial fields are surfaced for review; no silent overwrite.
-- Migration is restart-safe and retains a recoverable source until verification passes.
+- Migration is restart-safe and retains the old snapshot until the normalized IndexedDB transaction commits.
 - Large transaction lists are paginated and do not require serializing the full ledger on every save.
 
 ## Explicit non-goals for the first release
