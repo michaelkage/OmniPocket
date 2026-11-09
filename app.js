@@ -56,9 +56,11 @@ function loadState() {
 }
 
 async function bootstrapStorage() {
+  let domainStateLoaded = false;
   try {
     const loaded = await storage.load();
     state = migrateState(loaded || loadState());
+    domainStateLoaded = true;
     persistenceReady = true;
     rebuildBalances();
     bindOmniPocketBus();
@@ -68,7 +70,11 @@ async function bootstrapStorage() {
     await storage.save(state);
   } catch (error) {
     console.warn("IndexedDB unavailable; using local fallback.", error);
-    state = loadState();
+    persistenceReady = false;
+    // If the database was readable but a normalized write failed, keep the
+    // already-loaded domain state in memory. Do not replace it with an empty
+    // localStorage fallback while the original IndexedDB snapshot is intact.
+    if (!domainStateLoaded) state = loadState();
   }
   render();
 }
