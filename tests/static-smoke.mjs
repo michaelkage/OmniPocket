@@ -135,4 +135,5 @@ assert(storage.includes("async removeOutbox(id)"), "storage must expose per-job 
 assert(storage.includes("localStorage.removeItem(key)"), "legacy queue must only be removed after IndexedDB migration commits");
 assert(!/slice\(-50\)/.test(fs.readFileSync("production-hardening.js", "utf8")), "offline jobs must never be silently truncated at 50");
 assert(fs.readFileSync("production-hardening.js", "utf8").includes("queueStorage.enqueueOutbox(job)"), "bank refresh queue must use IndexedDB");
-\nconsole.log("OmniPocket static smoke tests passed");
+
+console.log("OmniPocket static smoke tests passed");
