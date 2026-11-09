@@ -169,7 +169,7 @@ assert.match(app, /Pending at bank · excluded/);
 assert.match(app, /Failed · excluded/);
 assert.match(app, /Reversed · excluded/);
 assert.match(app, /Reversed by provider — excluded from financial totals/);
-assert.match(app, /\$\{t\.bankStatus \|\| ""\}/);
+assert.match(app, /const bankStatus = String\(t\.bankStatus \|\| ""\)\.trim\(\)\.toLowerCase\(\)/);\nassert.match(app, /escapeHtml\(lifecycleLabel\)/);
 assert.match(accounts, /h\.status==="warning"\?"Sync completed with warnings"/);
 assert.match(accounts, /h\.ownershipConflictCount/);
 assert.match(accounts, /h\.currencyMismatchCount/);
