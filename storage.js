@@ -261,6 +261,20 @@ class OmniPocketStorage {
     const expectedVersion = Number(this.cache?.version) || 0;
     const nextVersion = expectedVersion + 1;
     const nextCache = this._buildCache(records, settings, appSchemaVersion, nextVersion);
+    const hasRecordChanges = this.entityStoreNames.some(name => {
+      const previous = this.cache.stores[name] || new Map();
+      const next = nextCache.stores[name];
+      if (previous.size !== next.size) return true;
+      for (const [key, fingerprint] of next) if (previous.get(key) !== fingerprint) return true;
+      return false;
+    });
+    const hasMetadataChanges =
+      this.cache.meta.settings !== nextCache.meta.settings ||
+      this.cache.meta.schemaVersion !== nextCache.meta.schemaVersion;
+    // Bootstrap should not advance the shared version when the normalized
+    // ledger is already current; otherwise merely opening a second tab would
+    // invalidate the first tab's cache.
+    if (expectedVersion > 0 && !hasRecordChanges && !hasMetadataChanges) return expectedVersion;
     const storeNames = [...this.entityStoreNames, this.metaStoreName, this.storeName];
     return new Promise((resolve, reject) => {
       const tx = db.transaction(storeNames, "readwrite");
