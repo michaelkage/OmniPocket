@@ -101,7 +101,9 @@ Recommended payment-intent lifecycle:
 - [ ] Add runtime migration fixtures covering populated V2 databases, empty databases, interrupted upgrades, and legacy localStorage imports.
 - [ ] Add paginated transaction query APIs and migrate activity/review views away from full-history rendering.
 - [ ] Move large receipt/OCR text and image blobs into a dedicated attachments store.
-- [x] Add optimistic state-version checks to every normalized write; a stale tab aborts instead of overwriting newer ledger records.\n- [x] Broadcast committed versions across tabs and warn stale tabs to reload; conflict writes never fall back to localStorage.
+- [x] Add optimistic state-version checks to every normalized write; a stale tab aborts instead of overwriting newer ledger records.
+- [x] Broadcast committed versions across tabs and warn stale tabs to reload; conflict writes never fall back to localStorage.
+- [x] Keep a monotonic version tombstone when clearing the ledger so a stale tab cannot resurrect deleted records.
 
 ### 3. Implement outbox sync
 - Add a sync worker/service module with single-flight locking, bounded batches, retry/backoff, jitter, online/visibility triggers, and an explicit manual retry.
