@@ -8,6 +8,7 @@ class OmniPocketStorage {
     this.key = "current";
     this.dbPromise = null;
     this.cache = null;
+    this.channel = null;
     this.entityStoreNames = [
       "accounts",
       "transactions",
@@ -83,6 +84,15 @@ class OmniPocketStorage {
           this.dbPromise = null;
           this.cache = null;
         };
+        if (!this.channel && typeof BroadcastChannel === "function") {
+          this.channel = new BroadcastChannel("omnipocket:" + this.dbName + ":state");
+          this.channel.onmessage = event => {
+            const version = Number(event.data?.version) || 0;
+            if (event.data?.type === "state-committed" && version > Number(this.cache?.version || 0)) {
+              window.dispatchEvent(new CustomEvent("omnipocket:external-state-change", { detail: { version, dbName: this.dbName } }));
+            }
+          };
+        }
         resolve(db);
       };
       request.onerror = () => {
@@ -131,8 +141,8 @@ class OmniPocketStorage {
     };
   }
 
-  _buildCache(records, settings, schemaVersion = 1) {
-    const cache = { stores: {}, meta: {} };
+  _buildCache(records, settings, schemaVersion = 1, stateVersion = 0) {
+    const cache = { stores: {}, meta: {}, version: Number(stateVersion) || 0 };
     for (const name of this.entityStoreNames) {
       cache.stores[name] = new Map();
       for (const record of records[name] || []) {
@@ -163,7 +173,7 @@ class OmniPocketStorage {
         requests[name].onerror = () => reject(requests[name].error || new Error("Could not read normalized " + name + "."));
       }
       requests.settings.onsuccess = () => { result.settings = requests.settings.result?.value || null; };
-      requests.stateVersion.onsuccess = () => { result.version = requests.stateVersion.result?.value || null; };
+      requests.stateVersion.onsuccess = () => { result.version = requests.stateVersion.result?.value ?? null; };
       requests.schemaVersion.onsuccess = () => { result.schemaVersion = requests.schemaVersion.result?.value ?? null; };
       requests.settings.onerror = () => reject(requests.settings.error || new Error("Could not read OmniPocket settings."));
       requests.stateVersion.onerror = () => reject(requests.stateVersion.error || new Error("Could not read normalized storage version."));
@@ -174,9 +184,10 @@ class OmniPocketStorage {
           return;
         }
         result.records.deletedExternalTransactions = result.records.deletedExternalTransactions.map(({ key, ...item }) => item);
-        this.cache = this._buildCache(result.records, result.settings || {}, result.schemaVersion ?? 1);
+        this.cache = this._buildCache(result.records, result.settings || {}, result.schemaVersion ?? 1, result.version);
         resolve({
           schemaVersion: result.schemaVersion ?? null,
+          stateVersion: result.version,
           settings: result.settings || {},
           accounts: result.records.accounts,
           transactions: result.records.transactions,
@@ -243,55 +254,82 @@ class OmniPocketStorage {
     const settings = state.settings || {};
     if (!this.cache) {
       const existing = await this._readNormalized(db);
-      if (existing) {
-        // _readNormalized initializes the cache from the committed database.
-      } else {
-        this.cache = this._buildCache({}, {});
-      }
+      if (!existing) this.cache = this._buildCache({}, {}, 1, 0);
     }
 
     const appSchemaVersion = Number.isFinite(Number(state.schemaVersion)) ? Number(state.schemaVersion) : 1;
-    const nextCache = this._buildCache(records, settings, appSchemaVersion);
+    const expectedVersion = Number(this.cache?.version) || 0;
+    const nextVersion = expectedVersion + 1;
+    const nextCache = this._buildCache(records, settings, appSchemaVersion, nextVersion);
+    const hasRecordChanges = this.entityStoreNames.some(name => {
+      const previous = this.cache.stores[name] || new Map();
+      const next = nextCache.stores[name];
+      if (previous.size !== next.size) return true;
+      for (const [key, fingerprint] of next) if (previous.get(key) !== fingerprint) return true;
+      return false;
+    });
+    const hasMetadataChanges =
+      this.cache.meta.settings !== nextCache.meta.settings ||
+      this.cache.meta.schemaVersion !== nextCache.meta.schemaVersion;
+    // Bootstrap should not advance the shared version when the normalized
+    // ledger is already current; otherwise merely opening a second tab would
+    // invalidate the first tab's cache.
+    if (expectedVersion > 0 && !hasRecordChanges && !hasMetadataChanges) return expectedVersion;
     const storeNames = [...this.entityStoreNames, this.metaStoreName, this.storeName];
     return new Promise((resolve, reject) => {
       const tx = db.transaction(storeNames, "readwrite");
-      for (const name of this.entityStoreNames) {
-        const store = tx.objectStore(name);
-        const previous = this.cache.stores[name] || new Map();
-        const next = nextCache.stores[name];
-        for (const [key, fingerprint] of next) {
-          if (previous.get(key) !== fingerprint) {
-            const record = name === "deletedExternalTransactions"
-              ? records[name].find(item => item.key === key)
-              : records[name].find(item => item.id === key);
-            store.put(record);
+      const meta = tx.objectStore(this.metaStoreName);
+      let conflictError = null;
+      const versionRequest = meta.get("stateVersion");
+
+      versionRequest.onsuccess = () => {
+        const actualVersion = Number(versionRequest.result?.value) || 0;
+        if (actualVersion !== expectedVersion) {
+          conflictError = new Error("OmniPocket changed in another tab. Reload before saving this stale copy.");
+          conflictError.code = "OMNI_CONFLICT";
+          try { tx.abort(); } catch (_) { reject(conflictError); }
+          return;
+        }
+
+        for (const name of this.entityStoreNames) {
+          const store = tx.objectStore(name);
+          const previous = this.cache.stores[name] || new Map();
+          const next = nextCache.stores[name];
+          for (const [key, fingerprint] of next) {
+            if (previous.get(key) !== fingerprint) {
+              const record = name === "deletedExternalTransactions"
+                ? records[name].find(item => item.key === key)
+                : records[name].find(item => item.id === key);
+              store.put(record);
+            }
+          }
+          for (const key of previous.keys()) {
+            if (!next.has(key)) store.delete(key);
           }
         }
-        for (const key of previous.keys()) {
-          if (!next.has(key)) store.delete(key);
+        if (this.cache.meta.settings !== nextCache.meta.settings) {
+          meta.put({ key: "settings", value: settings });
         }
-      }
-      const meta = tx.objectStore(this.metaStoreName);
-      if (this.cache.meta.settings !== nextCache.meta.settings) {
-        meta.put({ key: "settings", value: settings });
-      }
-      meta.put({ key: "stateVersion", value: 1 });
-      if (this.cache.meta.schemaVersion !== nextCache.meta.schemaVersion) {
-        meta.put({ key: "schemaVersion", value: appSchemaVersion });
-      }
-      // Remove the old monolithic V2 snapshot only in the same successful
-      // transaction that commits its normalized replacement.
-      tx.objectStore(this.storeName).delete(this.key);
+        meta.put({ key: "stateVersion", value: nextVersion });
+        if (this.cache.meta.schemaVersion !== nextCache.meta.schemaVersion) {
+          meta.put({ key: "schemaVersion", value: appSchemaVersion });
+        }
+        // Remove the old monolithic V2 snapshot only in the same successful
+        // transaction that commits its normalized replacement.
+        tx.objectStore(this.storeName).delete(this.key);
+      };
+      versionRequest.onerror = () => reject(versionRequest.error || new Error("Could not verify the current ledger version."));
       tx.oncomplete = () => {
         this.cache = nextCache;
         // Remove the legacy V1 snapshot only after the normalized transaction
         // commits. If the write aborts, the original source remains recoverable.
         try { localStorage.removeItem(this.legacyKey); }
         catch (error) { console.warn("Normalized data is safe in IndexedDB, but the legacy copy could not be removed.", error); }
-        resolve();
+        this.channel?.postMessage({ type: "state-committed", version: nextVersion });
+        resolve(nextVersion);
       };
-      tx.onerror = () => reject(tx.error || new Error("Could not save normalized OmniPocket data."));
-      tx.onabort = () => reject(tx.error || new Error("Normalized OmniPocket save was aborted."));
+      tx.onerror = () => reject(conflictError || tx.error || new Error("Could not save normalized OmniPocket data."));
+      tx.onabort = () => reject(conflictError || tx.error || new Error("Normalized OmniPocket save was aborted."));
     });
   }
 
