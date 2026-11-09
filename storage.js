@@ -203,7 +203,8 @@ class OmniPocketStorage {
     // every normalized record has committed successfully.
     const snapshot = await this._readSnapshot(db);
     if (snapshot && typeof snapshot === "object") {
-      await this.save(snapshot);
+      // Return the source to app.js for domain migration first. Some legacy
+      // records may lack normalized IDs, so never write this raw shape directly.
       return snapshot;
     }
 
@@ -216,9 +217,8 @@ class OmniPocketStorage {
       return null;
     }
     if (legacy && typeof legacy === "object") {
-      await this.save(legacy);
-      try { localStorage.removeItem(this.legacyKey); }
-      catch (error) { console.warn("Migrated data is safe in IndexedDB, but the legacy copy could not be removed.", error); }
+      // app.js normalizes IDs and relationships before its first save. The
+      // legacy source is removed only by save(), after IndexedDB commits.
       return legacy;
     }
     return null;
@@ -284,6 +284,10 @@ class OmniPocketStorage {
       tx.objectStore(this.storeName).delete(this.key);
       tx.oncomplete = () => {
         this.cache = nextCache;
+        // Remove the legacy V1 snapshot only after the normalized transaction
+        // commits. If the write aborts, the original source remains recoverable.
+        try { localStorage.removeItem(this.legacyKey); }
+        catch (error) { console.warn("Normalized data is safe in IndexedDB, but the legacy copy could not be removed.", error); }
         resolve();
       };
       tx.onerror = () => reject(tx.error || new Error("Could not save normalized OmniPocket data."));
