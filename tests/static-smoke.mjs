@@ -148,6 +148,11 @@ assert(storage.includes("for (const key of previous.keys())"), "normalized persi
 assert(app.includes("await storage.save(state);"), "bootstrap must persist the migrated domain shape to normalized stores");
 assert(app.includes("if (!domainStateLoaded) state = loadState();"), "a failed normalized migration must not discard a readable legacy ledger");
 
+assert(storage.includes('const versionRequest = meta.get("stateVersion")'), "normalized writes must verify the expected ledger version before committing");
+assert(storage.includes('conflictError.code = "OMNI_CONFLICT"'), "stale tab writes must fail with an explicit conflict code");
+assert(storage.includes('new BroadcastChannel("omnipocket:" + this.dbName + ":state")'), "tabs must receive committed-ledger notifications");
+assert(app.includes('if (error?.code === "OMNI_CONFLICT")'), "stale ledger conflicts must not fall through to localStorage fallback");
+assert(app.includes('if (revision !== persistenceRevision && !persistenceConflict)'), "a conflicted tab must not retry stale snapshots");
 assert(storage.includes("async enqueueOutbox(job)"), "storage must expose durable outbox enqueue");
 assert(storage.includes("async listOutbox()"), "storage must expose durable outbox reads");
 assert(storage.includes("async removeOutbox(id)"), "storage must expose per-job acknowledgements");
