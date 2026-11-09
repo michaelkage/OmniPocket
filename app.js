@@ -41,7 +41,21 @@ let state = clone(DEFAULT_STATE);
 Object.defineProperty(window, "omnipocketState", { configurable:true, get:()=>state });
 let persistTimer = null;
 let persistenceReady = false;
+let persistenceConflict = false;
 let quickType = "expense";
+
+function showStorageConflict(message) {
+  persistenceConflict = true;
+  persistenceReady = false;
+  const notify = window.OmniPocketV1?.toast;
+  if (notify) notify(message);
+  else console.warn(message);
+}
+window.addEventListener("omnipocket:external-state-change", event => {
+  if (event.detail?.dbName === "omnipocket") {
+    showStorageConflict("This ledger changed in another tab. Reload before continuing so you do not overwrite newer entries.");
+  }
+});
 
 function emitStateEvent(event, detail = {}) { if (window.OmniPocketBus) OmniPocketBus.emit(event, { state, ...detail }); }
 function bindOmniPocketBus() { if (!window.OmniPocketBus || window.__omnipocketBusBound) return; window.__omnipocketBusBound = true; OmniPocketBus.on("account:updated", () => { renderAccounts(); renderFullViews(); renderGoal(); renderDashboard(); }); OmniPocketBus.on("transaction:updated", () => { rebuildBalances(); renderActivity(); renderGoal(); renderDashboard(); renderFullViews(); }); OmniPocketBus.on("goal:updated", () => { renderGoal(); renderFullViews(); renderDashboard(); }); OmniPocketBus.on("fx:updated", () => render()); OmniPocketBus.on("privacy:updated", () => render()); OmniPocketBus.on("dashboard:updated", () => renderDashboard()); OmniPocketBus.on("context:changed", payload => { renderContextBar(payload.context); renderAccounts(); renderGoal(); renderActivity(); renderDashboardContextWidgets(payload.context); }); OmniPocketBus.on("context:cleared", payload => { renderContextBar(payload.context); renderAccounts(); renderGoal(); renderActivity(); renderDashboardContextWidgets(payload.context); }); }
@@ -69,12 +83,16 @@ async function bootstrapStorage() {
     // The storage adapter only writes records whose content has changed.
     await storage.save(state);
   } catch (error) {
-    console.warn("IndexedDB unavailable; using local fallback.", error);
-    persistenceReady = false;
-    // If the database was readable but a normalized write failed, keep the
-    // already-loaded domain state in memory. Do not replace it with an empty
-    // localStorage fallback while the original IndexedDB snapshot is intact.
-    if (!domainStateLoaded) state = loadState();
+    if (error?.code === "OMNI_CONFLICT") {
+      showStorageConflict("Another tab saved a newer ledger. Reload this tab to load the latest data.");
+    } else {
+      console.warn("IndexedDB unavailable; using local fallback.", error);
+      persistenceReady = false;
+      // If the database was readable but a normalized write failed, keep the
+      // already-loaded domain state in memory. Do not replace it with an empty
+      // localStorage fallback while the original IndexedDB snapshot is intact.
+      if (!domainStateLoaded) state = loadState();
+    }
   }
   render();
 }
@@ -240,6 +258,7 @@ let persistenceQueue = Promise.resolve();
 
 function flushPersistence() {
   persistTimer = null;
+  if (persistenceConflict) return Promise.resolve();
   const revision = ++persistenceRevision;
   const snapshot = structuredClone(state);
   persistenceInFlight = true;
@@ -254,11 +273,16 @@ function flushPersistence() {
         await storage.save(snapshot);
         return;
       } catch (error) {
+        if (error?.code === "OMNI_CONFLICT") {
+          showStorageConflict("Another tab saved first. This tab's latest edit was not saved; reload to continue.");
+          return;
+        }
         persistenceReady = false;
         console.warn("IndexedDB save failed; switching to local fallback.", error);
       }
     }
 
+    if (persistenceConflict) return;
     // localStorage is a compatibility/recovery path only when IndexedDB is
     // unavailable. It is never written during healthy IndexedDB operation.
     try {
@@ -268,7 +292,7 @@ function flushPersistence() {
     }
   }).finally(() => {
     persistenceInFlight = false;
-    if (revision !== persistenceRevision) {
+    if (revision !== persistenceRevision && !persistenceConflict) {
       clearTimeout(persistTimer);
       persistTimer = setTimeout(flushPersistence, 0);
     }
