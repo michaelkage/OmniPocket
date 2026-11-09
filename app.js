@@ -1,6 +1,7 @@
 /* OmniPocket — V1 financial domain + UI engine */
 const STORAGE_KEY = "omnipocket.v1";
 const storage = new OmniPocketStorage({ dbName: "omnipocket", storeName: "state", legacyKey: STORAGE_KEY });
+window.OmniPocketStorageInstance = storage;
 const SCHEMA_VERSION = 9;
 const CURRENCIES = ["NGN", "USD", "GBP", "EUR"];
 const ACCOUNT_TYPES = ["bank", "cash", "wallet", "locked"];
@@ -55,17 +56,25 @@ function loadState() {
 }
 
 async function bootstrapStorage() {
+  let domainStateLoaded = false;
   try {
     const loaded = await storage.load();
     state = migrateState(loaded || loadState());
+    domainStateLoaded = true;
     persistenceReady = true;
     rebuildBalances();
     bindOmniPocketBus();
     OmniPocketEngine.recordDailySnapshot(state);
-    if (!loaded) await storage.save(state);
+    // Persist the migrated domain shape into normalized stores on every boot.
+    // The storage adapter only writes records whose content has changed.
+    await storage.save(state);
   } catch (error) {
     console.warn("IndexedDB unavailable; using local fallback.", error);
-    state = loadState();
+    persistenceReady = false;
+    // If the database was readable but a normalized write failed, keep the
+    // already-loaded domain state in memory. Do not replace it with an empty
+    // localStorage fallback while the original IndexedDB snapshot is intact.
+    if (!domainStateLoaded) state = loadState();
   }
   render();
 }
@@ -1142,7 +1151,7 @@ function renderIntelligence() {
     const hidden = state.settings.privacyHidden;
     const display = value => hidden ? "••••" : money(value, forecast.currency);
     forecastEl.innerHTML =
-      '<div class="forecast-primary"><span class="muted">Estimated balance · ' + escapeHtml(new Date(forecast.monthEndDate + "T12:00:00").toLocaleDateString(undefined, { day: "numeric", month: "long" })) + "</span>"<strong>' + escapeHtml(display(forecast.projectedBalance)) + '</strong><small>' + escapeHtml((forecast.projectedNet >= 0 ? "+" : "−") + display(Math.abs(forecast.projectedNet)) + " projected net change") + '</small></div>' +
+      '<div class="forecast-primary"><span class="muted">Estimated balance · ' + escapeHtml(new Date(forecast.monthEndDate + "T12:00:00").toLocaleDateString(undefined, { day: "numeric", month: "long" })) + '</span><strong>' + escapeHtml(display(forecast.projectedBalance)) + '</strong><small>' + escapeHtml((forecast.projectedNet >= 0 ? "+" : "−") + display(Math.abs(forecast.projectedNet)) + " projected net change") + '</small></div>' +
       '<div class="forecast-breakdown"><div><span>Current balance</span><strong>' + escapeHtml(display(forecast.currentBalance)) + '</strong></div><div><span>Income left to month-end</span><strong>' + escapeHtml(display(forecast.projectedIncome)) + '</strong></div><div><span>Spending left to month-end</span><strong>' + escapeHtml(display(forecast.projectedExpenses)) + '</strong></div></div>' +
       '<div class="forecast-confidence"><span>Confidence: ' + escapeHtml(forecast.confidence) + '</span><small>' + escapeHtml(forecast.sampleTransactions + " transactions across " + forecast.activeDays + " active days · " + forecast.daysElapsed + " days observed") + '</small></div>';
   }
