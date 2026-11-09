@@ -136,6 +136,8 @@ assert(storage.includes('db.createObjectStore("snapshots", { keyPath: "id" })'),
 assert(storage.includes('db.createObjectStore("meta", { keyPath: "key" })'), "normalized metadata store must be created");
 assert(storage.includes('createIndex("sourceAccountDate", ["sourceAccountId", "date"]'), "transaction history must be indexed by account and date");
 assert(storage.includes('createIndex("providerTransactionId", ["external.provider", "external.providerTransactionId"]'), "provider transaction identity must be indexed");
+assert(storage.includes('requests.schemaVersion = tx.objectStore(this.metaStoreName).get("schemaVersion");'), "normalized storage must preserve the application schema version");
+assert(storage.includes('meta.put({ key: "schemaVersion", value: appSchemaVersion });'), "normalized writes must persist the application schema version");
 assert(storage.includes("async _readNormalized(db)"), "storage must reconstruct the domain state from normalized records");
 assert(storage.includes("async _readSnapshot(db)"), "storage must retain the V2 snapshot migration path");
 assert(storage.includes("const storeNames = [...this.entityStoreNames, this.metaStoreName, this.storeName]"), "normalized records and legacy snapshot cleanup must share one atomic write transaction");
