@@ -243,6 +243,7 @@ try {
     const verifier = new window.OmniPocketStorage(options);
     const latest = await verifier.load();
     const staleBeforeClear = await writerB.load();
+    staleBeforeClear.accounts[0].balance = 999;
     const clearer = new window.OmniPocketStorage(options);
     await clearer.clear();
     let staleAfterClearRejected = false;
