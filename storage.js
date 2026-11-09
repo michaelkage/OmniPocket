@@ -398,9 +398,20 @@ class OmniPocketStorage {
     const stores = [...this.entityStoreNames, this.metaStoreName, this.storeName, "outbox"];
     return new Promise((resolve, reject) => {
       const tx = db.transaction(stores, "readwrite");
-      for (const name of stores) tx.objectStore(name).clear();
+      const meta = tx.objectStore(this.metaStoreName);
+      const versionRequest = meta.get("stateVersion");
+      let nextVersion = 1;
+      versionRequest.onsuccess = () => {
+        nextVersion = (Number(versionRequest.result?.value) || 0) + 1;
+        for (const name of stores) tx.objectStore(name).clear();
+        // Keep a version tombstone after clearing so an older open tab cannot
+        // recreate the deleted ledger with a stale snapshot.
+        meta.put({ key: "stateVersion", value: nextVersion });
+      };
+      versionRequest.onerror = () => reject(versionRequest.error || new Error("Could not verify ledger version before clearing."));
       tx.oncomplete = () => {
-        this.cache = null;
+        this.cache = this._buildCache({}, {}, 1, nextVersion);
+        this.channel?.postMessage({ type: "state-committed", version: nextVersion });
         try {
           localStorage.removeItem(this.legacyKey);
           resolve();
