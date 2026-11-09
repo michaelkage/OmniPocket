@@ -20,9 +20,9 @@ OmniPocket is a local-first, multi-currency wealth tracker designed to give a si
 
 The financial state is treated as a domain model rather than a collection of UI counters. Transactions describe money movement; account balances are maintained as the current materialized state; reconciliation is recorded as an adjustment rather than silently changing history.
 
-The current browser persistence adapter is **IndexedDB** (`storage.js`), with a one-time migration path from the legacy V1 localStorage snapshot. The domain model is intentionally separated from the UI. localStorage remains in use for small preferences and a few legacy integration/queue values; it is not the primary financial-state database.
+The current browser persistence adapter is **IndexedDB** (`storage.js`). Schema v3 stores accounts, transactions, goals, snapshots, provider-deletion markers, metadata, and offline jobs in separate object stores with relevant indexes. Saves compare per-record fingerprints and commit changed records atomically instead of replacing one monolithic state snapshot. The V2 snapshot and V1 localStorage data have migration paths that retain their source until the replacement is committed. The UI still reconstructs the complete in-memory domain state at startup; paginated reads and receipt attachment separation are follow-up work.
 
-The next storage milestone is to replace the single serialized state snapshot with indexed, independently committed local records. The offline bank-refresh queue now uses a durable IndexedDB outbox (schema v2), including migration from its legacy localStorage queue and per-job acknowledgements. See [Project Shadow-Sync](docs/SHADOW-SYNC.md). SQLite/WASM is an evaluated future option, not a prerequisite: the existing IndexedDB foundation should be normalized and measured before adding another database runtime.
+The offline bank-refresh queue uses a durable IndexedDB outbox, with migration from its legacy localStorage queue and per-job acknowledgements. See [Project Shadow-Sync](docs/SHADOW-SYNC.md). SQLite/WASM is an evaluated future option, not a prerequisite: benchmark the normalized IndexedDB implementation before adding another database runtime.
 
 ## Status
 
