@@ -53,7 +53,7 @@ assert(!/areyxlydzqzlzmgzavpi\.supabase\.co/.test(client + app), "Supabase URL m
 // otherwise the PWA serves index.html in place of the missing JS when offline.
 const sw = fs.readFileSync("sw.js", "utf8");
 assert(/const CACHE="omnipocket-shell-v\d+"/.test(sw), "service worker must version its shell cache");
-assert(sw.includes('const CACHE="omnipocket-shell-v19"'), "shell cache must be bumped when the app shell changes");
+assert(sw.includes('const CACHE="omnipocket-shell-v20"'), "shell cache must be bumped when the app shell changes");
 const cacheLine = sw.split("\n").find(line => line.includes("const ASSETS="));
 assert(cacheLine, "sw.js must declare an ASSETS list");
 for (const match of html.matchAll(/<script src="([^"]+)"/g)) {
@@ -126,4 +126,13 @@ assert(receiptRows.includes('dialog.querySelector("[data-receipt-copy]")'), "rec
 assert(receiptRows.includes('dialog.querySelector("[data-receipt-share]")'), "receipt share control must be wired");
 assert(receiptRows.includes('dialog.querySelector("[data-receipt-print]")'), "receipt print control must be wired");
 
-console.log("OmniPocket static smoke tests passed");
+
+assert(storage.includes('this.version = 2;'), "IndexedDB schema must be versioned for the durable outbox");
+assert(storage.includes('db.createObjectStore("outbox", { keyPath: "id" })'), "IndexedDB must create the durable outbox store");
+assert(storage.includes("async enqueueOutbox(job)"), "storage must expose durable outbox enqueue");
+assert(storage.includes("async listOutbox()"), "storage must expose durable outbox reads");
+assert(storage.includes("async removeOutbox(id)"), "storage must expose per-job acknowledgements");
+assert(storage.includes("localStorage.removeItem(key)"), "legacy queue must only be removed after IndexedDB migration commits");
+assert(!/slice\(-50\)/.test(fs.readFileSync("production-hardening.js", "utf8")), "offline jobs must never be silently truncated at 50");
+assert(fs.readFileSync("production-hardening.js", "utf8").includes("queueStorage.enqueueOutbox(job)"), "bank refresh queue must use IndexedDB");
+\nconsole.log("OmniPocket static smoke tests passed");
