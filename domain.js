@@ -819,6 +819,7 @@
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key).push(row);
     }
+    if (state.transactions?.some(tx => tx.id === "spike")) console.log("unusual-spending-collected-debug", { alertKey, baselineKey, expenses });
 
     const median = values => {
       const sorted = values.slice().sort((a, b) => a - b);
