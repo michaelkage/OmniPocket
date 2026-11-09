@@ -43,6 +43,9 @@ let persistTimer = null;
 let persistenceReady = false;
 let persistenceConflict = false;
 let quickType = "expense";
+const ACTIVITY_PAGE_SIZE = 50;
+let activityPageSize = ACTIVITY_PAGE_SIZE;
+let activityFilterSignature = "";
 
 function showStorageConflict(message) {
   persistenceConflict = true;
@@ -1843,42 +1846,60 @@ function renderFullViews() {
     categorySelect.value = categories.includes(selectedCategory) ? selectedCategory : "all";
   }
   const activityEl = $("activityFullList");
-  if (activityEl) activityEl.innerHTML = state.transactions.slice().sort((a,b)=>b.createdAt-a.createdAt).filter(t => {
-    if (t.status === "superseded" && !reviewOnly) return false;
-    const source = account(t.sourceAccountId), destination = account(t.destinationAccountId);
-    const external = t.external || {};
-    const amountText = String(Math.abs(Number(t.amount) || 0));
-    const formattedAmount = money(t.amount, t.currency);
-    const corpus = [
-      transactionLabel(t), t.category, t.description, t.note, t.reference, t.date,
-      t.status, t.bankStatus, t.type, t.currency, amountText, formattedAmount,
-      source?.name, source?.institution, destination?.name, destination?.institution,
-      external.provider, external.providerTransactionId, external.merchantName,
-      t.provenance?.reference, t.provenance?.description
-    ].filter(Boolean).join(" ").toLowerCase();
-    const matchesText = tokens.every(token => corpus.includes(token));
-    const matchesReview = !reviewOnly || t.potentialDuplicateStatus === "needs_review" || t.status === "needs_review" || (external.provider && t.suggestedCategory && Number.isFinite(Number(t.categoryConfidence)) && Number(t.categoryConfidence) < 0.8);
-    const matchesType = typeFilter === "all" || t.type === typeFilter;
-    const matchesCategory = categoryFilter === "all" || t.category === categoryFilter;
-    const bankStatus = String(t.bankStatus || "").toLowerCase();
-    const matchesStatus = statusFilter === "all" ||
-      (statusFilter === "needs_review" && (t.status === "needs_review" || t.potentialDuplicateStatus === "needs_review" || (external.provider && t.suggestedCategory && Number(t.categoryConfidence) < 0.8))) ||
-      (statusFilter === "pending" && bankStatus === "pending") ||
-      (statusFilter === "failed" && bankStatus === "failed") ||
-      (statusFilter === "reversed" && bankStatus === "reversed") ||
-      (statusFilter === "recorded" && t.status === "recorded" && !["pending","failed","reversed"].includes(bankStatus) && t.potentialDuplicateStatus !== "needs_review");
-    const matchesDate = (!fromDate || t.date >= fromDate) && (!toDate || t.date <= toDate);
-    return matchesText && matchesReview && matchesType && matchesCategory && matchesStatus && matchesDate;
-  }).map(t => {
-    const source = account(t.sourceAccountId), dest = account(t.destinationAccountId);
-    const direction = transactionDirection(t);
-    const sign = direction === "out" ? "−" : direction === "in" ? "+" : "";
-    const detail = t.type === "transfer" ? `${source?.name || "Unknown"} → ${dest?.name || "Unknown"}` : source?.name || "Unknown";
-     const bankStatus = String(t.bankStatus || "").trim().toLowerCase();
-     const transactionStatus = String(t.status || "").trim().toLowerCase();
-     const lifecycleLabel = t.potentialDuplicateStatus === "needs_review" ? "Possible duplicate · review" : bankStatus === "pending" ? "Pending at bank · excluded" : bankStatus === "failed" ? "Failed · excluded" : bankStatus === "reversed" ? "Reversed · excluded" : transactionStatus === "needs_review" ? "Needs confirmation" : transactionStatus === "superseded" ? "Paired leg · excluded" : (t.external?.provider && t.suggestedCategory && Number.isFinite(Number(t.categoryConfidence)) && Number(t.categoryConfidence) < 0.8) ? "Check suggested category" : "Recorded";
-    return `<div class="activity-row interactive-row" data-transaction-id="${escapeHtml(t.id)}" tabindex="0" role="button"><div><strong>${escapeHtml(transactionLabel(t))}</strong><div class="muted">${escapeHtml(t.date)} · ${escapeHtml(detail)}${t.note ? " · "+escapeHtml(t.note) : ""}</div></div><div class="activity-value"><strong data-financial-value>${sign}${escapeHtml(state.settings.privacyHidden ? "••••••" : money(t.amount,t.currency))}</strong><span class="muted">${escapeHtml(lifecycleLabel)}${t.external?.provider ? " · " + escapeHtml(t.external.provider) : ""}</span></div></div>`;
-  }).join("") || '<div class="empty-state">No matching activity.</div>';
+  const filterSignature = JSON.stringify({
+    query: rawSearch, typeFilter, statusFilter, category: categorySelect?.value || "all", fromDate, toDate
+  });
+  if (filterSignature !== activityFilterSignature) {
+    activityFilterSignature = filterSignature;
+    activityPageSize = ACTIVITY_PAGE_SIZE;
+  }
+  if (activityEl) {
+    const filteredRows = state.transactions.slice().sort((a,b)=>b.createdAt-a.createdAt).filter(t => {
+      if (t.status === "superseded" && !reviewOnly) return false;
+      const source = account(t.sourceAccountId), destination = account(t.destinationAccountId);
+      const external = t.external || {};
+      const amountText = String(Math.abs(Number(t.amount) || 0));
+      const formattedAmount = money(t.amount, t.currency);
+      const corpus = [
+        transactionLabel(t), t.category, t.description, t.note, t.reference, t.date,
+        t.status, t.bankStatus, t.type, t.currency, amountText, formattedAmount,
+        source?.name, source?.institution, destination?.name, destination?.institution,
+        external.provider, external.providerTransactionId, external.merchantName,
+        t.provenance?.reference, t.provenance?.description
+      ].filter(Boolean).join(" ").toLowerCase();
+      const matchesText = tokens.every(token => corpus.includes(token));
+      const matchesReview = !reviewOnly || t.potentialDuplicateStatus === "needs_review" || t.status === "needs_review" || (external.provider && t.suggestedCategory && Number.isFinite(Number(t.categoryConfidence)) && Number(t.categoryConfidence) < 0.8);
+      const matchesType = typeFilter === "all" || t.type === typeFilter;
+      const matchesCategory = (categorySelect?.value || "all") === "all" || t.category === categorySelect.value;
+      const bankStatus = String(t.bankStatus || "").toLowerCase();
+      const matchesStatus = statusFilter === "all" ||
+        (statusFilter === "needs_review" && (t.status === "needs_review" || t.potentialDuplicateStatus === "needs_review" || (external.provider && t.suggestedCategory && Number(t.categoryConfidence) < 0.8))) ||
+        (statusFilter === "pending" && bankStatus === "pending") ||
+        (statusFilter === "failed" && bankStatus === "failed") ||
+        (statusFilter === "reversed" && bankStatus === "reversed") ||
+        (statusFilter === "recorded" && t.status === "recorded" && !["pending","failed","reversed"].includes(bankStatus) && t.potentialDuplicateStatus !== "needs_review");
+      const matchesDate = (!fromDate || t.date >= fromDate) && (!toDate || t.date <= toDate);
+      return matchesText && matchesReview && matchesType && matchesCategory && matchesStatus && matchesDate;
+    });
+    const visibleRows = filteredRows.slice(0, activityPageSize);
+    const rowsHtml = visibleRows.map(t => {
+      const source = account(t.sourceAccountId), dest = account(t.destinationAccountId);
+      const direction = transactionDirection(t);
+      const sign = direction === "out" ? "−" : direction === "in" ? "+" : "";
+      const detail = t.type === "transfer" ? `${source?.name || "Unknown"} → ${dest?.name || "Unknown"}` : source?.name || "Unknown";
+      const bankStatus = String(t.bankStatus || "").trim().toLowerCase();
+      const transactionStatus = String(t.status || "").trim().toLowerCase();
+      const lifecycleLabel = t.potentialDuplicateStatus === "needs_review" ? "Possible duplicate · review" : bankStatus === "pending" ? "Pending at bank · excluded" : bankStatus === "failed" ? "Failed · excluded" : bankStatus === "reversed" ? "Reversed · excluded" : transactionStatus === "needs_review" ? "Needs confirmation" : transactionStatus === "superseded" ? "Paired leg · excluded" : (t.external?.provider && t.suggestedCategory && Number.isFinite(Number(t.categoryConfidence)) && Number(t.categoryConfidence) < 0.8) ? "Check suggested category" : "Recorded";
+      return `<div class="activity-row interactive-row" data-transaction-id="${escapeHtml(t.id)}" tabindex="0" role="button"><div><strong>${escapeHtml(transactionLabel(t))}</strong><div class="muted">${escapeHtml(t.date)} · ${escapeHtml(detail)}${t.note ? " · "+escapeHtml(t.note) : ""}</div></div><div class="activity-value"><strong data-financial-value>${sign}${escapeHtml(state.settings.privacyHidden ? "••••••" : money(t.amount,t.currency))}</strong><span class="muted">${escapeHtml(lifecycleLabel)}${t.external?.provider ? " · " + escapeHtml(t.external.provider) : ""}</span></div></div>`;
+    }).join("");
+    const pagination = filteredRows.length > activityPageSize
+      ? `<div class="activity-pagination"><span class="muted">Showing ${visibleRows.length.toLocaleString()} of ${filteredRows.length.toLocaleString()} matching transactions</span><button type="button" class="secondary" data-activity-load-more>Load ${ACTIVITY_PAGE_SIZE} more</button></div>`
+      : filteredRows.length
+        ? `<div class="activity-pagination"><span class="muted">Showing all ${filteredRows.length.toLocaleString()} matching transactions</span></div>`
+        : "";
+    activityEl.innerHTML = rowsHtml || '<div class="empty-state">No matching activity.</div>';
+    if (pagination) activityEl.insertAdjacentHTML("beforeend", pagination);
+  }
 
   document.querySelectorAll("[data-reconcile]").forEach(button => {
     button.onclick = event => {
@@ -1911,6 +1932,17 @@ function renderPaymentCenter(){
 async function refreshPaymentCenter(){const sb=getSupabaseClient();if(!sb){paymentCenterRows=[];renderPaymentCenter();return;}try{const {data,error}=await sb.from("omnipocket_payments").select("*").order("created_at",{ascending:false}).limit(100);if(error)throw error;paymentCenterRows=data||[];renderPaymentCenter();}catch(e){console.warn("Payment history unavailable:",e);renderPaymentCenter();}}
 function openPaymentDetail(paymentId){const p=paymentCenterRows.find(x=>x.id===paymentId);if(!p)return;const d=document.createElement("dialog");d.className="app-dialog payment-detail-dialog";d.innerHTML='<div class="dialog-head"><div><span class="eyebrow">PAYMENT INTENT</span><h2>'+escapeHtml(p.recipient_name||"Payment")+'</h2><div class="muted">'+escapeHtml(paymentStatusLabel(p.status))+'</div></div><button type="button" class="icon-button" data-close>✕</button></div><div class="detail-balance"><strong>'+escapeHtml(state.settings.privacyHidden?"••••":money((Number(p.amount_minor)||0)/100,p.currency||"NGN"))+'</strong><span class="muted">'+escapeHtml(p.currency||"NGN")+'</span></div><div class="payment-detail-grid"><div><span>From</span><strong>'+escapeHtml(account(p.source_account_id)?.name||"—")+'</strong></div><div><span>Bank</span><strong>'+escapeHtml(p.recipient_bank_name||"—")+'</strong></div><div><span>Account</span><strong>'+escapeHtml(p.recipient_account_number||"—")+'</strong></div><div><span>Reference</span><strong>'+escapeHtml(p.provider_reference||"—")+'</strong></div></div><div class="detail-section"><div class="eyebrow">RECONCILIATION TIMELINE</div><div class="payment-progress">'+paymentProgressSteps(p)+'</div></div><div class="detail-callout">'+escapeHtml(p.error||(p.status==="awaiting_user"?"Complete the payment in your bank app or dialer. OmniPocket will wait for confirmation.":p.status==="completed"?"Payment confirmed; the completion can be reconciled against bank activity.":"Waiting for the provider or bank transaction to settle."))+'</div><div class="dialog-actions"><button type="button" data-close>Done</button></div>';document.body.appendChild(d);d.showModal();d.querySelectorAll("[data-close]").forEach(b=>b.addEventListener("click",()=>d.close()));d.addEventListener("close",()=>d.remove(),{once:true});}
 function bindPaymentCenter(){ $("newPaymentPageButton")?.addEventListener("click",openPaymentFlow); $("refreshPaymentsButton")?.addEventListener("click",refreshPaymentCenter); $("paymentStatusFilters")?.addEventListener("click",e=>{const b=e.target.closest("[data-payment-filter]");if(!b)return;paymentCenterFilter=b.dataset.paymentFilter;document.querySelectorAll("[data-payment-filter]").forEach(x=>x.classList.toggle("is-active",x===b));renderPaymentCenter();}); $("paymentCenterTimeline")?.addEventListener("click",e=>{const b=e.target.closest("[data-payment-id]");if(b)openPaymentDetail(b.dataset.paymentId);});}
+
+["activitySearch", "activityTypeFilter", "activityStatusFilter", "activityCategoryFilter", "activityFromDate", "activityToDate"].forEach(id => {
+  const control = $(id);
+  if (!control) return;
+  const eventName = id === "activitySearch" ? "input" : "change";
+  control.addEventListener(eventName, () => {
+    activityPageSize = ACTIVITY_PAGE_SIZE;
+    activityFilterSignature = "";
+    renderFullViews();
+  });
+});
 
 bindPaymentCenter();
 refreshPaymentCenter();
@@ -1964,6 +1996,12 @@ function navigate(page) {
 }
 
 document.addEventListener("click", event => {
+  const loadMoreActivity = event.target.closest("[data-activity-load-more]");
+  if (loadMoreActivity) {
+    activityPageSize += ACTIVITY_PAGE_SIZE;
+    renderFullViews();
+    return;
+  }
   const reviewQueueOpen = event.target.closest("#reviewQueueOpen");
   if (reviewQueueOpen) {
     event.preventDefault();
