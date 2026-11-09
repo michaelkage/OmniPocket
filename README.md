@@ -20,12 +20,13 @@ OmniPocket is a local-first, multi-currency wealth tracker designed to give a si
 
 The financial state is treated as a domain model rather than a collection of UI counters. Transactions describe money movement; account balances are maintained as the current materialized state; reconciliation is recorded as an adjustment rather than silently changing history.
 
-The current persistence adapter uses localStorage for the bootstrap build. The domain model is intentionally separated from the UI so IndexedDB, synchronization, bank integrations, and live FX providers can be introduced without rewriting the product model.
+The current browser persistence adapter is **IndexedDB** (`storage.js`). Schema v3 stores accounts, transactions, goals, snapshots, provider-deletion markers, metadata, and offline jobs in separate object stores with relevant indexes. Saves compare per-record fingerprints and commit changed records atomically instead of replacing one monolithic state snapshot. The V2 snapshot and V1 localStorage data have migration paths that retain their source until the replacement is committed. The UI still reconstructs the complete in-memory domain state at startup; paginated reads and receipt attachment separation are follow-up work.
+
+The offline bank-refresh queue uses a durable IndexedDB outbox, with migration from its legacy localStorage queue and per-job acknowledgements. See [Project Shadow-Sync](docs/SHADOW-SYNC.md). SQLite/WASM is an evaluated future option, not a prerequisite: benchmark the normalized IndexedDB implementation before adding another database runtime.
 
 ## Status
 
 Active V1 development.
-
 
 ## Operational completion
 
@@ -33,10 +34,9 @@ The current build includes historical wealth snapshots, cached/live FX handling,
 
 Production provider credentials remain server-side. OmniPocket does not treat an external bank-app or USSD handoff as successful until provider/bank activity can be reconciled.
 
-
 ## Production hardening
 
-The bank pipeline now uses Supabase as the canonical provider-data boundary and the PWA as a local projection. Bank sync has explicit freshness/reconciliation state, transaction provenance, duplicate fingerprints, provider adapters, webhook event persistence and operational diagnostics. See docs/IMPLEMENTATION-40.md for the complete 40-item implementation map.
+The bank pipeline uses Supabase as the canonical provider-data boundary and the PWA as a local projection. Bank sync has explicit freshness/reconciliation state, transaction provenance, duplicate fingerprints, provider adapters, webhook event persistence and operational diagnostics. See [docs/IMPLEMENTATION-40.md](docs/IMPLEMENTATION-40.md) for the complete 40-item implementation map.
 
 ## Deployment
 
