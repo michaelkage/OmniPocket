@@ -141,6 +141,11 @@ assert(storage.includes('createIndex("providerTransactionId", ["external.provide
 assert(storage.includes('requests.schemaVersion = tx.objectStore(this.metaStoreName).get("schemaVersion");'), "normalized storage must preserve the application schema version");
 assert(storage.includes('meta.put({ key: "schemaVersion", value: appSchemaVersion });'), "normalized writes must persist the application schema version");
 assert(storage.includes("async _readNormalized(db)"), "storage must reconstruct the domain state from normalized records");
+assert(app.includes("const ACTIVITY_PAGE_SIZE = 50;"), "Activity history must render in bounded batches");
+assert(app.includes("data-activity-load-more"), "Activity history must expose a working load-more control");
+assert(app.includes("activityFilterSignature"), "changing Activity filters must reset pagination");
+assert(fs.readFileSync("styles.css", "utf8").includes(".activity-pagination"), "Activity pagination controls must be styled");
+assert(sw.includes("omnipocket-shell-v23"), "shell cache must be bumped for the Activity pagination UI");
 assert(storage.includes("async _readSnapshot(db)"), "storage must retain the V2 snapshot migration path");
 assert(storage.includes("const storeNames = [...this.entityStoreNames, this.metaStoreName, this.storeName]"), "normalized records and legacy snapshot cleanup must share one atomic write transaction");
 assert(storage.includes("if (previous.get(key) !== fingerprint)"), "normalized persistence must only write changed records");
