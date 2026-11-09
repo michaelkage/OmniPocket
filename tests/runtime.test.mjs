@@ -388,7 +388,6 @@ const tx = (o) => ({
     ],
   });
   const forecast = E.monthEndForecast(state, new Date("2026-11-03T12:00:00"));
-  console.log("forecast-diagnostic", E.balancesAt(state, { date: "2026-11-03", createdAt: Number.MAX_SAFE_INTEGER }), state.transactions);
   assert.equal(forecast.currentBalance, 17000, "current balance must exclude pending and future activity");
   assert.equal(forecast.incomeToDate, 8000);
   assert.equal(forecast.expensesToDate, 1000);
