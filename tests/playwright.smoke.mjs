@@ -278,6 +278,39 @@ try {
   check("netWorth is not a number", Number.isFinite(engine.netWorth));
   check("availableWealth disagrees with netWorth", Math.abs(engine.bankTotal - engine.netWorth) < 0.01);
 
+  // Activity history renders a bounded first page, expands on demand, and resets after filtering.
+  const activityPagination = await page.evaluate(() => {
+    const state = window.omnipocketState;
+    const original = state.transactions;
+    state.transactions = Array.from({ length: 123 }, (_, index) => {
+      const id = "TX-" + String(index + 1).padStart(6, "0");
+      return {
+        id, type: "expense", amount: index + 1, currency: "NGN",
+        category: "Test", description: id, date: "2026-10-" + String((index % 28) + 1).padStart(2, "0"),
+        createdAt: index + 1, status: "recorded", bankStatus: "posted",
+        sourceAccountId: null, destinationAccountId: null,
+      };
+    });
+    const list = document.getElementById("activityFullList");
+    window.renderFullViews();
+    const firstPage = list.querySelectorAll(".activity-row").length;
+    list.querySelector("[data-activity-load-more]")?.click();
+    const secondPage = list.querySelectorAll(".activity-row").length;
+    const search = document.getElementById("activitySearch");
+    search.value = "TX-000120";
+    search.dispatchEvent(new Event("input", { bubbles: true }));
+    const filteredPage = list.querySelectorAll(".activity-row").length;
+    const filteredText = list.textContent.includes("TX-000120");
+    state.transactions = original;
+    search.value = "";
+    search.dispatchEvent(new Event("input", { bubbles: true }));
+    return { firstPage, secondPage, filteredPage, filteredText };
+  });
+  check("Activity first page should be capped at 50 rows", activityPagination.firstPage === 50);
+  check("Activity load-more should append the next 50 rows", activityPagination.secondPage === 100);
+  check("Activity filters should reset pagination and return only matches", activityPagination.filteredPage === 1 && activityPagination.filteredText);
+
+
   // Bank projection helpers expose the Mono adapter.
   const bank = await page.evaluate(() => ({
     states: window.OmniPocketBank.STATES.length,
