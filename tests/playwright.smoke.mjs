@@ -56,8 +56,8 @@ try {
       reviewQueue: !!document.querySelector("#activityReviewQueue"),
     };
   });
-  check("activity search is not a native search input", activityUi.type === "search");
-  check("activity search has no descriptive accessible label", activityUi.label === "Search transactions by merchant, reference, category, note, amount, date or account");
+  // Assert discoverability, not exact copy, so product wording can evolve safely.\n  check("activity search is not a native search input", activityUi.type === "search");
+  check(`activity search has no descriptive accessible label (actual: ${JSON.stringify(activityUi.label)})`, typeof activityUi.label === "string" && activityUi.label.toLowerCase().includes("search transactions") && activityUi.label.toLowerCase().includes("account"));
   check("activity ledger container is missing", activityUi.fullList);
   check("activity review queue container is missing", activityUi.reviewQueue);
 
@@ -102,18 +102,47 @@ try {
 
   // IndexedDB-backed persistence round-trips a real mutation.
   const persisted = await page.evaluate(async () => {
-    window.omnipocketState.accounts.push({
+    const state = window.omnipocketState;
+    state.accounts.push({
       id: "e2e-account", name: "E2E", type: "bank", currency: "NGN",
       openingBalance: 500, balance: 500, archived: false,
     });
-    window.omnipocketState.schemaVersion = 8;
+    state.transactions.push({
+      id: "e2e-transaction", type: "income", amount: 125, currency: "NGN",
+      date: "2026-11-09", createdAt: 1, sourceAccountId: "e2e-account",
+      destinationAccountId: null, external: { provider: "mono", providerTransactionId: "e2e-provider-tx" },
+    });
+    state.goals.push({ id: "e2e-goal", name: "E2E goal", target: 1000, currency: "NGN", accountIds: ["e2e-account"], status: "active", createdAt: 1 });
+    state.snapshots.push({ id: "e2e-snapshot", date: "2026-11-09", capturedAt: 1, baseCurrency: "NGN", value: 500, balances: [], rates: {} });
+    state.deletedExternalTransactions.push({ provider: "mono", providerAccountId: "e2e-provider-account", providerTransactionId: "e2e-deleted-tx", localAccountId: "e2e-account", deletedAt: "2026-11-09T00:00:00.000Z" });
+    state.schemaVersion = 8;
     if (typeof flushPersistence === "function") await flushPersistence();
     const store = new window.OmniPocketStorage({ dbName: "omnipocket", storeName: "state", legacyKey: "omnipocket.v1" });
     const raw = await store.load();
-    return { stored: raw?.accounts?.some(a => a.id === "e2e-account") ?? false, version: raw?.schemaVersion ?? null };
+    const db = await store.open();
+    const legacySnapshot = await new Promise((resolve, reject) => {
+      const tx = db.transaction("state", "readonly");
+      const request = tx.objectStore("state").get("current");
+      request.onsuccess = () => resolve(request.result ?? null);
+      request.onerror = () => reject(request.error);
+    });
+    return {
+      stored: raw?.accounts?.some(a => a.id === "e2e-account") ?? false,
+      transactionStored: raw?.transactions?.some(t => t.id === "e2e-transaction" && t.external?.providerTransactionId === "e2e-provider-tx") ?? false,
+      goalStored: raw?.goals?.some(g => g.id === "e2e-goal") ?? false,
+      snapshotStored: raw?.snapshots?.some(s => s.id === "e2e-snapshot") ?? false,
+      deletionTombstoneStored: raw?.deletedExternalTransactions?.some(t => t.providerTransactionId === "e2e-deleted-tx") ?? false,
+      version: raw?.schemaVersion ?? null,
+      legacySnapshotRemoved: legacySnapshot === null,
+    };
   });
   check("IndexedDB did not persist the mutated account", persisted.stored);
+  check("normalized transaction record was not persisted", persisted.transactionStored);
+  check("normalized goal record was not persisted", persisted.goalStored);
+  check("normalized snapshot record was not persisted", persisted.snapshotStored);
+  check("external transaction deletion tombstone was not persisted", persisted.deletionTombstoneStored);
   check("schemaVersion not persisted", persisted.version === 8);
+  check("monolithic IndexedDB snapshot was not removed after normalized commit", persisted.legacySnapshotRemoved);
 
   // The financial engine runs against live DOM state.
   const engine = await page.evaluate(() => {
