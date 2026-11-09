@@ -85,11 +85,22 @@ async function syncAccount(supabase: any, userId: string, monoAccountId: string,
   const account = unwrapAccount(accountPayload);
   const transactions = unwrapTransactions(txPayload);
   const transactionMeta = txPayload?.meta || txPayload?.data?.meta || txPayload?.data?.paging || txPayload?.paging || {};
-  const reportedTransactionTotal = Number(transactionMeta.total);
-  const hasReportedTransactionTotal = Number.isFinite(reportedTransactionTotal) && reportedTransactionTotal >= 0;
-  const hasNextTransactionPage = Boolean(transactionMeta.next);
+  const totalValue = transactionMeta.total ?? transactionMeta.total_count ?? transactionMeta.totalCount ?? transactionMeta.count;
+  const reportedTransactionTotal = totalValue == null || (typeof totalValue === "string" && !totalValue.trim()) ? null : Number(totalValue);
+  const hasReportedTransactionTotal = reportedTransactionTotal != null && Number.isSafeInteger(reportedTransactionTotal) && reportedTransactionTotal >= 0;
+  const invalidReportedTotal = totalValue != null && !hasReportedTransactionTotal;
+  const pageValue = transactionMeta.page ?? transactionMeta.current_page ?? transactionMeta.currentPage;
+  const pagesValue = transactionMeta.total_pages ?? transactionMeta.totalPages ?? transactionMeta.pages;
+  const page = pageValue == null ? null : Number(pageValue);
+  const pages = pagesValue == null ? null : Number(pagesValue);
+  const invalidPageMetadata = (pageValue != null && (!Number.isSafeInteger(page) || page < 1))
+    || (pagesValue != null && (!Number.isSafeInteger(pages) || pages < 1))
+    || (page != null && pages != null && page > pages);
+  const hasNextTransactionPage = Boolean(transactionMeta.next ?? transactionMeta.next_page ?? transactionMeta.nextPage)
+    || transactionMeta.has_next === true || transactionMeta.hasNext === true
+    || (page != null && pages != null && page < pages);
   const dataStatus = String(accountPayload?.data?.meta?.data_status || accountPayload?.data?.meta?.dataStatus || "").toUpperCase();
-  const transactionFeedComplete = !hasNextTransactionPage
+  let transactionFeedComplete = !hasNextTransactionPage && !invalidReportedTotal && !invalidPageMetadata
     && (!hasReportedTransactionTotal || reportedTransactionTotal === transactions?.length)
     && !["PARTIAL", "UNAVAILABLE", "PROCESSING", "FAILED"].includes(dataStatus);
   if (!Array.isArray(transactions)) {
@@ -137,6 +148,7 @@ async function syncAccount(supabase: any, userId: string, monoAccountId: string,
   let duplicateTransactionCount = 0;
   let invalidDirectionCount = 0;
   let invalidAmountCount = 0;
+  let missingProviderIdCount = 0;
   for (const tx of transactions.map((item: any) => normalizeTransaction(item, amountUnit))) {
     if (tx.amount_minor == null) {
       invalidAmountCount++;
@@ -147,6 +159,7 @@ async function syncAccount(supabase: any, userId: string, monoAccountId: string,
       continue;
     }
     if (!tx.mono_transaction_id) {
+      missingProviderIdCount++;
       console.warn("Skipping Mono transaction without a stable provider ID");
       continue;
     }
@@ -154,6 +167,24 @@ async function syncAccount(supabase: any, userId: string, monoAccountId: string,
     normalizedById.set(tx.mono_transaction_id, tx);
   }
   const normalized = [...normalizedById.values()];
+  const feedQualityIssues = [];
+  if (duplicateTransactionCount) feedQualityIssues.push(`${duplicateTransactionCount} duplicate provider transaction record(s) were returned.`);
+  if (invalidDirectionCount) feedQualityIssues.push(`${invalidDirectionCount} transaction(s) had an unsupported direction.`);
+  if (invalidAmountCount) feedQualityIssues.push(`${invalidAmountCount} transaction(s) had an invalid amount.`);
+  if (missingProviderIdCount) feedQualityIssues.push(`${missingProviderIdCount} transaction(s) had no stable provider ID.`);
+  if (invalidReportedTotal || invalidPageMetadata) feedQualityIssues.push("Mono returned invalid pagination metadata.");
+  if (hasNextTransactionPage) feedQualityIssues.push("Mono indicated additional transaction pages.");
+  if (hasReportedTransactionTotal && reportedTransactionTotal !== transactions.length) feedQualityIssues.push(`Mono reported ${reportedTransactionTotal} transactions but returned ${transactions.length}.`);
+  if (["PARTIAL", "UNAVAILABLE", "PROCESSING", "FAILED"].includes(dataStatus)) feedQualityIssues.push(`Mono account data status is ${dataStatus}.`);
+  if (feedQualityIssues.length) {
+    transactionFeedComplete = false;
+    row.sync_status = "warning";
+    row.last_sync_error = feedQualityIssues.join(" ");
+    const { error: qualityUpdateError } = await supabase.from("bank_connections").update({
+      sync_status: "warning", last_sync_error: row.last_sync_error
+    }).eq("id", connection.id).eq("user_id", userId).eq("status", "active");
+    if (qualityUpdateError) throw qualityUpdateError;
+  }
   const transactionIds = normalized.map((tx: any) => tx.mono_transaction_id);
   const { data: existingRows, error: existingRowsError } = transactionIds.length
     ? await supabase.from("bank_transactions").select("mono_transaction_id").eq("connection_id", connection.id).in("mono_transaction_id", transactionIds)
@@ -182,15 +213,15 @@ async function syncAccount(supabase: any, userId: string, monoAccountId: string,
     user_id: userId, connection_id: connection.id, provider: "mono",
     event_type: "account_sync", status: transactionFeedComplete ? "success" : "warning", started_at: startedAt, completed_at: now,
     imported_count: insertedCount,
-    metadata: { transaction_feed_complete: transactionFeedComplete, data_status: row.data_status, amount_unit: amountUnit, fetched_count: transactions.length, inserted_count: insertedCount, updated_count: updatedCount, skipped_count: transactions.length - normalized.length, duplicate_count: duplicateTransactionCount, invalid_direction_count: invalidDirectionCount, invalid_amount_count: invalidAmountCount }
+    metadata: { transaction_feed_complete: transactionFeedComplete, data_status: row.data_status, amount_unit: amountUnit, fetched_count: transactions.length, inserted_count: insertedCount, updated_count: updatedCount, skipped_count: transactions.length - normalized.length, duplicate_count: duplicateTransactionCount, invalid_direction_count: invalidDirectionCount, invalid_amount_count: invalidAmountCount, missing_provider_id_count: missingProviderIdCount, feed_incomplete_reason: feedQualityIssues.join(" ") || null }
   });
   if (eventError) console.warn("Could not record bank sync event:", eventError.message);
 
   return {
     connection, account, transactionsImported: insertedCount, transactionsFetched: transactions.length,
     transactionsInserted: insertedCount, transactionsUpdated: updatedCount, transactionsSkipped: transactions.length - normalized.length,
-    duplicateTransactionCount, invalidTransactionCount: invalidDirectionCount + invalidAmountCount, transactions: normalized, dataStatus: row.data_status, amountUnit,
-    transactionFeedComplete, reportedTransactionTotal: hasReportedTransactionTotal ? reportedTransactionTotal : null
+    duplicateTransactionCount, invalidTransactionCount: invalidDirectionCount + invalidAmountCount + missingProviderIdCount, transactions: normalized, dataStatus: row.data_status, amountUnit,
+    transactionFeedComplete, transactionFeedIncompleteReason: feedQualityIssues.join(" ") || null, reportedTransactionTotal: hasReportedTransactionTotal ? reportedTransactionTotal : null
   };
 }
 
