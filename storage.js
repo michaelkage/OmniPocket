@@ -4,7 +4,7 @@ class OmniPocketStorage {
     this.dbName = dbName;
     this.storeName = storeName;
     this.legacyKey = legacyKey;
-    this.version = 4;
+    this.version = 5;
     this.key = "current";
     this.dbPromise = null;
     this.cache = null;
@@ -59,9 +59,25 @@ class OmniPocketStorage {
           transactions.createIndex("destinationAccountDate", ["destinationAccountId", "date"], { unique: false });
           transactions.createIndex("providerTransactionId", ["external.provider", "external.providerTransactionId"], { unique: false });
         } else if (upgradeTransaction) {
+          // Existing installations must receive every index introduced by the
+          // normalized schema, not just dateId. createIndex is safe here only
+          // after checking indexNames because upgrades run against old stores.
           const transactions = upgradeTransaction.objectStore("transactions");
-          if (!transactions.indexNames?.contains?.("dateId")) {
-            transactions.createIndex("dateId", ["date", "id"], { unique: false });
+          const indexes = [
+            ["date", "date"],
+            ["dateId", ["date", "id"]],
+            ["sourceAccountId", "sourceAccountId"],
+            ["destinationAccountId", "destinationAccountId"],
+            ["sourceAccountDate", ["sourceAccountId", "date"]],
+            ["destinationAccountDate", ["destinationAccountId", "date"]],
+            ["sourceAccountDateId", ["sourceAccountId", "date", "id"]],
+            ["destinationAccountDateId", ["destinationAccountId", "date", "id"]],
+            ["providerTransactionId", ["external.provider", "external.providerTransactionId"]]
+          ];
+          for (const [name, keyPath] of indexes) {
+            if (!transactions.indexNames.contains(name)) {
+              transactions.createIndex(name, keyPath, { unique: false });
+            }
           }
         }
         if (!db.objectStoreNames.contains("goals")) {
