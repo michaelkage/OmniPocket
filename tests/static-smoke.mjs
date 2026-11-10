@@ -129,7 +129,7 @@ assert(receiptRows.includes('dialog.querySelector("[data-receipt-share]")'), "re
 assert(receiptRows.includes('dialog.querySelector("[data-receipt-print]")'), "receipt print control must be wired");
 
 
-assert(storage.includes('this.version = 3;'), "IndexedDB schema must be versioned for normalized financial records");
+assert(storage.includes('this.version = 4;'), "IndexedDB schema must be versioned for normalized financial records and transaction cursors");
 assert(storage.includes('db.createObjectStore("outbox", { keyPath: "id" })'), "IndexedDB must create the durable outbox store");
 assert(storage.includes('db.createObjectStore("accounts", { keyPath: "id" })'), "normalized accounts store must be created");
 assert(storage.includes('db.createObjectStore("transactions", { keyPath: "id" })'), "normalized transactions store must be created");
