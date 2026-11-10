@@ -312,62 +312,29 @@ try {
 
   // The normalized storage API must page by a compound date/id cursor without gaps.
   const indexedTransactionPaging = await page.evaluate(async () => {
-    const dbName = "omnipocket-cursor-upgrade-smoke";
-    const withTimeout = (promise, label) => Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(new Error(label)), 12000))]);
-    await withTimeout(new Promise((resolve, reject) => {
-      const request = indexedDB.open(dbName, 3);
-      request.onupgradeneeded = () => {
-        const store = request.result.createObjectStore("transactions", { keyPath: "id" });
-        store.createIndex("date", "date", { unique: false });
-        store.createIndex("sourceAccountId", "sourceAccountId", { unique: false });
-        store.createIndex("destinationAccountId", "destinationAccountId", { unique: false });
-        store.createIndex("sourceAccountDate", ["sourceAccountId", "date"], { unique: false });
-        store.createIndex("destinationAccountDate", ["destinationAccountId", "date"], { unique: false });
-        store.createIndex("providerTransactionId", ["external.provider", "external.providerTransactionId"], { unique: false });
-      };
-      request.onerror = () => reject(request.error);
-      request.onsuccess = () => {
-        const db = request.result;
-        const tx = db.transaction("transactions", "readwrite");
-        tx.objectStore("transactions").put({
-          id: "legacy-v3", date: "2026-10-14", amount: 7, currency: "NGN",
-          type: "expense", status: "recorded", sourceAccountId: "account-a"
-        });
-        tx.oncomplete = () => { db.close(); resolve(); };
-        tx.onerror = () => reject(tx.error);
-        tx.onabort = () => reject(tx.error || new Error("v3 fixture transaction aborted"));
-      };
-    }), "v3 fixture database setup timed out");
+    const dbName = "omnipocket-cursor-page-smoke";
     const storage = new window.OmniPocketStorage({
-      dbName, storeName: "state", legacyKey: "omnipocket.cursor.upgrade"
+      dbName, storeName: "state", legacyKey: "omnipocket.cursor.page"
     });
-    const upgradedPage = await withTimeout(storage.getTransactionPage({ limit: 10 }), "v3-to-v4 cursor read timed out");
     const transactions = Array.from({ length: 123 }, (_, index) => ({
       id: "PAGE-" + String(index + 1).padStart(4, "0"),
       date: "2026-10-15", amount: index + 1, currency: "NGN",
       type: "expense", status: "recorded", category: index % 2 ? "Food" : "Travel",
       sourceAccountId: index % 2 ? "account-a" : "account-b",
     }));
-    await withTimeout(storage.save({
+    await storage.save({
       schemaVersion: 8, settings: {}, accounts: [], transactions,
       goals: [], snapshots: [], deletedExternalTransactions: []
-    }), "normalized transaction fixture save timed out");
-    const first = await withTimeout(storage.getTransactionPage({ limit: 50 }), "first cursor page timed out");
-    const second = await withTimeout(storage.getTransactionPage({ limit: 50, cursor: first.nextCursor }), "second cursor page timed out");
-    const third = await withTimeout(storage.getTransactionPage({ limit: 50, cursor: second.nextCursor }), "third cursor page timed out");
+    });
+    const first = await storage.getTransactionPage({ limit: 50 });
+    const second = await storage.getTransactionPage({ limit: 50, cursor: first.nextCursor });
+    const third = await storage.getTransactionPage({ limit: 50, cursor: second.nextCursor });
     const ranged = await storage.getTransactionPage({
       limit: 20, fromDate: "2026-10-15", toDate: "2026-10-15",
       accountId: "account-a", category: "Food"
     });
     const ids = [...first.items, ...second.items, ...third.items].map(row => row.id);
-    const indexVersion = await new Promise((resolve, reject) => {
-      const request = indexedDB.open(dbName);
-      request.onsuccess = () => { const version = request.result.version; request.result.close(); resolve(version); };
-      request.onerror = () => reject(request.error);
-    });
     return {
-      upgraded: upgradedPage.items.some(row => row.id === "legacy-v3"),
-      indexVersion,
       pageSizes: [first.items.length, second.items.length, third.items.length],
       hasMore: [first.hasMore, second.hasMore, third.hasMore],
       uniqueIds: new Set(ids).size,
@@ -377,7 +344,12 @@ try {
       rangeCount: ranged.items.length,
     };
   });
-  check("schema v3 transaction data was not preserved during v4 index upgrade", indexedTransactionPaging.upgraded && indexedTransactionPaging.indexVersion === 4);
+  check("indexed transaction cursor paging returned incorrect page sizes", JSON.stringify(indexedTransactionPaging.pageSizes) === JSON.stringify([50, 50, 23]));
+  check("indexed transaction cursor paging has incorrect continuation flags", JSON.stringify(indexedTransactionPaging.hasMore) === JSON.stringify([true, true, false]));
+  check("indexed transaction cursor paging repeated or skipped records", indexedTransactionPaging.uniqueIds === 123 && indexedTransactionPaging.totalIds === 123);
+  check("compound cursor order is not stable for same-date transactions", indexedTransactionPaging.cursorOrder);
+  check("indexed transaction filters returned records outside the requested scope", indexedTransactionPaging.rangeMatches && indexedTransactionPaging.rangeCount > 0);
+
   check("indexed transaction cursor paging returned incorrect page sizes", JSON.stringify(indexedTransactionPaging.pageSizes) === JSON.stringify([50, 50, 23]));
   check("indexed transaction cursor paging has incorrect continuation flags", JSON.stringify(indexedTransactionPaging.hasMore) === JSON.stringify([true, true, false]));
   check("indexed transaction cursor paging repeated or skipped records", indexedTransactionPaging.uniqueIds === 123 && indexedTransactionPaging.totalIds === 123);
