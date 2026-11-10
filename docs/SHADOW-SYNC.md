@@ -104,7 +104,7 @@ Recommended payment-intent lifecycle:
 - [x] Keep the outbox in the same database and preserve queued work across reloads.
 - [x] Add runtime migration fixtures covering populated V2 databases and existing v4 transaction-store index upgrades; empty/interrupted-upgrade fault injection remains follow-up work.
 - [x] Add cursor-backed transaction query APIs and migrate Activity filtering/load-more to IndexedDB pages; review and other full-history workflows still use the hydrated domain collection.
-- [x] Route single-account transaction history through outgoing/incoming compound account/date/id indexes, merge both streams in descending order, and de-duplicate self-transfers; multi-account queries retain the date-index fallback.
+- [x] Route single- and multi-account transaction history through outgoing/incoming compound account/date/id indexes, merge the descending streams, de-duplicate transfers shared by selected accounts, and preserve the date/id continuation cursor.
 - [x] Progressively render Activity results in 50-row batches from IndexedDB so the DOM does not grow with the full ledger.
 - [ ] Move large receipt/OCR text and image blobs into a dedicated attachments store.
 - [x] Add optimistic state-version checks to every normalized write; a stale tab aborts instead of overwriting newer ledger records.
