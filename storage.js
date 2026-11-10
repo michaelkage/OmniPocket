@@ -487,7 +487,10 @@ class OmniPocketStorage {
             }
           }
           for (const key of previous.keys()) {
-            if (!next.has(key)) store.delete(key);
+            // Older in-memory snapshots may contain an unkeyed legacy row.
+            // IndexedDB.delete(undefined) throws DataError; it is not a valid
+            // primary key and cannot correspond to a persisted normalized row.
+            if (key != null && key !== "" && !next.has(key)) store.delete(key);
           }
         }
         if (this.cache.meta.settings !== nextCache.meta.settings) {
