@@ -255,6 +255,74 @@ class OmniPocketStorage {
     });
   }
 
+  // Build account balances from IndexedDB without materializing the transaction
+  // collection. This is the first projection primitive for safe lazy hydration.
+  async getAccountBalanceSummary(accounts = [], settings = {}) {
+    const db = await this.open();
+    const baseCurrency = settings.baseCurrency || "NGN";
+    const rates = settings.fx?.rates || {};
+    const rows = new Map((accounts || []).map(account => [account.id, {
+      id: account.id,
+      openingBalance: Number(account.openingBalance) || 0,
+      balance: Number(account.openingBalance) || 0,
+      currency: account.currency || baseCurrency
+    }]));
+    const convert = (amount, from, to, overrideRate = null) => {
+      const value = Number(amount) || 0;
+      if (from === to) return value;
+      const positive = candidate => Number.isFinite(Number(candidate)) && Number(candidate) > 0 ? Number(candidate) : null;
+      const directOverride = positive(overrideRate);
+      if (directOverride) return value * directOverride;
+      const direct = positive(rates?.[from]?.[to]);
+      if (direct) return value * direct;
+      const inverse = positive(rates?.[to]?.[from]);
+      if (inverse) return value / inverse;
+      const sourceToBase = positive(rates?.[from]?.[baseCurrency]);
+      const baseToTarget = positive(rates?.[baseCurrency]?.[to]);
+      if (sourceToBase && baseToTarget) return value * sourceToBase * baseToTarget;
+      return value;
+    };
+    const effective = tx => String(tx?.status || "").toLowerCase() !== "needs_review" &&
+      String(tx?.status || "").toLowerCase() !== "superseded" &&
+      !["pending", "failed", "reversed"].includes(String(tx?.bankStatus || "").toLowerCase());
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction("transactions", "readonly");
+      const request = tx.objectStore("transactions").openCursor();
+      let count = 0;
+      request.onsuccess = () => {
+        const cursor = request.result;
+        if (!cursor) return;
+        const item = cursor.value || {};
+        if (effective(item)) {
+          const amount = Math.abs(Number(item.amount) || 0);
+          const source = rows.get(item.sourceAccountId);
+          const destination = rows.get(item.destinationAccountId);
+          if (item.type === "income" && source) source.balance += amount;
+          else if (item.type === "expense" && source) source.balance -= amount;
+          else if (item.type === "adjustment" && source) {
+            const delta = item.adjustmentSign === -1 || (item.adjustmentSign == null && String(item.category || "").toLowerCase().includes("decrease"))
+              ? -amount : amount;
+            source.balance += delta;
+          } else if (item.type === "transfer" || item.type === "withdrawal") {
+            if (source) source.balance -= amount;
+            if (destination) destination.balance += item.receivedAmount != null
+              ? Math.abs(Number(item.receivedAmount) || 0)
+              : convert(amount, item.currency || source?.currency || baseCurrency, destination.currency, item.fxRate);
+          }
+          count++;
+        }
+        cursor.continue();
+      };
+      request.onerror = () => reject(request.error || new Error("Could not aggregate account balances."));
+      tx.oncomplete = () => resolve({
+        accounts: [...rows.values()],
+        effectiveTransactionCount: count
+      });
+      tx.onerror = () => reject(tx.error || new Error("Account balance aggregation failed."));
+      tx.onabort = () => reject(tx.error || new Error("Account balance aggregation was aborted."));
+    });
+  }
+
   // Read a bounded page directly from the date/id index. The opaque cursor
   // carries the final compound key from the prior page, so equal-date rows
   // cannot be skipped or repeated between requests.
