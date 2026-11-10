@@ -417,18 +417,20 @@ class OmniPocketStorage {
         reviewMatch && supersededMatch && searchMatch;
     };
 
-    // A single-account view is a union of outgoing and incoming entries. Read
-    // each side through its compound account/date/id index, then merge the two
-    // already-descending streams. Each side needs at most limit+1 matches to
-    // determine the global page and hasMore flag.
-    const singleAccount = options.accountId && !(Array.isArray(options.accountIds) && options.accountIds.length);
-    if (singleAccount) {
-      const lower = [options.accountId, fromDate || "", ""];
-      const upper = cursor
-        ? [options.accountId, String(cursor.date), String(cursor.id)]
-        : [options.accountId, toDate || "\uffff", "\uffff"];
-      const range = IDBKeyRange.bound(lower, upper, false, Boolean(cursor));
-      const readSide = indexName => new Promise((resolve, reject) => {
+    // Account-scoped views query the outgoing and incoming compound indexes.
+    // For multiple selected accounts, query each account's two streams and
+    // merge them; a transfer between selected accounts is de-duplicated.
+    const scopedAccountIds = [...new Set([
+      ...(options.accountId ? [options.accountId] : []),
+      ...(Array.isArray(options.accountIds) ? options.accountIds.filter(Boolean) : [])
+    ])];
+    if (scopedAccountIds.length) {
+      const readSide = (accountId, indexName) => new Promise((resolve, reject) => {
+        const lower = [accountId, fromDate || "", ""];
+        const upper = cursor
+          ? [accountId, String(cursor.date), String(cursor.id)]
+          : [accountId, toDate || "\\uffff", "\\uffff"];
+        const range = IDBKeyRange.bound(lower, upper, false, Boolean(cursor));
         const tx = db.transaction("transactions", "readonly");
         const index = tx.objectStore("transactions").index(indexName);
         const request = index.openCursor(range, "prev");
@@ -444,12 +446,14 @@ class OmniPocketStorage {
         tx.onerror = () => reject(tx.error || new Error("Account transaction index read failed."));
         tx.onabort = () => reject(tx.error || new Error("Account transaction index read was aborted."));
       });
-      const [outgoing, incoming] = await Promise.all([
-        readSide("sourceAccountDateId"),
-        readSide("destinationAccountDateId")
-      ]);
+      const streams = await Promise.all(scopedAccountIds.flatMap(accountId => [
+        readSide(accountId, "sourceAccountDateId"),
+        readSide(accountId, "destinationAccountDateId")
+      ]));
       const merged = new Map();
-      for (const item of [...outgoing, ...incoming]) merged.set(item.id, item);
+      for (const stream of streams) {
+        for (const item of stream) merged.set(item.id, item);
+      }
       const compareKey = (left, right) => left === right ? 0 : (left > right ? 1 : -1);
       const ordered = [...merged.values()].sort((a, b) =>
         compareKey(String(b.date), String(a.date)) || compareKey(String(b.id), String(a.id)));
