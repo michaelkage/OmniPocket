@@ -144,6 +144,8 @@ assert(storage.includes("async _readNormalized(db)"), "storage must reconstruct 
 assert(storage.includes("this.version = 4;"), "normalized storage must upgrade to schema v4 for the date/id cursor index");
 assert(storage.includes('createIndex("dateId", ["date", "id"]'), "transaction store must have a stable compound date/id cursor index");
 assert(storage.includes("async getTransactionPage(options = {})"), "storage must expose bounded indexed transaction page reads");
+assert(storage.includes("async getAccountBalanceSummary(accounts = [], settings = {})"), "storage must expose an indexed account-balance projection for lazy hydration");
+assert(storage.includes('tx.objectStore("transactions").openCursor()'), "account-balance projection must stream transactions from IndexedDB rather than materialize them");
 assert(storage.includes('index.openCursor(range, "prev")'), "transaction pages must use a reverse IndexedDB cursor");
 assert(app.includes("const ACTIVITY_PAGE_SIZE = 50;"), "Activity history must render in bounded batches");
 assert(app.includes("data-activity-load-more"), "Activity history must expose a working load-more control");
