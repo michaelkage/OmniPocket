@@ -322,7 +322,7 @@
     const windowDays = Math.max(1, Math.min(365, Number(lookbackDays) || 90));
     start.setDate(start.getDate() - windowDays + 1);
     const startKey = dateKey(start);
-    const essentialPattern = /\b(rent|housing|mortgage|grocer|food|supermarket|market|utility|electric|power|water|internet|data|transport|fuel|petrol|diesel|health|medical|pharmacy|medicine|education|school|childcare)\b/i;
+    const essentialPattern = /\b(rent|housing|mortgage|grocer(?:y|ies)|food|supermarket|market|utility|electric|power|water|internet|data|transport|fuel|petrol|diesel|health|medical|pharmacy|medicine|education|school|childcare)\b/i;
     const totals = { essential: 0, discretionary: 0, unclassified: 0 };
     let sampleTransactions = 0;
     const activeDates = new Set();
