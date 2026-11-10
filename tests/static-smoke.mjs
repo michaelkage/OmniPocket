@@ -148,6 +148,7 @@ assert(storage.includes('index.openCursor(range, "prev")'), "transaction pages m
 assert(app.includes("const ACTIVITY_PAGE_SIZE = 50;"), "Activity history must render in bounded batches");
 assert(app.includes("data-activity-load-more"), "Activity history must expose a working load-more control");
 assert(app.includes("activityFilterSignature"), "changing Activity filters must reset pagination");
+assert(app.includes("loadActivityCursorPage") && app.includes("storage.getTransactionPage(options)"), "Activity UI must fetch bounded pages from the IndexedDB cursor");
 assert(fs.readFileSync("styles.css", "utf8").includes(".activity-pagination"), "Activity pagination controls must be styled");
 assert(sw.includes("omnipocket-shell-v23"), "shell cache must be bumped for the Activity pagination UI");
 assert(storage.includes("async _readSnapshot(db)"), "storage must retain the V2 snapshot migration path");
