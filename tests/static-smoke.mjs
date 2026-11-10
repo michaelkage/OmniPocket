@@ -143,6 +143,9 @@ assert(storage.includes('meta.put({ key: "schemaVersion", value: appSchemaVersio
 assert(storage.includes("async _readNormalized(db)"), "storage must reconstruct the domain state from normalized records");
 assert(storage.includes("this.version = 4;"), "normalized storage must upgrade to schema v4 for the date/id cursor index");
 assert(storage.includes('createIndex("dateId", ["date", "id"]'), "transaction store must have a stable compound date/id cursor index");
+assert(storage.includes('this.version = 5;'), "transaction index additions must trigger an IndexedDB schema upgrade");
+assert(storage.includes('["sourceAccountDateId", ["sourceAccountId", "date", "id"]]'), "existing transaction stores must gain stable source account/date/id indexes");
+assert(storage.includes('["destinationAccountDateId", ["destinationAccountId", "date", "id"]]'), "existing transaction stores must gain stable destination account/date/id indexes");
 assert(storage.includes("async getTransactionPage(options = {})"), "storage must expose bounded indexed transaction page reads");
 assert(storage.includes("async getAccountBalanceSummary(accounts = [], settings = {})"), "storage must expose an indexed account-balance projection for lazy hydration");
 assert(storage.includes('tx.objectStore("transactions").openCursor()'), "account-balance projection must stream transactions from IndexedDB rather than materialize them");
