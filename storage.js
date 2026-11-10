@@ -429,7 +429,7 @@ class OmniPocketStorage {
         const lower = [accountId, fromDate || "", ""];
         const upper = cursor
           ? [accountId, String(cursor.date), String(cursor.id)]
-          : [accountId, toDate || "\\uffff", "\\uffff"];
+          : [accountId, toDate || "\uffff", "\uffff"];
         const range = IDBKeyRange.bound(lower, upper, false, Boolean(cursor));
         const tx = db.transaction("transactions", "readonly");
         const index = tx.objectStore("transactions").index(indexName);
