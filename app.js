@@ -1841,7 +1841,7 @@ async function loadActivityCursorPage({ reset = false } = {}) {
     type: $("activityTypeFilter")?.value || "all", status: $("activityStatusFilter")?.value || "all",
     category: $("activityCategoryFilter")?.value || "all", reviewOnly, includeSuperseded: reviewOnly,
     searchTokens: reviewOnly ? [] : rawSearch.split(/\\s+/).filter(Boolean),
-    searchExtras: state.accounts.flatMap(a => [a.name, a.institution].filter(Boolean)),
+    accountSearchFields: state.accounts.map(a => ({ id: a.id, name: a.name, institution: a.institution })),
     accountIds: allowedIds, transactionId: context.scope === "transaction" ? context.transactionId : null
   };
   activityCursorLoading = true;
