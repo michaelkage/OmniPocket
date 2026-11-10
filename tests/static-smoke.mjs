@@ -146,8 +146,9 @@ assert(storage.includes('this.version = 5;'), "transaction index additions must 
 assert(storage.includes('["sourceAccountDateId", ["sourceAccountId", "date", "id"]]'), "existing transaction stores must gain stable source account/date/id indexes");
 assert(storage.includes('["destinationAccountDateId", ["destinationAccountId", "date", "id"]]'), "existing transaction stores must gain stable destination account/date/id indexes");
 assert(storage.includes('index.openCursor(range, "prev")'), "account history must use reverse compound-index cursors");
-assert(storage.includes('readSide("sourceAccountDateId")') && storage.includes('readSide("destinationAccountDateId")'), "single-account history must query both outgoing and incoming account indexes");
+assert(storage.includes('readSide(accountId, "sourceAccountDateId")') && storage.includes('readSide(accountId, "destinationAccountDateId")'), "account history must query both outgoing and incoming account indexes for each selected account");
 assert(storage.includes('merged.set(item.id, item)'), "account history must de-duplicate self-transfers across its two index streams");
+assert(storage.includes("scopedAccountIds.flatMap(accountId"), "multi-account history must fan out over selected account indexes instead of scanning the whole ledger");
 
 assert(storage.includes("async getTransactionPage(options = {})"), "storage must expose bounded indexed transaction page reads");
 assert(storage.includes("async getAccountBalanceSummary(accounts = [], settings = {})"), "storage must expose an indexed account-balance projection for lazy hydration");
