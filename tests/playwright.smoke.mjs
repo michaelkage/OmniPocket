@@ -278,8 +278,8 @@ try {
   check("netWorth is not a number", Number.isFinite(engine.netWorth));
   check("availableWealth disagrees with netWorth", Math.abs(engine.bankTotal - engine.netWorth) < 0.01);
 
-  // Activity history renders a bounded first page, expands on demand, and resets after filtering.
-  const activityPagination = await page.evaluate(() => {
+  // Activity now reads each bounded page from the normalized IndexedDB cursor.
+  const activityPagination = await page.evaluate(async () => {
     const state = window.omnipocketState;
     const original = state.transactions;
     state.transactions = Array.from({ length: 123 }, (_, index) => {
@@ -291,24 +291,37 @@ try {
         sourceAccountId: null, destinationAccountId: null,
       };
     });
+    const storage = window.OmniPocketStorageInstance;
+    await storage.save(state);
     const list = document.getElementById("activityFullList");
     window.renderFullViews();
+    const waitFor = async predicate => {
+      for (let attempt = 0; attempt < 100; attempt++) {
+        if (predicate()) return true;
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
+      return false;
+    };
+    await waitFor(() => list.querySelectorAll(".activity-row").length === 50);
     const firstPage = list.querySelectorAll(".activity-row").length;
     list.querySelector("[data-activity-load-more]")?.click();
+    await waitFor(() => list.querySelectorAll(".activity-row").length === 100);
     const secondPage = list.querySelectorAll(".activity-row").length;
     const search = document.getElementById("activitySearch");
     search.value = "TX-000120";
     search.dispatchEvent(new Event("input", { bubbles: true }));
+    await waitFor(() => list.querySelectorAll(".activity-row").length === 1);
     const filteredPage = list.querySelectorAll(".activity-row").length;
     const filteredText = list.querySelector(".activity-row")?.dataset.transactionId === "TX-000120";
     state.transactions = original;
+    await storage.save(state);
     search.value = "";
     search.dispatchEvent(new Event("input", { bubbles: true }));
     return { firstPage, secondPage, filteredPage, filteredText };
   });
-  check("Activity first page should be capped at 50 rows", activityPagination.firstPage === 50);
-  check("Activity load-more should append the next 50 rows", activityPagination.secondPage === 100);
-  check("Activity filters should reset pagination and return only matches", activityPagination.filteredPage === 1 && activityPagination.filteredText);
+  check("Activity first page should be fetched as 50 indexed rows", activityPagination.firstPage === 50);
+  check("Activity load-more should append the next indexed 50 rows", activityPagination.secondPage === 100);
+  check("Activity indexed search should reset the cursor and return only matches", activityPagination.filteredPage === 1 && activityPagination.filteredText);
 
   // The normalized storage API must page by a compound date/id cursor without gaps.
   const indexedTransactionPaging = await page.evaluate(async () => {
