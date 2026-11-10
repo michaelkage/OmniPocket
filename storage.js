@@ -285,9 +285,12 @@ class OmniPocketStorage {
         const recordCursor = request.result;
         if (!recordCursor) return;
         const record = recordCursor.value;
-        const accountMatch = !options.accountId ||
+        const accountIds = Array.isArray(options.accountIds) ? options.accountIds.filter(Boolean) : [];
+        const accountMatch = (!options.accountId && !accountIds.length) ||
           record.sourceAccountId === options.accountId ||
-          record.destinationAccountId === options.accountId;
+          record.destinationAccountId === options.accountId ||
+          accountIds.includes(record.sourceAccountId) ||
+          accountIds.includes(record.destinationAccountId);
         const transactionMatch = !options.transactionId || record.id === options.transactionId;
         const typeMatch = !options.type || options.type === "all" || record.type === options.type;
         const categoryMatch = !options.category || options.category === "all" || record.category === options.category;
