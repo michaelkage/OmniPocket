@@ -313,6 +313,7 @@ try {
   // The normalized storage API must page by a compound date/id cursor without gaps.
   const indexedTransactionPaging = await page.evaluate(async () => {
     const dbName = "omnipocket-cursor-upgrade-smoke";
+    const withTimeout = (promise, label) => Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(new Error(label)), 12000))]);
     await new Promise((resolve, reject) => {
       const request = indexedDB.open(dbName, 3);
       request.onupgradeneeded = () => {
@@ -339,20 +340,20 @@ try {
     const storage = new window.OmniPocketStorage({
       dbName, storeName: "state", legacyKey: "omnipocket.cursor.upgrade"
     });
-    const upgradedPage = await storage.getTransactionPage({ limit: 10 });
+    const upgradedPage = await withTimeout(storage.getTransactionPage({ limit: 10 }), "v3-to-v4 cursor read timed out");
     const transactions = Array.from({ length: 123 }, (_, index) => ({
       id: "PAGE-" + String(index + 1).padStart(4, "0"),
       date: "2026-10-15", amount: index + 1, currency: "NGN",
       type: "expense", status: "recorded", category: index % 2 ? "Food" : "Travel",
       sourceAccountId: index % 2 ? "account-a" : "account-b",
     }));
-    await storage.save({
+    await withTimeout(storage.save({
       schemaVersion: 8, settings: {}, accounts: [], transactions,
       goals: [], snapshots: [], deletedExternalTransactions: []
-    });
-    const first = await storage.getTransactionPage({ limit: 50 });
-    const second = await storage.getTransactionPage({ limit: 50, cursor: first.nextCursor });
-    const third = await storage.getTransactionPage({ limit: 50, cursor: second.nextCursor });
+    }), "normalized transaction fixture save timed out");
+    const first = await withTimeout(storage.getTransactionPage({ limit: 50 }), "first cursor page timed out");
+    const second = await withTimeout(storage.getTransactionPage({ limit: 50, cursor: first.nextCursor }), "second cursor page timed out");
+    const third = await withTimeout(storage.getTransactionPage({ limit: 50, cursor: second.nextCursor }), "third cursor page timed out");
     const ranged = await storage.getTransactionPage({
       limit: 20, fromDate: "2026-10-15", toDate: "2026-10-15",
       accountId: "account-a", category: "Food"
