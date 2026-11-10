@@ -280,6 +280,9 @@ class OmniPocketStorage {
       const sourceToBase = positive(rates?.[from]?.[baseCurrency]);
       const baseToTarget = positive(rates?.[baseCurrency]?.[to]);
       if (sourceToBase && baseToTarget) return value * sourceToBase * baseToTarget;
+      const baseToSource = positive(rates?.[baseCurrency]?.[from]);
+      const targetToBase = positive(rates?.[to]?.[baseCurrency]);
+      if (baseToSource && targetToBase) return value / (baseToSource * targetToBase);
       return value;
     };
     const effective = tx => String(tx?.status || "").toLowerCase() !== "needs_review" &&
