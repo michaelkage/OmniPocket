@@ -141,6 +141,10 @@ assert(storage.includes('createIndex("providerTransactionId", ["external.provide
 assert(storage.includes('requests.schemaVersion = tx.objectStore(this.metaStoreName).get("schemaVersion");'), "normalized storage must preserve the application schema version");
 assert(storage.includes('meta.put({ key: "schemaVersion", value: appSchemaVersion });'), "normalized writes must persist the application schema version");
 assert(storage.includes("async _readNormalized(db)"), "storage must reconstruct the domain state from normalized records");
+assert(storage.includes("this.version = 4;"), "normalized storage must upgrade to schema v4 for the date/id cursor index");
+assert(storage.includes('createIndex("dateId", ["date", "id"]'), "transaction store must have a stable compound date/id cursor index");
+assert(storage.includes("async getTransactionPage(options = {})"), "storage must expose bounded indexed transaction page reads");
+assert(storage.includes('index.openCursor(range, "prev")'), "transaction pages must use a reverse IndexedDB cursor");
 assert(app.includes("const ACTIVITY_PAGE_SIZE = 50;"), "Activity history must render in bounded batches");
 assert(app.includes("data-activity-load-more"), "Activity history must expose a working load-more control");
 assert(app.includes("activityFilterSignature"), "changing Activity filters must reset pagination");
