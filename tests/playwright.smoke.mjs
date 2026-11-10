@@ -314,7 +314,7 @@ try {
   const indexedTransactionPaging = await page.evaluate(async () => {
     const dbName = "omnipocket-cursor-upgrade-smoke";
     const withTimeout = (promise, label) => Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(new Error(label)), 12000))]);
-    await new Promise((resolve, reject) => {
+    await withTimeout(new Promise((resolve, reject) => {
       const request = indexedDB.open(dbName, 3);
       request.onupgradeneeded = () => {
         const store = request.result.createObjectStore("transactions", { keyPath: "id" });
@@ -335,8 +335,9 @@ try {
         });
         tx.oncomplete = () => { db.close(); resolve(); };
         tx.onerror = () => reject(tx.error);
+        tx.onabort = () => reject(tx.error || new Error("v3 fixture transaction aborted"));
       };
-    });
+    }), "v3 fixture database setup timed out");
     const storage = new window.OmniPocketStorage({
       dbName, storeName: "state", legacyKey: "omnipocket.cursor.upgrade"
     });
