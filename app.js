@@ -1142,7 +1142,7 @@ function renderIntelligence() {
     const hidden = state.settings.privacyHidden;
     const display = value => hidden ? "••••" : money(value, forecast.currency);
     forecastEl.innerHTML =
-      '<div class="forecast-primary"><span class="muted">Estimated balance · ' + escapeHtml(new Date(forecast.monthEndDate + "T12:00:00").toLocaleDateString(undefined, { day: "numeric", month: "long" })) + "</span>"<strong>' + escapeHtml(display(forecast.projectedBalance)) + '</strong><small>' + escapeHtml((forecast.projectedNet >= 0 ? "+" : "−") + display(Math.abs(forecast.projectedNet)) + " projected net change") + '</small></div>' +
+      '<div class="forecast-primary"><span class="muted">Estimated balance · ' + escapeHtml(new Date(forecast.monthEndDate + "T12:00:00").toLocaleDateString(undefined, { day: "numeric", month: "long" })) + '</span><strong>' + escapeHtml(display(forecast.projectedBalance)) + '</strong><small>' + escapeHtml((forecast.projectedNet >= 0 ? "+" : "−") + display(Math.abs(forecast.projectedNet)) + " projected net change") + '</small></div>' +
       '<div class="forecast-breakdown"><div><span>Current balance</span><strong>' + escapeHtml(display(forecast.currentBalance)) + '</strong></div><div><span>Income left to month-end</span><strong>' + escapeHtml(display(forecast.projectedIncome)) + '</strong></div><div><span>Spending left to month-end</span><strong>' + escapeHtml(display(forecast.projectedExpenses)) + '</strong></div></div>' +
       '<div class="forecast-confidence"><span>Confidence: ' + escapeHtml(forecast.confidence) + '</span><small>' + escapeHtml(forecast.sampleTransactions + " transactions across " + forecast.activeDays + " active days · " + forecast.daysElapsed + " days observed") + '</small></div>';
   }
