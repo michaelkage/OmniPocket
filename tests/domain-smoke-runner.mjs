@@ -47,7 +47,7 @@ const fxGoalState = {
 const bothAccountsGoal = { currency: "USD", accountIds: ["ngn", "usd"] };
 const sourceOnlyGoal = { currency: "USD", accountIds: ["ngn"] };
 const destinationOnlyGoal = { currency: "USD", accountIds: ["usd"] };
-assert.equal(E.goalContributionHistory(fxGoalState, bothAccountsGoal)[0].value, -0.1);
+assert.ok(Math.abs(E.goalContributionHistory(fxGoalState, bothAccountsGoal)[0].value - (-0.1)) < 1e-9, "combined cross-currency goal contribution should be -0.1 within floating-point precision");
 assert.equal(E.goalContributionHistory(fxGoalState, sourceOnlyGoal)[0].value, -1);
 assert.equal(E.goalContributionHistory(fxGoalState, destinationOnlyGoal)[0].value, 0.9);
 
