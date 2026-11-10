@@ -201,6 +201,40 @@ try {
   check(`IndexedDB balance projection diverged from domain engine: ${JSON.stringify(balanceProjection)}`, balanceProjection.matches);
   check("balance projection did not exclude padded pending/review statuses", balanceProjection.effectiveTransactionCount === 9);
 
+  // Existing v4 databases must receive all missing transaction indexes on upgrade.
+  const indexUpgrade = await page.evaluate(async () => {
+    const dbName = "omnipocket-index-upgrade-fixture";
+    const legacy = await new Promise((resolve, reject) => {
+      const request = indexedDB.open(dbName, 4);
+      request.onupgradeneeded = () => {
+        const db = request.result;
+        const transactions = db.createObjectStore("transactions", { keyPath: "id" });
+        transactions.createIndex("date", "date", { unique: false });
+        transactions.createIndex("dateId", ["date", "id"], { unique: false });
+      };
+      request.onsuccess = () => { request.result.close(); resolve(true); };
+      request.onerror = () => reject(request.error);
+    });
+    const storage = new window.OmniPocketStorage({
+      dbName,
+      storeName: "state",
+      legacyKey: "omnipocket.index-upgrade-fixture"
+    });
+    const db = await storage.open();
+    const names = [...db.transaction("transactions").objectStore("transactions").indexNames];
+    db.close();
+    return {
+      legacy,
+      hasSourceDateId: names.includes("sourceAccountDateId"),
+      hasDestinationDateId: names.includes("destinationAccountDateId"),
+      hasProviderIdentity: names.includes("providerTransactionId"),
+      hasAccountIndexes: names.includes("sourceAccountDate") && names.includes("destinationAccountDate")
+    };
+  });
+  check(`existing IndexedDB indexes were not upgraded: ${JSON.stringify(indexUpgrade)}`,
+    indexUpgrade.hasSourceDateId && indexUpgrade.hasDestinationDateId &&
+    indexUpgrade.hasProviderIdentity && indexUpgrade.hasAccountIndexes);
+
   // V2 monolithic snapshot migration: preserve the source until normalized commit.
   const v2Migration = await page.evaluate(async () => {
     const dbName = "omnipocket-v2-migration-fixture";
