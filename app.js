@@ -46,6 +46,11 @@ let quickType = "expense";
 const ACTIVITY_PAGE_SIZE = 50;
 let activityPageSize = ACTIVITY_PAGE_SIZE;
 let activityFilterSignature = "";
+let activityCursor = null;
+let activityCursorRows = [];
+let activityCursorHasMore = false;
+let activityCursorLoading = false;
+let activityRequestSequence = 0;
 
 function showStorageConflict(message) {
   persistenceConflict = true;
@@ -1814,6 +1819,54 @@ function renderReviewQueue() {
   });
 }
 
+async function loadActivityCursorPage({ reset = false } = {}) {
+  const el = $("activityFullList");
+  if (!el || activityCursorLoading) return;
+  if (reset) {
+    activityRequestSequence += 1;
+    activityCursor = null;
+    activityCursorRows = [];
+    activityCursorHasMore = false;
+    el.innerHTML = '<div class="empty-state">Loading activity…</div>';
+  } else if (!activityCursorHasMore || !activityCursor) return;
+  const requestSequence = activityRequestSequence;
+  const rawSearch = ($("activitySearch")?.value || "").trim().toLowerCase();
+  const reviewOnly = rawSearch === "__review__";
+  const context = getAppContext();
+  const allowedIds = context.scope === "global" ? [] : contextAccountIds(context);
+  const options = {
+    limit: ACTIVITY_PAGE_SIZE, cursor: activityCursor,
+    fromDate: $("activityFromDate")?.value || "", toDate: $("activityToDate")?.value || "",
+    type: $("activityTypeFilter")?.value || "all", status: $("activityStatusFilter")?.value || "all",
+    category: $("activityCategoryFilter")?.value || "all", reviewOnly, includeSuperseded: reviewOnly,
+    searchTokens: reviewOnly ? [] : rawSearch.split(/\\s+/).filter(Boolean),
+    searchExtras: state.accounts.flatMap(a => [a.name, a.institution].filter(Boolean)),
+    accountIds: allowedIds, transactionId: context.scope === "transaction" ? context.transactionId : null
+  };
+  activityCursorLoading = true;
+  try {
+    const page = await storage.getTransactionPage(options);
+    if (requestSequence !== activityRequestSequence) return;
+    activityCursorRows = reset ? page.items : activityCursorRows.concat(page.items);
+    activityCursor = page.nextCursor;
+    activityCursorHasMore = page.hasMore;
+    const rowsHtml = activityCursorRows.map(t => {
+      const source = account(t.sourceAccountId), dest = account(t.destinationAccountId);
+      const direction = transactionDirection(t);
+      const sign = direction === "out" ? "−" : direction === "in" ? "+" : "";
+      const detail = t.type === "transfer" ? (source?.name || "Unknown") + " → " + (dest?.name || "Unknown") : source?.name || "Unknown";
+      const bankStatus = String(t.bankStatus || "").trim().toLowerCase();
+      const transactionStatus = String(t.status || "").trim().toLowerCase();
+      const lifecycleLabel = t.potentialDuplicateStatus === "needs_review" ? "Possible duplicate · review" : bankStatus === "pending" ? "Pending at bank · excluded" : bankStatus === "failed" ? "Failed · excluded" : bankStatus === "reversed" ? "Reversed · excluded" : transactionStatus === "needs_review" ? "Needs confirmation" : transactionStatus === "superseded" ? "Paired leg · excluded" : (t.external?.provider && t.suggestedCategory && Number.isFinite(Number(t.categoryConfidence)) && Number(t.categoryConfidence) < 0.8) ? "Check suggested category" : "Recorded";
+      return '<div class="activity-row interactive-row" data-transaction-id="' + escapeHtml(t.id) + '" tabindex="0" role="button"><div><strong>' + escapeHtml(transactionLabel(t)) + '</strong><div class="muted">' + escapeHtml(t.date) + ' · ' + escapeHtml(detail) + (t.note ? " · " + escapeHtml(t.note) : "") + '</div></div><div class="activity-value"><strong data-financial-value>' + sign + escapeHtml(state.settings.privacyHidden ? "••••••" : money(t.amount,t.currency)) + '</strong><span class="muted">' + escapeHtml(lifecycleLabel) + (t.external?.provider ? " · " + escapeHtml(t.external.provider) : "") + '</span></div></div>';
+    }).join("");
+    const pagination = activityCursorHasMore ? '<div class="activity-pagination"><span class="muted">Showing ' + activityCursorRows.length.toLocaleString() + ' loaded transactions</span><button type="button" class="secondary" data-activity-load-more>Load ' + ACTIVITY_PAGE_SIZE + ' more</button></div>' : activityCursorRows.length ? '<div class="activity-pagination"><span class="muted">Showing all ' + activityCursorRows.length.toLocaleString() + ' matching transactions</span></div>' : "";
+    el.innerHTML = rowsHtml || '<div class="empty-state">No matching activity.</div>';
+    if (pagination) el.insertAdjacentHTML("beforeend", pagination);
+  } catch (error) {
+    if (requestSequence === activityRequestSequence) { console.warn("Indexed Activity query failed.", error); el.innerHTML = '<div class="empty-state">Activity could not be loaded. Change a filter to retry.</div>'; }
+  } finally { activityCursorLoading = false; }
+}
 function renderFullViews() {
   renderReviewQueue();
   const accountsEl = $("accountsFullList");
@@ -1846,59 +1899,11 @@ function renderFullViews() {
     categorySelect.value = categories.includes(selectedCategory) ? selectedCategory : "all";
   }
   const activityEl = $("activityFullList");
-  const filterSignature = JSON.stringify({
-    query: rawSearch, typeFilter, statusFilter, category: categorySelect?.value || "all", fromDate, toDate
-  });
+  const filterSignature = JSON.stringify({ query: rawSearch, typeFilter, statusFilter, category: categorySelect?.value || "all", fromDate, toDate, context: getAppContext() });
   if (filterSignature !== activityFilterSignature) {
     activityFilterSignature = filterSignature;
     activityPageSize = ACTIVITY_PAGE_SIZE;
-  }
-  if (activityEl) {
-    const filteredRows = state.transactions.slice().sort((a,b)=>b.createdAt-a.createdAt).filter(t => {
-      if (t.status === "superseded" && !reviewOnly) return false;
-      const source = account(t.sourceAccountId), destination = account(t.destinationAccountId);
-      const external = t.external || {};
-      const amountText = String(Math.abs(Number(t.amount) || 0));
-      const formattedAmount = money(t.amount, t.currency);
-      const corpus = [
-        transactionLabel(t), t.category, t.description, t.note, t.reference, t.date,
-        t.status, t.bankStatus, t.type, t.currency, amountText, formattedAmount,
-        source?.name, source?.institution, destination?.name, destination?.institution,
-        external.provider, external.providerTransactionId, external.merchantName,
-        t.provenance?.reference, t.provenance?.description
-      ].filter(Boolean).join(" ").toLowerCase();
-      const matchesText = tokens.every(token => corpus.includes(token));
-      const matchesReview = !reviewOnly || t.potentialDuplicateStatus === "needs_review" || t.status === "needs_review" || (external.provider && t.suggestedCategory && Number.isFinite(Number(t.categoryConfidence)) && Number(t.categoryConfidence) < 0.8);
-      const matchesType = typeFilter === "all" || t.type === typeFilter;
-      const matchesCategory = (categorySelect?.value || "all") === "all" || t.category === categorySelect.value;
-      const bankStatus = String(t.bankStatus || "").toLowerCase();
-      const matchesStatus = statusFilter === "all" ||
-        (statusFilter === "needs_review" && (t.status === "needs_review" || t.potentialDuplicateStatus === "needs_review" || (external.provider && t.suggestedCategory && Number(t.categoryConfidence) < 0.8))) ||
-        (statusFilter === "pending" && bankStatus === "pending") ||
-        (statusFilter === "failed" && bankStatus === "failed") ||
-        (statusFilter === "reversed" && bankStatus === "reversed") ||
-        (statusFilter === "recorded" && t.status === "recorded" && !["pending","failed","reversed"].includes(bankStatus) && t.potentialDuplicateStatus !== "needs_review");
-      const matchesDate = (!fromDate || t.date >= fromDate) && (!toDate || t.date <= toDate);
-      return matchesText && matchesReview && matchesType && matchesCategory && matchesStatus && matchesDate;
-    });
-    const visibleRows = filteredRows.slice(0, activityPageSize);
-    const rowsHtml = visibleRows.map(t => {
-      const source = account(t.sourceAccountId), dest = account(t.destinationAccountId);
-      const direction = transactionDirection(t);
-      const sign = direction === "out" ? "−" : direction === "in" ? "+" : "";
-      const detail = t.type === "transfer" ? `${source?.name || "Unknown"} → ${dest?.name || "Unknown"}` : source?.name || "Unknown";
-      const bankStatus = String(t.bankStatus || "").trim().toLowerCase();
-      const transactionStatus = String(t.status || "").trim().toLowerCase();
-      const lifecycleLabel = t.potentialDuplicateStatus === "needs_review" ? "Possible duplicate · review" : bankStatus === "pending" ? "Pending at bank · excluded" : bankStatus === "failed" ? "Failed · excluded" : bankStatus === "reversed" ? "Reversed · excluded" : transactionStatus === "needs_review" ? "Needs confirmation" : transactionStatus === "superseded" ? "Paired leg · excluded" : (t.external?.provider && t.suggestedCategory && Number.isFinite(Number(t.categoryConfidence)) && Number(t.categoryConfidence) < 0.8) ? "Check suggested category" : "Recorded";
-      return `<div class="activity-row interactive-row" data-transaction-id="${escapeHtml(t.id)}" tabindex="0" role="button"><div><strong>${escapeHtml(transactionLabel(t))}</strong><div class="muted">${escapeHtml(t.date)} · ${escapeHtml(detail)}${t.note ? " · "+escapeHtml(t.note) : ""}</div></div><div class="activity-value"><strong data-financial-value>${sign}${escapeHtml(state.settings.privacyHidden ? "••••••" : money(t.amount,t.currency))}</strong><span class="muted">${escapeHtml(lifecycleLabel)}${t.external?.provider ? " · " + escapeHtml(t.external.provider) : ""}</span></div></div>`;
-    }).join("");
-    const pagination = filteredRows.length > activityPageSize
-      ? `<div class="activity-pagination"><span class="muted">Showing ${visibleRows.length.toLocaleString()} of ${filteredRows.length.toLocaleString()} matching transactions</span><button type="button" class="secondary" data-activity-load-more>Load ${ACTIVITY_PAGE_SIZE} more</button></div>`
-      : filteredRows.length
-        ? `<div class="activity-pagination"><span class="muted">Showing all ${filteredRows.length.toLocaleString()} matching transactions</span></div>`
-        : "";
-    activityEl.innerHTML = rowsHtml || '<div class="empty-state">No matching activity.</div>';
-    if (pagination) activityEl.insertAdjacentHTML("beforeend", pagination);
+    loadActivityCursorPage({ reset: true });
   }
 
   document.querySelectorAll("[data-reconcile]").forEach(button => {
@@ -1987,8 +1992,7 @@ function navigate(page) {
 document.addEventListener("click", event => {
   const loadMoreActivity = event.target.closest("[data-activity-load-more]");
   if (loadMoreActivity) {
-    activityPageSize += ACTIVITY_PAGE_SIZE;
-    renderFullViews();
+    loadActivityCursorPage();
     return;
   }
   const reviewQueueOpen = event.target.closest("#reviewQueueOpen");
