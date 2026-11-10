@@ -288,6 +288,7 @@ class OmniPocketStorage {
         const accountMatch = !options.accountId ||
           record.sourceAccountId === options.accountId ||
           record.destinationAccountId === options.accountId;
+        const transactionMatch = !options.transactionId || record.id === options.transactionId;
         const typeMatch = !options.type || options.type === "all" || record.type === options.type;
         const categoryMatch = !options.category || options.category === "all" || record.category === options.category;
         const bankStatus = String(record.bankStatus || "").toLowerCase();
@@ -315,10 +316,11 @@ class OmniPocketStorage {
           record.category, record.description, record.note, record.reference,
           record.currency, record.amount, record.merchantName,
           external.provider, external.providerTransactionId, external.merchantName,
-          record.provenance?.reference, record.provenance?.description
+          record.provenance?.reference, record.provenance?.description,
+          ...(Array.isArray(options.searchExtras) ? options.searchExtras : [])
         ].filter(Boolean).join(" ").toLowerCase();
         const searchMatch = tokens.every(token => searchCorpus.includes(token));
-        if (accountMatch && typeMatch && statusMatch && categoryMatch &&
+        if (accountMatch && transactionMatch && typeMatch && statusMatch && categoryMatch &&
             reviewMatch && supersededMatch && searchMatch) {
           if (items.length < limit) items.push(record);
           else {
