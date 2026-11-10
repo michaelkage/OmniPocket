@@ -350,7 +350,13 @@ try {
     const storage = window.OmniPocketStorageInstance;
     await storage.save(state);
     const list = document.getElementById("activityFullList");
-    window.renderFullViews();
+    const search = document.getElementById("activitySearch");
+    // Force a real filter transition so the cursor is reset after replacing the
+    // fixture ledger, even when the prior page already used an empty query.
+    search.value = "__activity_refresh__";
+    search.dispatchEvent(new Event("input", { bubbles: true }));
+    search.value = "";
+    search.dispatchEvent(new Event("input", { bubbles: true }));
     const waitFor = async predicate => {
       for (let attempt = 0; attempt < 100; attempt++) {
         if (predicate()) return true;
@@ -363,7 +369,6 @@ try {
     list.querySelector("[data-activity-load-more]")?.click();
     await waitFor(() => list.querySelectorAll(".activity-row").length === 100);
     const secondPage = list.querySelectorAll(".activity-row").length;
-    const search = document.getElementById("activitySearch");
     search.value = "TX-000120";
     search.dispatchEvent(new Event("input", { bubbles: true }));
     await waitFor(() => list.querySelectorAll(".activity-row").length === 1);
