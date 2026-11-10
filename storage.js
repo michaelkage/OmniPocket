@@ -370,6 +370,98 @@ class OmniPocketStorage {
       throw new Error("Invalid transaction page cursor for the requested date range.");
     }
 
+    const matches = record => {
+      const accountIds = Array.isArray(options.accountIds) ? options.accountIds.filter(Boolean) : [];
+      const accountMatch = (!options.accountId && !accountIds.length) ||
+        record.sourceAccountId === options.accountId ||
+        record.destinationAccountId === options.accountId ||
+        accountIds.includes(record.sourceAccountId) ||
+        accountIds.includes(record.destinationAccountId);
+      const transactionMatch = !options.transactionId || record.id === options.transactionId;
+      const typeMatch = !options.type || options.type === "all" || record.type === options.type;
+      const categoryMatch = !options.category || options.category === "all" || record.category === options.category;
+      const bankStatus = String(record.bankStatus || "").toLowerCase();
+      const external = record.external || {};
+      const reviewFlag = record.status === "needs_review" ||
+        record.potentialDuplicateStatus === "needs_review" ||
+        Boolean(external.provider && record.suggestedCategory &&
+          Number.isFinite(Number(record.categoryConfidence)) &&
+          Number(record.categoryConfidence) < 0.8);
+      const statusMatch = !options.status || options.status === "all" ||
+        (options.status === "needs_review" && reviewFlag) ||
+        (options.status === "pending" && bankStatus === "pending") ||
+        (options.status === "failed" && bankStatus === "failed") ||
+        (options.status === "reversed" && bankStatus === "reversed") ||
+        (options.status === "recorded" && record.status === "recorded" &&
+          !["pending", "failed", "reversed"].includes(bankStatus) &&
+          record.potentialDuplicateStatus !== "needs_review");
+      const reviewMatch = !options.reviewOnly || reviewFlag;
+      const supersededMatch = options.includeSuperseded === true || record.status !== "superseded";
+      const tokens = Array.isArray(options.searchTokens)
+        ? options.searchTokens.map(token => String(token).toLowerCase()).filter(Boolean)
+        : [];
+      const relatedAccounts = Array.isArray(options.accountSearchFields)
+        ? options.accountSearchFields.filter(item =>
+            item && (item.id === record.sourceAccountId || item.id === record.destinationAccountId))
+        : [];
+      const searchCorpus = [
+        record.id, record.type, record.status, record.bankStatus, record.date,
+        record.category, record.description, record.note, record.reference,
+        record.currency, record.amount, record.merchantName,
+        external.provider, external.providerTransactionId, external.merchantName,
+        record.provenance?.reference, record.provenance?.description,
+        ...relatedAccounts.flatMap(item => [item.name, item.institution])
+      ].filter(Boolean).join(" ").toLowerCase();
+      const searchMatch = tokens.every(token => searchCorpus.includes(token));
+      return accountMatch && transactionMatch && typeMatch && statusMatch && categoryMatch &&
+        reviewMatch && supersededMatch && searchMatch;
+    };
+
+    // A single-account view is a union of outgoing and incoming entries. Read
+    // each side through its compound account/date/id index, then merge the two
+    // already-descending streams. Each side needs at most limit+1 matches to
+    // determine the global page and hasMore flag.
+    const singleAccount = options.accountId && !(Array.isArray(options.accountIds) && options.accountIds.length);
+    if (singleAccount) {
+      const lower = [options.accountId, fromDate || "", ""];
+      const upper = cursor
+        ? [options.accountId, String(cursor.date), String(cursor.id)]
+        : [options.accountId, toDate || "\uffff", "\uffff"];
+      const range = IDBKeyRange.bound(lower, upper, false, Boolean(cursor));
+      const readSide = indexName => new Promise((resolve, reject) => {
+        const tx = db.transaction("transactions", "readonly");
+        const index = tx.objectStore("transactions").index(indexName);
+        const request = index.openCursor(range, "prev");
+        const found = [];
+        request.onsuccess = () => {
+          const current = request.result;
+          if (!current || found.length >= limit + 1) return;
+          if (matches(current.value)) found.push(current.value);
+          current.continue();
+        };
+        request.onerror = () => reject(request.error || new Error("Could not read account transaction index."));
+        tx.oncomplete = () => resolve(found);
+        tx.onerror = () => reject(tx.error || new Error("Account transaction index read failed."));
+        tx.onabort = () => reject(tx.error || new Error("Account transaction index read was aborted."));
+      });
+      const [outgoing, incoming] = await Promise.all([
+        readSide("sourceAccountDateId"),
+        readSide("destinationAccountDateId")
+      ]);
+      const merged = new Map();
+      for (const item of [...outgoing, ...incoming]) merged.set(item.id, item);
+      const ordered = [...merged.values()].sort((a, b) =>
+        String(b.date).localeCompare(String(a.date)) || String(b.id).localeCompare(String(a.id)));
+      const hasMore = ordered.length > limit;
+      const items = ordered.slice(0, limit);
+      const last = items[items.length - 1];
+      return {
+        items,
+        nextCursor: hasMore && last ? { date: last.date, id: last.id } : null,
+        hasMore
+      };
+    }
+
     const lower = [fromDate || "", ""];
     const upper = cursor ? [String(cursor.date), String(cursor.id)] : [toDate || "\uffff", "\uffff"];
     const range = IDBKeyRange.bound(lower, upper, false, Boolean(cursor));
@@ -383,50 +475,7 @@ class OmniPocketStorage {
         const recordCursor = request.result;
         if (!recordCursor) return;
         const record = recordCursor.value;
-        const accountIds = Array.isArray(options.accountIds) ? options.accountIds.filter(Boolean) : [];
-        const accountMatch = (!options.accountId && !accountIds.length) ||
-          record.sourceAccountId === options.accountId ||
-          record.destinationAccountId === options.accountId ||
-          accountIds.includes(record.sourceAccountId) ||
-          accountIds.includes(record.destinationAccountId);
-        const transactionMatch = !options.transactionId || record.id === options.transactionId;
-        const typeMatch = !options.type || options.type === "all" || record.type === options.type;
-        const categoryMatch = !options.category || options.category === "all" || record.category === options.category;
-        const bankStatus = String(record.bankStatus || "").toLowerCase();
-        const external = record.external || {};
-        const reviewFlag = record.status === "needs_review" ||
-          record.potentialDuplicateStatus === "needs_review" ||
-          Boolean(external.provider && record.suggestedCategory &&
-            Number.isFinite(Number(record.categoryConfidence)) &&
-            Number(record.categoryConfidence) < 0.8);
-        const statusMatch = !options.status || options.status === "all" ||
-          (options.status === "needs_review" && reviewFlag) ||
-          (options.status === "pending" && bankStatus === "pending") ||
-          (options.status === "failed" && bankStatus === "failed") ||
-          (options.status === "reversed" && bankStatus === "reversed") ||
-          (options.status === "recorded" && record.status === "recorded" &&
-            !["pending", "failed", "reversed"].includes(bankStatus) &&
-            record.potentialDuplicateStatus !== "needs_review");
-        const reviewMatch = !options.reviewOnly || reviewFlag;
-        const supersededMatch = options.includeSuperseded === true || record.status !== "superseded";
-        const tokens = Array.isArray(options.searchTokens)
-          ? options.searchTokens.map(token => String(token).toLowerCase()).filter(Boolean)
-          : [];
-        const relatedAccounts = Array.isArray(options.accountSearchFields)
-          ? options.accountSearchFields.filter(item =>
-              item && (item.id === record.sourceAccountId || item.id === record.destinationAccountId))
-          : [];
-        const searchCorpus = [
-          record.id, record.type, record.status, record.bankStatus, record.date,
-          record.category, record.description, record.note, record.reference,
-          record.currency, record.amount, record.merchantName,
-          external.provider, external.providerTransactionId, external.merchantName,
-          record.provenance?.reference, record.provenance?.description,
-          ...relatedAccounts.flatMap(item => [item.name, item.institution])
-        ].filter(Boolean).join(" ").toLowerCase();
-        const searchMatch = tokens.every(token => searchCorpus.includes(token));
-        if (accountMatch && transactionMatch && typeMatch && statusMatch && categoryMatch &&
-            reviewMatch && supersededMatch && searchMatch) {
+        if (matches(record)) {
           if (items.length < limit) items.push(record);
           else {
             hasMore = true;
