@@ -314,13 +314,17 @@ class OmniPocketStorage {
         const tokens = Array.isArray(options.searchTokens)
           ? options.searchTokens.map(token => String(token).toLowerCase()).filter(Boolean)
           : [];
+        const relatedAccounts = Array.isArray(options.accountSearchFields)
+          ? options.accountSearchFields.filter(item =>
+              item && (item.id === record.sourceAccountId || item.id === record.destinationAccountId))
+          : [];
         const searchCorpus = [
           record.id, record.type, record.status, record.bankStatus, record.date,
           record.category, record.description, record.note, record.reference,
           record.currency, record.amount, record.merchantName,
           external.provider, external.providerTransactionId, external.merchantName,
           record.provenance?.reference, record.provenance?.description,
-          ...(Array.isArray(options.searchExtras) ? options.searchExtras : [])
+          ...relatedAccounts.flatMap(item => [item.name, item.institution])
         ].filter(Boolean).join(" ").toLowerCase();
         const searchMatch = tokens.every(token => searchCorpus.includes(token));
         if (accountMatch && transactionMatch && typeMatch && statusMatch && categoryMatch &&
