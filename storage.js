@@ -273,7 +273,7 @@ class OmniPocketStorage {
     }
 
     const lower = [fromDate || "", ""];
-    const upper = cursor ? [String(cursor.date), String(cursor.id)] : [toDate || "\\uffff", "\\uffff"];
+    const upper = cursor ? [String(cursor.date), String(cursor.id)] : [toDate || "\uffff", "\uffff"];
     const range = IDBKeyRange.bound(lower, upper, false, Boolean(cursor));
     return new Promise((resolve, reject) => {
       const tx = db.transaction("transactions", "readonly");
