@@ -129,7 +129,6 @@ assert(receiptRows.includes('dialog.querySelector("[data-receipt-share]")'), "re
 assert(receiptRows.includes('dialog.querySelector("[data-receipt-print]")'), "receipt print control must be wired");
 
 
-assert(storage.includes('this.version = 4;'), "IndexedDB schema must be versioned for normalized financial records and transaction cursors");
 assert(storage.includes('db.createObjectStore("outbox", { keyPath: "id" })'), "IndexedDB must create the durable outbox store");
 assert(storage.includes('db.createObjectStore("accounts", { keyPath: "id" })'), "normalized accounts store must be created");
 assert(storage.includes('db.createObjectStore("transactions", { keyPath: "id" })'), "normalized transactions store must be created");
@@ -146,6 +145,10 @@ assert(storage.includes('createIndex("dateId", ["date", "id"]'), "transaction st
 assert(storage.includes('this.version = 5;'), "transaction index additions must trigger an IndexedDB schema upgrade");
 assert(storage.includes('["sourceAccountDateId", ["sourceAccountId", "date", "id"]]'), "existing transaction stores must gain stable source account/date/id indexes");
 assert(storage.includes('["destinationAccountDateId", ["destinationAccountId", "date", "id"]]'), "existing transaction stores must gain stable destination account/date/id indexes");
+assert(storage.includes('index.openCursor(range, "prev")'), "account history must use reverse compound-index cursors");
+assert(storage.includes('readSide("sourceAccountDateId")') && storage.includes('readSide("destinationAccountDateId")'), "single-account history must query both outgoing and incoming account indexes");
+assert(storage.includes('merged.set(item.id, item)'), "account history must de-duplicate self-transfers across its two index streams");
+
 assert(storage.includes("async getTransactionPage(options = {})"), "storage must expose bounded indexed transaction page reads");
 assert(storage.includes("async getAccountBalanceSummary(accounts = [], settings = {})"), "storage must expose an indexed account-balance projection for lazy hydration");
 assert(storage.includes('tx.objectStore("transactions").openCursor()'), "account-balance projection must stream transactions from IndexedDB rather than materialize them");
