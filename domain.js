@@ -735,7 +735,7 @@
     for (const tx of state.transactions || []) {
       if (tx.type !== "expense" || !isFinanciallyEffective(tx)) continue;
       const date = String(tx.date || "");
-      if (date < startKey || date > endKey || !/^\\d{4}-\\d{2}-\\d{2}$/.test(date)) continue;
+      if (date < startKey || date > endKey || !/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
       const amount = Math.abs(Number(tx.amount) || 0);
       if (!amount) continue;
       const label = String(tx.note || tx.category || "Uncategorised expense")
@@ -807,7 +807,7 @@
     for (const tx of state.transactions || []) {
       if (tx.type !== "expense" || !isFinanciallyEffective(tx)) continue;
       const date = String(tx.date || "");
-      if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(date) || date < baselineKey || date > endKey) continue;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date < baselineKey || date > endKey) continue;
       const amount = Math.abs(Number(tx.amount) || 0);
       if (!amount) continue;
       const category = String(tx.category || "Uncategorised").trim() || "Uncategorised";
