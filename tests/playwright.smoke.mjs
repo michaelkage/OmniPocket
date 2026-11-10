@@ -333,6 +333,20 @@ try {
       limit: 20, fromDate: "2026-10-15", toDate: "2026-10-15",
       accountId: "account-a", category: "Food"
     });
+    await storage.save({
+      schemaVersion: 8, settings: {}, accounts: [], goals: [], snapshots: [],
+      deletedExternalTransactions: [],
+      transactions: [
+        { id: "FILTER-REVIEW", date: "2026-10-16", type: "expense", status: "needs_review", amount: 10, currency: "NGN", category: "Food", description: "Coffee shop", sourceAccountId: "account-a" },
+        { id: "FILTER-PENDING", date: "2026-10-16", type: "expense", status: "recorded", bankStatus: "pending", amount: 11, currency: "NGN", category: "Food", description: "Pending transfer", sourceAccountId: "account-a" },
+        { id: "FILTER-LOW-CONFIDENCE", date: "2026-10-16", type: "expense", status: "recorded", amount: 12, currency: "NGN", category: "Other", description: "Unknown merchant", external: { provider: "mono" }, suggestedCategory: "Food", categoryConfidence: 0.4 },
+        { id: "FILTER-SUPERSEDED", date: "2026-10-16", type: "expense", status: "superseded", amount: 13, currency: "NGN", description: "Paired leg" }
+      ]
+    });
+    const review = await storage.getTransactionPage({ reviewOnly: true });
+    const pending = await storage.getTransactionPage({ status: "pending" });
+    const search = await storage.getTransactionPage({ searchTokens: ["coffee", "shop"] });
+    const includeSuperseded = await storage.getTransactionPage({ includeSuperseded: true });
     const ids = [...first.items, ...second.items, ...third.items].map(row => row.id);
     return {
       pageSizes: [first.items.length, second.items.length, third.items.length],
@@ -342,6 +356,10 @@ try {
       cursorOrder: first.items[0]?.id > first.items[49]?.id,
       rangeMatches: ranged.items.every(row => row.sourceAccountId === "account-a" && row.category === "Food"),
       rangeCount: ranged.items.length,
+      reviewIds: review.items.map(row => row.id).sort(),
+      pendingIds: pending.items.map(row => row.id),
+      searchIds: search.items.map(row => row.id),
+      supersededIncluded: includeSuperseded.items.some(row => row.id === "FILTER-SUPERSEDED"),
     };
   });
   check("indexed transaction cursor paging returned incorrect page sizes", JSON.stringify(indexedTransactionPaging.pageSizes) === JSON.stringify([50, 50, 23]));
@@ -349,6 +367,10 @@ try {
   check("indexed transaction cursor paging repeated or skipped records", indexedTransactionPaging.uniqueIds === 123 && indexedTransactionPaging.totalIds === 123);
   check("compound cursor order is not stable for same-date transactions", indexedTransactionPaging.cursorOrder);
   check("indexed transaction filters returned records outside the requested scope", indexedTransactionPaging.rangeMatches && indexedTransactionPaging.rangeCount > 0);
+  check("review-only cursor filter omitted review-flagged records", JSON.stringify(indexedTransactionPaging.reviewIds) === JSON.stringify(["FILTER-LOW-CONFIDENCE", "FILTER-REVIEW"]));
+  check("bank pending filter did not use bank lifecycle status", JSON.stringify(indexedTransactionPaging.pendingIds) === JSON.stringify(["FILTER-PENDING"]));
+  check("indexed free-text search did not match all tokens", JSON.stringify(indexedTransactionPaging.searchIds) === JSON.stringify(["FILTER-REVIEW"]));
+  check("superseded rows could not be explicitly included for review", indexedTransactionPaging.supersededIncluded);
 
   check("indexed transaction cursor paging returned incorrect page sizes", JSON.stringify(indexedTransactionPaging.pageSizes) === JSON.stringify([50, 50, 23]));
   check("indexed transaction cursor paging has incorrect continuation flags", JSON.stringify(indexedTransactionPaging.hasMore) === JSON.stringify([true, true, false]));
