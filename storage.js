@@ -289,10 +289,37 @@ class OmniPocketStorage {
           record.sourceAccountId === options.accountId ||
           record.destinationAccountId === options.accountId;
         const typeMatch = !options.type || options.type === "all" || record.type === options.type;
-        const statusMatch = !options.status || options.status === "all" || record.status === options.status;
         const categoryMatch = !options.category || options.category === "all" || record.category === options.category;
-        const supersededMatch = options.includeSuperseded !== false || record.status !== "superseded";
-        if (accountMatch && typeMatch && statusMatch && categoryMatch && supersededMatch) {
+        const bankStatus = String(record.bankStatus || "").toLowerCase();
+        const external = record.external || {};
+        const reviewFlag = record.status === "needs_review" ||
+          record.potentialDuplicateStatus === "needs_review" ||
+          Boolean(external.provider && record.suggestedCategory &&
+            Number.isFinite(Number(record.categoryConfidence)) &&
+            Number(record.categoryConfidence) < 0.8);
+        const statusMatch = !options.status || options.status === "all" ||
+          (options.status === "needs_review" && reviewFlag) ||
+          (options.status === "pending" && bankStatus === "pending") ||
+          (options.status === "failed" && bankStatus === "failed") ||
+          (options.status === "reversed" && bankStatus === "reversed") ||
+          (options.status === "recorded" && record.status === "recorded" &&
+            !["pending", "failed", "reversed"].includes(bankStatus) &&
+            record.potentialDuplicateStatus !== "needs_review");
+        const reviewMatch = !options.reviewOnly || reviewFlag;
+        const supersededMatch = options.includeSuperseded === true || record.status !== "superseded";
+        const tokens = Array.isArray(options.searchTokens)
+          ? options.searchTokens.map(token => String(token).toLowerCase()).filter(Boolean)
+          : [];
+        const searchCorpus = [
+          record.id, record.type, record.status, record.bankStatus, record.date,
+          record.category, record.description, record.note, record.reference,
+          record.currency, record.amount, record.merchantName,
+          external.provider, external.providerTransactionId, external.merchantName,
+          record.provenance?.reference, record.provenance?.description
+        ].filter(Boolean).join(" ").toLowerCase();
+        const searchMatch = tokens.every(token => searchCorpus.includes(token));
+        if (accountMatch && typeMatch && statusMatch && categoryMatch &&
+            reviewMatch && supersededMatch && searchMatch) {
           if (items.length < limit) items.push(record);
           else {
             hasMore = true;
