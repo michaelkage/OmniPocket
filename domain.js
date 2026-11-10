@@ -302,7 +302,14 @@
     const ranked = [...votes.values()].sort((a, b) => b.score - a.score || b.count - a.count);
     const best = ranked[0];
     const runnerUp = ranked[1];
-    if (!best || best.score < 0.35 || (runnerUp && best.score < runnerUp.score * 1.35)) return null;
+    // Two categories backed by the exact same merchant-token evidence are
+    // contradictory user corrections, even if one row contains extra location
+    // or channel words that make its raw overlap score look slightly stronger.
+    const sameEvidence = Boolean(best && runnerUp &&
+      best.matched.size === runnerUp.matched.size &&
+      [...best.matched].every(token => runnerUp.matched.has(token)));
+    if (!best || best.score < 0.35 ||
+      (runnerUp && (best.score < runnerUp.score * 1.35 || sameEvidence))) return null;
     const confidence = Math.min(0.94, 0.82 + Math.min(0.08, (best.count - 1) * 0.03) + (best.score >= 0.8 ? 0.04 : 0));
     return {
       category: best.category,
