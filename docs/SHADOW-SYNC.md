@@ -6,9 +6,10 @@ Make OmniPocket reliable under intermittent connectivity without weakening its a
 
 ## What exists today
 
-- `storage.js` uses IndexedDB schema v4 with normalized `accounts`, `transactions`, `goals`, `snapshots`, `deletedExternalTransactions`, `meta`, and `outbox` stores. The V2 monolithic `state/current` snapshot remains available as a migration source until the normalized write transaction commits.
-- `storage.js` reconstructs the current domain state from those stores on startup. `getTransactionPage()` now reads bounded pages from a compound `[date, id]` index with a stable continuation cursor. This query API is covered independently; the Activity UI still hydrates and filters the full in-memory state and has not yet been migrated to lazy paging.
-- The Activity page progressively renders 50 matching rows at a time with a Load 50 more control. This limits DOM size and layout work, but filtering/sorting and startup hydration still use the full in-memory collection; wiring its search/review semantics to the cursor API remains follow-up work.
+- `storage.js` uses IndexedDB schema v5 with normalized `accounts`, `transactions`, `goals`, `snapshots`, `deletedExternalTransactions`, `meta`, and `outbox` stores. The V2 monolithic `state/current` snapshot remains available as a migration source until the normalized write transaction commits.
+- `storage.js` reconstructs the current domain state from those stores on startup. `getTransactionPage()` reads bounded pages from the compound `[date, id]` index with a stable continuation cursor; Activity now uses it for initial results and Load more, including search, date, category, type, lifecycle status, review-only, and account/transaction context filters.
+- Activity renders 50 matching rows at a time and rejects stale in-flight filter responses. This bounds Activity's rendered page and query result, but startup still hydrates the full transaction collection for dashboards, reports, edits, imports, and domain calculations; total application memory is not yet bounded.
+- IndexedDB schema v5 repairs missing transaction indexes on existing installations and adds stable source/destination account-date-id indexes. A streaming `getAccountBalanceSummary()` projection computes balances without materializing transaction rows; browser tests compare it against the domain engine. The projection is not yet wired into startup.
 - Normalized saves compare per-record fingerprints and only `put` changed records or delete removed records, with all related changes committed in one IndexedDB transaction. A monotonic `stateVersion` is checked inside the same read/write transaction; stale tabs abort rather than silently replacing newer state. `BroadcastChannel` notifies other tabs after commit, and conflicted tabs are told to reload instead of writing a stale localStorage fallback. This avoids rewriting every unchanged financial record, although the current app still clones the in-memory state and computes fingerprints across records on save.
 - `production-hardening.js` stores offline bank-refresh jobs in the IndexedDB outbox, migrates the legacy localStorage queue after commit, and no longer truncates it at 50 jobs.
 - Supabase already owns the provider-data boundary: `bank_connections`, `bank_transactions`, `bank_sync_runs`, webhook/event tables and reconciliation/payment tables exist. Do not create a competing copy of provider bank data.
@@ -16,7 +17,7 @@ Make OmniPocket reliable under intermittent connectivity without weakening its a
 
 ## Architectural decision
 
-**Phase 1: normalized IndexedDB + durable outbox.** The initial implementation is now present on the Shadow-Sync branch. IndexedDB is already asynchronous, supported by the PWA target, and avoids shipping a second database engine. The normalized stores, changed-record writes, and optimistic multi-tab write guard are in place; the bounded indexed transaction query is available; lazy Activity integration and attachment separation remain follow-up work.
+**Phase 1: normalized IndexedDB + durable outbox.** The initial implementation is now present on the Shadow-Sync branch. IndexedDB is already asynchronous, supported by the PWA target, and avoids shipping a second database engine. The normalized stores, changed-record writes, optimistic multi-tab write guard, cursor-backed Activity, and balance-projection foundation are in place. Full startup hydration and attachment separation remain follow-up work.
 
 **Phase 2: append-only local operation journal and Supabase ingestion.** Treat immutable financial facts as events/operations. Use deterministic IDs and idempotency keys. Sync operations in batches, acknowledge only after the server transaction commits, then advance a per-user/device cursor. Keep the current Supabase provider tables canonical for Mono data.
 
@@ -97,11 +98,13 @@ Recommended payment-intent lifecycle:
 ### 2. Normalize IndexedDB — foundation implemented; performance work remains
 - [x] Introduce database schema v3 and normalized entity stores.
 - [x] Migrate the existing snapshot in a single atomic transaction; if it aborts, the old snapshot remains available for retry.
-- [x] Add indexes for transaction date, account/date, provider transaction identity, account currency, goal status, and snapshot date.
+- [x] Add indexes for transaction date, account/date, stable account/date/id cursors, provider transaction identity, account currency, goal status, and snapshot date.
+- [x] Upgrade existing transaction stores to schema v5 and create any missing indexes without recreating the store.
+- [x] Add a streaming account-balance projection and browser parity test against the domain engine (not yet wired into startup).
 - [x] Keep the outbox in the same database and preserve queued work across reloads.
-- [ ] Add runtime migration fixtures covering populated V2 databases, empty databases, interrupted upgrades, and legacy localStorage imports.
-- [ ] Add paginated transaction query APIs and migrate activity/review views away from full-history rendering.
-- [x] Progressively render Activity results in 50-row batches so the DOM does not grow with the full ledger.
+- [x] Add runtime migration fixtures covering populated V2 databases and existing v4 transaction-store index upgrades; empty/interrupted-upgrade fault injection remains follow-up work.
+- [x] Add cursor-backed transaction query APIs and migrate Activity filtering/load-more to IndexedDB pages; review and other full-history workflows still use the hydrated domain collection.
+- [x] Progressively render Activity results in 50-row batches from IndexedDB so the DOM does not grow with the full ledger.
 - [ ] Move large receipt/OCR text and image blobs into a dedicated attachments store.
 - [x] Add optimistic state-version checks to every normalized write; a stale tab aborts instead of overwriting newer ledger records.
 - [x] Broadcast committed versions across tabs and warn stale tabs to reload; conflict writes never fall back to localStorage.
@@ -122,7 +125,7 @@ Recommended payment-intent lifecycle:
 
 - [x] Durable offline bank-refresh jobs are stored in IndexedDB, not localStorage.
 - [x] Financial records are stored in normalized IndexedDB object stores rather than a single serialized snapshot.
-- [ ] Large transaction lists are paginated and do not require loading the entire ledger for every view.
+- [ ] Activity pages are cursor-paginated; remaining dashboards, reports, and edit/import workflows still hydrate the full ledger.
 - [ ] Receipt OCR text and blobs are stored separately from frequently updated transaction metadata.
 - [ ] Concurrent tabs cannot silently overwrite financial edits.
 - A local transaction is acknowledged only after its IndexedDB transaction commits.
