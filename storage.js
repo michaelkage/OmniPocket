@@ -450,8 +450,9 @@ class OmniPocketStorage {
       ]);
       const merged = new Map();
       for (const item of [...outgoing, ...incoming]) merged.set(item.id, item);
+      const compareKey = (left, right) => left === right ? 0 : (left > right ? 1 : -1);
       const ordered = [...merged.values()].sort((a, b) =>
-        String(b.date).localeCompare(String(a.date)) || String(b.id).localeCompare(String(a.id)));
+        compareKey(String(b.date), String(a.date)) || compareKey(String(b.id), String(a.id)));
       const hasMore = ordered.length > limit;
       const items = ordered.slice(0, limit);
       const last = items[items.length - 1];
