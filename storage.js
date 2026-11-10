@@ -267,27 +267,34 @@ class OmniPocketStorage {
       balance: Number(account.openingBalance) || 0,
       currency: account.currency || baseCurrency
     }]));
+    // Mirror domain.js rateFromTable/rate exactly: explicit transaction FX wins,
+    // then direct, inverse, and base-currency triangulation; otherwise 1:1.
     const convert = (amount, from, to, overrideRate = null) => {
       const value = Number(amount) || 0;
       if (from === to) return value;
       const positive = candidate => Number.isFinite(Number(candidate)) && Number(candidate) > 0 ? Number(candidate) : null;
-      const directOverride = positive(overrideRate);
-      if (directOverride) return value * directOverride;
+      const override = positive(overrideRate);
+      if (override) return value * override;
       const direct = positive(rates?.[from]?.[to]);
       if (direct) return value * direct;
       const inverse = positive(rates?.[to]?.[from]);
       if (inverse) return value / inverse;
-      const sourceToBase = positive(rates?.[from]?.[baseCurrency]);
-      const baseToTarget = positive(rates?.[baseCurrency]?.[to]);
-      if (sourceToBase && baseToTarget) return value * sourceToBase * baseToTarget;
-      const baseToSource = positive(rates?.[baseCurrency]?.[from]);
-      const targetToBase = positive(rates?.[to]?.[baseCurrency]);
-      if (baseToSource && targetToBase) return value / (baseToSource * targetToBase);
+      if (baseCurrency && from !== baseCurrency && to !== baseCurrency) {
+        const sourceToBase = positive(rates?.[from]?.[baseCurrency]);
+        const baseToTarget = positive(rates?.[baseCurrency]?.[to]);
+        if (sourceToBase && baseToTarget) return value * sourceToBase * baseToTarget;
+        const baseToSource = positive(rates?.[baseCurrency]?.[from]);
+        const targetToBase = positive(rates?.[to]?.[baseCurrency]);
+        if (baseToSource && targetToBase) return value / (baseToSource * targetToBase);
+      }
       return value;
     };
-    const effective = tx => String(tx?.status || "").toLowerCase() !== "needs_review" &&
-      String(tx?.status || "").toLowerCase() !== "superseded" &&
-      !["pending", "failed", "reversed"].includes(String(tx?.bankStatus || "").toLowerCase());
+    const effective = item => {
+      const status = String(item?.status || "").trim().toLowerCase();
+      const bankStatus = String(item?.bankStatus || "").trim().toLowerCase();
+      return status !== "needs_review" && status !== "superseded" &&
+        !["pending", "failed", "reversed"].includes(bankStatus);
+    };
     return new Promise((resolve, reject) => {
       const tx = db.transaction("transactions", "readonly");
       const request = tx.objectStore("transactions").openCursor();
@@ -303,14 +310,16 @@ class OmniPocketStorage {
           if (item.type === "income" && source) source.balance += amount;
           else if (item.type === "expense" && source) source.balance -= amount;
           else if (item.type === "adjustment" && source) {
-            const delta = item.adjustmentSign === -1 || (item.adjustmentSign == null && String(item.category || "").toLowerCase().includes("decrease"))
-              ? -amount : amount;
+            const delta = item.adjustmentSign === -1 ? -amount
+              : item.adjustmentSign === 1 ? amount
+              : String(item.category || "").toLowerCase().includes("decrease") ? -amount : amount;
             source.balance += delta;
-          } else if (item.type === "transfer" || item.type === "withdrawal") {
+          }
+          if (item.type === "transfer" || item.type === "withdrawal") {
             if (source) source.balance -= amount;
             if (destination) destination.balance += item.receivedAmount != null
               ? Math.abs(Number(item.receivedAmount) || 0)
-              : convert(amount, item.currency || source?.currency || baseCurrency, destination.currency, item.fxRate);
+              : convert(item.amount, item.currency, destination.currency, item.fxRate);
           }
           count++;
         }
