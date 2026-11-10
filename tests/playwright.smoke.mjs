@@ -145,6 +145,62 @@ try {
   check("schemaVersion not persisted", persisted.version === 8);
   check("monolithic IndexedDB snapshot was not removed after normalized commit", persisted.legacySnapshotRemoved);
 
+  // IndexedDB balance projection must be numerically identical to the domain engine.
+  const balanceProjection = await page.evaluate(async () => {
+    const state = {
+      schemaVersion: 9,
+      settings: {
+        baseCurrency: "NGN",
+        fx: { rates: {
+          NGN: { USD: 1 / 1500, EUR: 1 / 1700 },
+          USD: { NGN: 1500 },
+          EUR: { NGN: 1600 }
+        } }
+      },
+      accounts: [
+        { id: "projection-ngn", currency: "NGN", openingBalance: 1000, archived: false },
+        { id: "projection-usd", currency: "USD", openingBalance: 10, archived: false },
+        { id: "projection-eur", currency: "EUR", openingBalance: 5, archived: false }
+      ],
+      transactions: [
+        { id: "p-income", type: "income", amount: 100, currency: "NGN", sourceAccountId: "projection-ngn", status: "recorded", bankStatus: "posted" },
+        { id: "p-expense", type: "expense", amount: -20, currency: "NGN", sourceAccountId: "projection-ngn", status: "recorded", bankStatus: "posted" },
+        { id: "p-adjustment-sign", type: "adjustment", amount: 10, adjustmentSign: -1, sourceAccountId: "projection-ngn", status: "recorded", bankStatus: "posted" },
+        { id: "p-adjustment-category", type: "adjustment", amount: 5, category: "Bank decrease", sourceAccountId: "projection-ngn", status: "recorded", bankStatus: "posted" },
+        { id: "p-transfer-direct", type: "transfer", amount: 1500, currency: "NGN", sourceAccountId: "projection-ngn", destinationAccountId: "projection-usd", status: "recorded", bankStatus: "posted" },
+        { id: "p-transfer-triangulated", type: "transfer", amount: 2, currency: "USD", sourceAccountId: "projection-usd", destinationAccountId: "projection-eur", status: "recorded", bankStatus: "posted" },
+        { id: "p-transfer-received", type: "transfer", amount: 150, currency: "NGN", receivedAmount: 0.09, receivedCurrency: "USD", sourceAccountId: "projection-ngn", destinationAccountId: "projection-usd", status: "recorded", bankStatus: "posted" },
+        { id: "p-withdrawal", type: "withdrawal", amount: 50, currency: "NGN", sourceAccountId: "projection-ngn", status: "recorded", bankStatus: "posted" },
+        { id: "p-no-currency", type: "transfer", amount: 25, sourceAccountId: "projection-ngn", destinationAccountId: "projection-usd", status: "recorded", bankStatus: "posted" },
+        { id: "p-padded-bank-status", type: "expense", amount: 999, sourceAccountId: "projection-ngn", status: "recorded", bankStatus: " pending " },
+        { id: "p-padded-review-status", type: "income", amount: 999, sourceAccountId: "projection-ngn", status: " needs_review ", bankStatus: "posted" },
+        { id: "p-superseded", type: "income", amount: 999, sourceAccountId: "projection-ngn", status: "superseded", bankStatus: "posted" }
+      ],
+      goals: [], snapshots: [], deletedExternalTransactions: []
+    };
+    const store = new window.OmniPocketStorage({
+      dbName: "omnipocket-balance-projection-fixture",
+      storeName: "state",
+      legacyKey: "omnipocket.balance-projection-fixture"
+    });
+    await store.save(state);
+    const projected = await store.getAccountBalanceSummary(state.accounts, state.settings);
+    const expected = window.OmniPocketEngine.balancesAt(state);
+    const balances = rows => Object.fromEntries(rows.map(row => [row.id, row.balance]));
+    const actualBalances = balances(projected.accounts);
+    const expectedBalances = balances(expected);
+    const matches = Object.keys(expectedBalances).every(id =>
+      Math.abs(actualBalances[id] - expectedBalances[id]) < 1e-8);
+    return {
+      matches,
+      actualBalances,
+      expectedBalances,
+      effectiveTransactionCount: projected.effectiveTransactionCount
+    };
+  });
+  check(`IndexedDB balance projection diverged from domain engine: ${JSON.stringify(balanceProjection)}`, balanceProjection.matches);
+  check("balance projection did not exclude padded pending/review statuses", balanceProjection.effectiveTransactionCount === 9);
+
   // V2 monolithic snapshot migration: preserve the source until normalized commit.
   const v2Migration = await page.evaluate(async () => {
     const dbName = "omnipocket-v2-migration-fixture";
