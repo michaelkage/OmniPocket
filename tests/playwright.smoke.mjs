@@ -506,11 +506,14 @@ try {
         { id: "TX-003", date, type: "transfer", amount: 3, sourceAccountId: "account-a", destinationAccountId: "account-a" },
         { id: "TX-004", date, type: "expense", amount: 4, sourceAccountId: "account-a" },
         { id: "TX-005", date, type: "expense", amount: 5, sourceAccountId: "account-b" },
+        { id: "TX-006", date, type: "transfer", amount: 6, sourceAccountId: "account-a", destinationAccountId: "account-b" },
         { id: "TX-006", date, type: "transfer", amount: 6, sourceAccountId: "account-a", destinationAccountId: "account-b" }
       ]
     });
     const first = await storage.getTransactionPage({ accountId: "account-a", limit: 2 });
     const second = await storage.getTransactionPage({ accountId: "account-a", limit: 2, cursor: first.nextCursor });
+    const multi = await storage.getTransactionPage({ accountIds: ["account-a", "account-b"], limit: 10 });
+
     const multi = await storage.getTransactionPage({ accountIds: ["account-a", "account-b"], limit: 10 });
 
     const ids = [...first.items, ...second.items].map(item => item.id);
@@ -521,6 +524,8 @@ try {
       ids,
       uniqueCount: new Set(ids).size,
       multiIds: multi.items.map(item => item.id),
+      multiUniqueCount: new Set(multi.items.map(item => item.id)).size,
+      multiIds: multi.items.map(item => item.id),
       multiUniqueCount: new Set(multi.items.map(item => item.id)).size
     };
   });
@@ -530,6 +535,9 @@ try {
   check("account-index paging repeated self-transfers or included another account's transactions",
     accountIndexedPaging.ids.length === 4 && accountIndexedPaging.uniqueCount === 4 &&
     !accountIndexedPaging.ids.includes("TX-005"));
+  check("multi-account indexed paging missed transfers or duplicated entries between selected accounts",
+    JSON.stringify(accountIndexedPaging.multiIds) === JSON.stringify(["TX-006", "TX-005", "TX-004", "TX-003", "TX-002", "TX-001"]) &&
+    accountIndexedPaging.multiUniqueCount === 6);
   check("multi-account indexed paging missed transfers or duplicated entries between selected accounts",
     JSON.stringify(accountIndexedPaging.multiIds) === JSON.stringify(["TX-006", "TX-005", "TX-004", "TX-003", "TX-002", "TX-001"]) &&
     accountIndexedPaging.multiUniqueCount === 6);
