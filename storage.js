@@ -57,6 +57,8 @@ class OmniPocketStorage {
           transactions.createIndex("destinationAccountId", "destinationAccountId", { unique: false });
           transactions.createIndex("sourceAccountDate", ["sourceAccountId", "date"], { unique: false });
           transactions.createIndex("destinationAccountDate", ["destinationAccountId", "date"], { unique: false });
+          transactions.createIndex("sourceAccountDateId", ["sourceAccountId", "date", "id"], { unique: false });
+          transactions.createIndex("destinationAccountDateId", ["destinationAccountId", "date", "id"], { unique: false });
           transactions.createIndex("providerTransactionId", ["external.provider", "external.providerTransactionId"], { unique: false });
         } else if (upgradeTransaction) {
           // Existing installations must receive every index introduced by the
