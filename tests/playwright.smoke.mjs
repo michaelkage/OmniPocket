@@ -488,6 +488,48 @@ try {
 
 
 
+  // A single-account history is the union of indexed outgoing/incoming streams.
+  // Self-transfers appear in both indexes and must be de-duplicated before paging.
+  const accountIndexedPaging = await page.evaluate(async () => {
+    const storage = new window.OmniPocketStorage({
+      dbName: "omnipocket-account-index-page-smoke",
+      storeName: "state",
+      legacyKey: "omnipocket.account-index-page"
+    });
+    const date = "2026-11-09";
+    await storage.save({
+      schemaVersion: 8, settings: {}, accounts: [], goals: [], snapshots: [],
+      deletedExternalTransactions: [],
+      transactions: [
+        { id: "TX-001", date, type: "expense", amount: 1, sourceAccountId: "account-a" },
+        { id: "TX-002", date, type: "income", amount: 2, destinationAccountId: "account-a" },
+        { id: "TX-003", date, type: "transfer", amount: 3, sourceAccountId: "account-a", destinationAccountId: "account-a" },
+        { id: "TX-004", date, type: "expense", amount: 4, sourceAccountId: "account-a" },
+        { id: "TX-005", date, type: "expense", amount: 5, sourceAccountId: "account-b" }
+      ]
+    });
+    const first = await storage.getTransactionPage({ accountId: "account-a", limit: 2 });
+    const second = await storage.getTransactionPage({ accountId: "account-a", limit: 2, cursor: first.nextCursor });
+    const ids = [...first.items, ...second.items].map(item => item.id);
+    return {
+      firstIds: first.items.map(item => item.id),
+      secondIds: second.items.map(item => item.id),
+      hasMore: [first.hasMore, second.hasMore],
+      ids,
+      uniqueCount: new Set(ids).size
+    };
+  });
+  check("account-index page did not merge outgoing and incoming transactions in descending order",
+    JSON.stringify(accountIndexedPaging.firstIds) === JSON.stringify(["TX-004", "TX-003"]) &&
+    JSON.stringify(accountIndexedPaging.secondIds) === JSON.stringify(["TX-002", "TX-001"]));
+  check("account-index paging repeated self-transfers or included another account's transactions",
+    accountIndexedPaging.ids.length === 4 && accountIndexedPaging.uniqueCount === 4 &&
+    !accountIndexedPaging.ids.includes("TX-005"));
+  check("account-index cursor did not preserve page continuation",
+    JSON.stringify(accountIndexedPaging.hasMore) === JSON.stringify([true, false]));
+
+
+
 
   // Bank projection helpers expose the Mono adapter.
   const bank = await page.evaluate(() => ({
