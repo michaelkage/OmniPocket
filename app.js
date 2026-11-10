@@ -1821,14 +1821,15 @@ function renderReviewQueue() {
 
 async function loadActivityCursorPage({ reset = false } = {}) {
   const el = $("activityFullList");
-  if (!el || activityCursorLoading) return;
+  if (!el) return;
   if (reset) {
     activityRequestSequence += 1;
     activityCursor = null;
     activityCursorRows = [];
     activityCursorHasMore = false;
+    activityCursorLoading = false;
     el.innerHTML = '<div class="empty-state">Loading activity…</div>';
-  } else if (!activityCursorHasMore || !activityCursor) return;
+  } else if (activityCursorLoading || !activityCursorHasMore || !activityCursor) return;
   const requestSequence = activityRequestSequence;
   const rawSearch = ($("activitySearch")?.value || "").trim().toLowerCase();
   const reviewOnly = rawSearch === "__review__";
@@ -1865,7 +1866,7 @@ async function loadActivityCursorPage({ reset = false } = {}) {
     if (pagination) el.insertAdjacentHTML("beforeend", pagination);
   } catch (error) {
     if (requestSequence === activityRequestSequence) { console.warn("Indexed Activity query failed.", error); el.innerHTML = '<div class="empty-state">Activity could not be loaded. Change a filter to retry.</div>'; }
-  } finally { activityCursorLoading = false; }
+  } finally { if (requestSequence === activityRequestSequence) activityCursorLoading = false; }
 }
 function renderFullViews() {
   renderReviewQueue();
