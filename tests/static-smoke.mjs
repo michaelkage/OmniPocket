@@ -150,8 +150,8 @@ assert(storage.includes('readSide(accountId, "sourceAccountDateId")') && storage
 assert(storage.includes('merged.set(item.id, item)'), "account history must de-duplicate self-transfers across its two index streams");
 assert(storage.includes("scopedAccountIds.flatMap(accountId"), "multi-account history must fan out over selected account indexes instead of scanning the whole ledger");
 
-assert(storage.includes("const recordMaps = Object.fromEntries(this.entityStoreNames.map(name => {"), "normalized writes must build per-store key maps before applying changes");
-assert(storage.includes("const record = recordMaps[name].get(key);"), "normalized writes must resolve changed records in constant time rather than repeatedly scanning arrays");
+assert(storage.includes("const changedRecordMaps = Object.fromEntries(this.entityStoreNames.map(name => {"), "normalized writes must build per-store key maps before applying changes");
+assert(storage.includes("const record = changedRecordMaps[name].get(key);"), "normalized writes must resolve changed records in constant time rather than repeatedly scanning arrays");
 assert(storage.includes("async getTransactionPage(options = {})"), "storage must expose bounded indexed transaction page reads");
 assert(storage.includes("async getAccountBalanceSummary(accounts = [], settings = {})"), "storage must expose an indexed account-balance projection for lazy hydration");
 assert(storage.includes('tx.objectStore("transactions").openCursor()'), "account-balance projection must stream transactions from IndexedDB rather than materialize them");
