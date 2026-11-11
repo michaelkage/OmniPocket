@@ -506,16 +506,6 @@ class OmniPocketStorage {
   async save(state) {
     const db = await this.open();
     const records = this._records(state);
-    // Resolve changed rows in O(1) during the write diff. Calling Array.find()
-    // for every changed transaction makes a large first save/import quadratic.
-    const recordMaps = Object.fromEntries(this.entityStoreNames.map(name => {
-      const byKey = new Map();
-      for (const record of records[name]) {
-        const key = name === "deletedExternalTransactions" ? record.key : record.id;
-        if (key != null && !byKey.has(key)) byKey.set(key, record);
-      }
-      return [name, byKey];
-    }));
     const settings = state.settings || {};
     if (!this.cache) {
       const existing = await this._readNormalized(db);
@@ -526,6 +516,20 @@ class OmniPocketStorage {
     const expectedVersion = Number(this.cache?.version) || 0;
     const nextVersion = expectedVersion + 1;
     const nextCache = this._buildCache(records, settings, appSchemaVersion, nextVersion);
+    // Index only changed rows: O(n) scan time with O(changed rows) extra memory.
+    // Avoid Array.find() per changed key, which makes bulk imports quadratic.
+    const changedRecordMaps = Object.fromEntries(this.entityStoreNames.map(name => {
+      const previous = this.cache.stores[name] || new Map();
+      const next = nextCache.stores[name];
+      const changed = new Map();
+      for (const record of records[name]) {
+        const key = name === "deletedExternalTransactions" ? record.key : record.id;
+        if (key != null && !changed.has(key) && previous.get(key) !== next.get(key)) {
+          changed.set(key, record);
+        }
+      }
+      return [name, changed];
+    }));
     const hasRecordChanges = this.entityStoreNames.some(name => {
       const previous = this.cache.stores[name] || new Map();
       const next = nextCache.stores[name];
@@ -562,7 +566,7 @@ class OmniPocketStorage {
           const next = nextCache.stores[name];
           for (const [key, fingerprint] of next) {
             if (previous.get(key) !== fingerprint) {
-              const record = recordMaps[name].get(key);
+              const record = changedRecordMaps[name].get(key);
               if (record) store.put(record);
             }
           }
