@@ -506,6 +506,16 @@ class OmniPocketStorage {
   async save(state) {
     const db = await this.open();
     const records = this._records(state);
+    // Resolve changed rows in O(1) during the write diff. Calling Array.find()
+    // for every changed transaction makes a large first save/import quadratic.
+    const recordMaps = Object.fromEntries(this.entityStoreNames.map(name => {
+      const byKey = new Map();
+      for (const record of records[name]) {
+        const key = name === "deletedExternalTransactions" ? record.key : record.id;
+        if (key != null && !byKey.has(key)) byKey.set(key, record);
+      }
+      return [name, byKey];
+    }));
     const settings = state.settings || {};
     if (!this.cache) {
       const existing = await this._readNormalized(db);
@@ -552,10 +562,8 @@ class OmniPocketStorage {
           const next = nextCache.stores[name];
           for (const [key, fingerprint] of next) {
             if (previous.get(key) !== fingerprint) {
-              const record = name === "deletedExternalTransactions"
-                ? records[name].find(item => item.key === key)
-                : records[name].find(item => item.id === key);
-              store.put(record);
+              const record = recordMaps[name].get(key);
+              if (record) store.put(record);
             }
           }
           for (const key of previous.keys()) {
